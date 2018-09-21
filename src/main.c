@@ -41,8 +41,8 @@ void error (const char *msg) {
 int initServer (struct sockaddr_in serverAddress) {
 
     // create the server socket
-    int serverSocket = socket (AF_INET, SOCK_STREAM, 0);
-    if (serverSocket < 0) error ("Error creating server socket!\n");
+    int ssocket = socket (AF_INET, SOCK_STREAM, 0);
+    if (ssocket < 0) error ("Error creating server socket!\n");
 
     // define the server address
     memset (&serverAddress, 0, sizeof (serverAddress));
@@ -52,10 +52,10 @@ int initServer (struct sockaddr_in serverAddress) {
     serverAddress.sin_port = htons (PORT);
 
     // bind the socket to our specify IP and port
-    if (bind (serverSocket, (struct sockaddr *) &serverAddress, sizeof (struct sockaddr)) < 0)
+    if (bind (ssocket, (struct sockaddr *) &serverAddress, sizeof (struct sockaddr)) < 0)
         error ("Error binding server socket!\n");
 
-    return serverSocket;
+    return ssocket;
 
 }
 
