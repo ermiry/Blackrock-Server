@@ -1,243 +1,131 @@
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-
-// #include <sys/types.h>
-// #include <unistd.h>
-
-// #include <sys/socket.h>
-// #include <netinet/in.h>
-// #include <arpa/inet.h>
-// #include <netinet/in.h>
-
-// #include <sys/sendfile.h>
-// #include <sys/stat.h>
-// #include <fcntl.h>
-
-// #include <errno.h>
-
-// #define PORT    9001
-
-// // #define SERVER_ADDRESS  "192.168.1.7"
-
-// char welcome[256] = "You have reached the Blackrock Server!!";
-
-// int serverSocket;
-// int clientSocket;
-
-// void error (const char *msg) {
-
-//     perror (msg);
-
-//     close (serverSocket);
-//     close (clientSocket);
-
-//     exit (1);
-
-// }
-
-// void sendFile () {
-
-
-
-// }
-
-// int main (void) {
-
-//     fprintf (stdout, "\n---> Blackrock Server <---\n\n");
-
-//     // create the server socket
-//     serverSocket = socket (AF_INET, SOCK_STREAM, 0);
-//     if (serverSocket < 0) error ("Error creating server socket!\n");
-
-//     // define the server address
-//     struct sockaddr_in serverAddress;
-//     // clears any data in server address
-//     bzero ((char *) &serverAddress, sizeof (serverAddress));
-//     serverAddress.sin_family = AF_INET;
-//     serverAddress.sin_port = htons (PORT);  // arbitrary port for now
-//     serverAddress.sin_addr.s_addr = INADDR_ANY;     // ip = 0.0.0.0
-//     // inet_pton(AF_INET, SERVER_ADDRESS, &(server_addr.sin_addr));
-
-//     // bind the socket to our specify IP and port
-//     int binding = bind (serverSocket, (struct sockaddr *) &serverAddress, sizeof (serverAddress));
-//     if (binding < 0) error ("Error binding server socket!\n");
-
-//     // we can now listen for connections
-//     fprintf (stdout, "Waiting for connection..\n\n");
-//     struct sockaddr_in clientAddress;
-//     listen (serverSocket, 5);   // 5 is our number of connections
-//     socklen_t clientLen = sizeof (clientAddress);
-
-//     // prepare file to send
-//     int fd = open ("./data/test.txt", O_RDONLY);
-//     if (fd < 0) fprintf (stderr, "Error openning file!\n%s\n", strerror (errno));
-
-//     // get file stats
-//     struct stat fileStats;
-//     if (fstat (fd, &fileStats) < 0) 
-//         fprintf (stderr, "Error openning file!\n%s\n", strerror (errno));
-
-//     fprintf (stdout, "\n\nFile size: %ld bytes.\n\n", fileStats.st_size);
-
-//     // accpet a connection
-//     clientSocket = accept (serverSocket, (struct sockaddr *) &clientAddress, &clientLen);
-//     if (clientSocket < 0) error ("Error accepting new connection!\n");
-//     else {
-//         fprintf (stdout, "Client connected!\n");
-//         fprintf (stdout, "%s\n", inet_ntoa (clientAddress.sin_addr));
-//     } 
-
-//     // send the welcome message if the connection is successfull
-//     send (clientSocket, welcome, sizeof (welcome), 0);
-
-//     char fileSize[256];
-//     sprintf (fileSize, "%ld", fileStats.st_size);
-
-//     // sending file size
-//     size_t len = send (clientSocket, fileSize, sizeof (fileSize), 0);
-//     if (len < 0) fprintf (stderr, "Error sending file size!\n%s\n", strerror (errno));
-
-//     fprintf (stdout, "Server sent %ld bytes for the size.\n", len);
-
-//     // sending file data
-//     off_t offset = 0;
-//     int remainData = fileStats.st_size;
-//     int sentBytes = 0;
-
-//     while (((sentBytes = sendfile (clientSocket, fd, &offset, BUFSIZ)) > 0) && (remainData > 0)) {
-//         fprintf (stdout, "Server sent %d bytes from file's data, offset is now: %ld and remaining data = %d\n", sentBytes, offset, remainData);
-//         remainData -= sentBytes;
-//         fprintf (stdout, "Server sent %d bytes from file's data, offset is now: %ld and remaining data = %d\n", sentBytes, offset, remainData);
-//     }
-
-//     // close the socket when we are done
-//     close (clientSocket);
-//     close (serverSocket);
-
-//     return 0;
-
-// }
-
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <string.h>
-#include <arpa/inet.h>
+
+#include <sys/types.h>
 #include <unistd.h>
+
+#include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+#include <sys/sendfile.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/sendfile.h>
 
-#define PORT_NUMBER     9005
+#include <errno.h>
+
+#define PORT    9001
+
+// FIXME:
 // #define SERVER_ADDRESS  "192.168.1.7"
-// #define FILE_TO_SEND    "hello.c"
 
-int main(int argc, char **argv)
-{
-        int server_socket;
-        int peer_socket;
-        socklen_t       sock_len;
-        ssize_t len;
-        struct sockaddr_in      server_addr;
-        struct sockaddr_in      peer_addr;
-        int fd;
-        int sent_bytes = 0;
-        char file_size[256];
-        struct stat file_stat;
-        off_t offset;
-        int remain_data;
+char welcome[256] = "You have reached the Blackrock Server!!";
+const char filepath[64] = "./data/test.txt";
 
-        /* Create server socket */
-        server_socket = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_socket == -1)
-        {
-                fprintf(stderr, "Error creating socket --> %s", strerror(errno));
+int serverSocket;
+int clientSocket;
 
-                exit(EXIT_FAILURE);
-        }
+void error (const char *msg) {
 
-        /* Zeroing server_addr struct */
-        memset(&server_addr, 0, sizeof(server_addr));
-        /* Construct server_addr struct */
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_addr.s_addr = INADDR_ANY;     // ip = 0.0.0.0
-        // inet_pton(AF_INET, SERVER_ADDRESS, &(server_addr.sin_addr));
-        server_addr.sin_port = htons(PORT_NUMBER);
+    perror (msg);
 
-        /* Bind */
-        if ((bind(server_socket, (struct sockaddr *)&server_addr, sizeof(struct sockaddr))) == -1)
-        {
-                fprintf(stderr, "Error on bind --> %s", strerror(errno));
+    close (serverSocket);
+    close (clientSocket);
 
-                exit(EXIT_FAILURE);
-        }
+    exit (1);
 
-        /* Listening to incoming connections */
-        if ((listen(server_socket, 5)) == -1)
-        {
-                fprintf(stderr, "Error on listen --> %s", strerror(errno));
+}
 
-                exit(EXIT_FAILURE);
-        }
+int initServer (struct sockaddr_in serverAddress) {
 
-        fd = open("./data/test.txt", O_RDONLY);
-        if (fd == -1)
-        {
-                fprintf(stderr, "Error opening file --> %s", strerror(errno));
+    // create the server socket
+    int serverSocket = socket (AF_INET, SOCK_STREAM, 0);
+    if (serverSocket < 0) error ("Error creating server socket!\n");
 
-                exit(EXIT_FAILURE);
-        }
+    // define the server address
+    memset (&serverAddress, 0, sizeof (serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    // inet_pton(AF_INET, SERVER_ADDRESS, &(server_addr.sin_addr));
+    serverAddress.sin_port = htons (PORT);
 
-        /* Get file stats */
-        if (fstat(fd, &file_stat) < 0)
-        {
-                fprintf(stderr, "Error fstat --> %s", strerror(errno));
+    // bind the socket to our specify IP and port
+    if (bind (serverSocket, (struct sockaddr *) &serverAddress, sizeof (struct sockaddr)) < 0)
+        error ("Error binding server socket!\n");
 
-                exit(EXIT_FAILURE);
-        }
+    return serverSocket;
 
-        fprintf(stdout, "File Size: \n%ld bytes\n", file_stat.st_size);
+}
 
-        sock_len = sizeof(struct sockaddr_in);
-        /* Accepting incoming peers */
-        peer_socket = accept(server_socket, (struct sockaddr *)&peer_addr, &sock_len);
-        if (peer_socket == -1)
-        {
-                fprintf(stderr, "Error on accept --> %s", strerror(errno));
+int fileData (const char *filepath, struct stat fileStats, char fileSize[]) {
 
-                exit(EXIT_FAILURE);
-        }
-        fprintf(stdout, "Accept peer --> %s\n", inet_ntoa(peer_addr.sin_addr));
+    // prepare the file to send
+    int fd = open (filepath, O_RDONLY);
+    if (fd < 0) error ("Error openning file!\n");
 
-        sprintf(file_size, "%ld", file_stat.st_size);
+    // get file stats
+    if (fstat (fd, &fileStats) < 0) error ("Error getting file stats!\n");
 
-        /* Sending file size */
-        len = send(peer_socket, file_size, sizeof(file_size), 0);
-        if (len < 0)
-        {
-              fprintf(stderr, "Error on sending greetings --> %s", strerror(errno));
+    sprintf (fileSize, "%ld", fileStats.st_size);
 
-              exit(EXIT_FAILURE);
-        }
+    fprintf (stdout, "File size: %ld bytes.\n", fileStats.st_size);
 
-        fprintf(stdout, "Server sent %ld bytes for the size\n", len);
+    return fd;
 
-        offset = 0;
-        remain_data = file_stat.st_size;
-        /* Sending file data */
-        while (((sent_bytes = sendfile(peer_socket, fd, &offset, BUFSIZ)) > 0) && (remain_data > 0))
-        {
-                fprintf(stdout, "1. Server sent %d bytes from file's data, offset is now : %ld and remaining data = %d\n", sent_bytes, offset, remain_data);
-                remain_data -= sent_bytes;
-                fprintf(stdout, "2. Server sent %d bytes from file's data, offset is now : %ld and remaining data = %d\n", sent_bytes, offset, remain_data);
-        }
+}
 
-        close(peer_socket);
-        close(server_socket);
+int main (void) {
 
-        return 0;
+    fprintf (stdout, "\n---> Blackrock Server <---\n\n");
+
+    struct sockaddr_in serverAddress;
+    serverSocket = initServer (serverAddress);
+
+    // get the file data
+    struct stat fileStats;
+    char fileSize[256];
+    int fd = fileData (filepath, fileStats, fileSize);
+
+    // FIXME: create a loop to listen for connections
+    // we can now listen for connections
+    fprintf (stdout, "Waiting for connection...\n\n");
+    listen (serverSocket, 5);   // 5 is our number of connections
+
+    socklen_t sockLen = sizeof (struct sockaddr_in);
+
+    // accepting peers
+    struct sockaddr_in peerAddress;
+    int peerSocket;
+    peerSocket = accept (serverSocket, (struct sockaddr *) &peerAddress, &sockLen);
+    if (peerSocket < 0) error ("Error accepting connection!\n");
+    else
+        fprintf(stdout, "Peer connected: %s\n", inet_ntoa (peerAddress.sin_addr));
+
+    // TODO: send welcome message
+
+    // Seinding file size
+    ssize_t len;
+
+    len = send (peerSocket, fileSize, sizeof (fileSize), 0);
+    if (len < 0) error ("Error sending file size!\n");
+    else fprintf (stdout, "Server sent %ld bytes for the size.\n", len);
+
+    // sending file data
+    off_t offset = 0;
+    int remainData = fileStats.st_size;
+    int sentBytes = 0;
+
+    while (((sentBytes = sendfile (peerSocket, fd, &offset, BUFSIZ)) > 0) && (remainData > 0)) {
+        remainData -= sentBytes;
+        fprintf (stdout, "Server sent %d bytes from file's data, offset is now: %ld and remaining data = %d\n", sentBytes, offset, remainData);
+    }
+
+    // close the socket when we are done
+    close (clientSocket);
+    close (serverSocket);
+
+    return 0;
+
 }
