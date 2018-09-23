@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -I $(IDIR)
+CFLAGS = -I $(IDIR) -l pthread
 
 IDIR = ./include/
 SRCDIR = ./src/

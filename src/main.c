@@ -16,6 +16,8 @@
 
 #include <errno.h>
 
+#include <pthread.h>
+
 #define PORT    9001
 
 // FIXME:
@@ -76,34 +78,7 @@ int fileData (const char *filepath, struct stat fileStats, char fileSize[]) {
 
 }
 
-int main (void) {
-
-    fprintf (stdout, "\n---> Blackrock Server <---\n\n");
-
-    struct sockaddr_in serverAddress;
-    serverSocket = initServer (serverAddress);
-
-    // get the file data
-    struct stat fileStats;
-    char fileSize[256];
-    int fd = fileData (filepath, fileStats, fileSize);
-
-    // FIXME: create a loop to listen for connections
-    // we can now listen for connections
-    fprintf (stdout, "Waiting for connection...\n\n");
-    listen (serverSocket, 5);   // 5 is our number of connections
-
-    socklen_t sockLen = sizeof (struct sockaddr_in);
-
-    // accepting peers
-    struct sockaddr_in peerAddress;
-    int peerSocket;
-    peerSocket = accept (serverSocket, (struct sockaddr *) &peerAddress, &sockLen);
-    if (peerSocket < 0) error ("Error accepting connection!\n");
-    else
-        fprintf(stdout, "Peer connected: %s\n", inet_ntoa (peerAddress.sin_addr));
-
-    // TODO: send welcome message
+int sendFile (int peerSocket, struct stat fileStats, int fd, char *fileSize) {
 
     // Seinding file size
     ssize_t len;
@@ -121,6 +96,62 @@ int main (void) {
         remainData -= sentBytes;
         fprintf (stdout, "Server sent %d bytes from file's data, offset is now: %ld and remaining data = %d\n", sentBytes, offset, remainData);
     }
+
+}
+
+// This handles the connection for each new client that connects
+void *connectionHandler (void *peerSocket) {
+
+    int peer = *(int *) peerSocket;
+
+    // send welcome message
+    send (peer, welcome, sizeof (welcome), 0);
+
+    close (peer);
+    free (peerSocket);
+
+}
+
+int main (void) {
+
+    fprintf (stdout, "\n---> Blackrock Server <---\n\n");
+
+    struct sockaddr_in serverAddress;
+    serverSocket = initServer (serverAddress);
+
+    // get the file data
+    struct stat fileStats;
+    char fileSize[256];
+    int fd = fileData (filepath, fileStats, fileSize);
+
+    // we can now listen for connections
+    fprintf (stdout, "Waiting for connections...\n\n");
+    listen (serverSocket, 5);   // 5 is our number of connections
+
+    socklen_t sockLen = sizeof (struct sockaddr_in);
+
+    // accepting peers
+    struct sockaddr_in peerAddress;
+    int peerSocket;
+    int *newSocket = NULL;
+
+    while ((peerSocket = accept (serverSocket, (struct sockaddr *) &peerAddress, &sockLen))){
+        fprintf(stdout, "Peer connected: %s\n", inet_ntoa (peerAddress.sin_addr));
+
+        pthread_t peerThread;
+        newSocket = (int *) malloc (sizeof (int));
+        *newSocket = peerSocket;
+
+        if (pthread_create (&peerThread, NULL, connectionHandler, newSocket) < 0)
+            fprintf (stderr, "Error creating peer thread!\n");
+
+        else printf ("Handler assigned.\n");
+
+        if (pthread_join (peerThread, NULL) < 0) fprintf (stderr, "Error joinning peer thread!\n");
+        else fprintf (stdout, "Client disconnected.\n");
+    }
+
+    if (peerSocket < 0) error ("Error accepting connection!\n");
 
     // close the socket when we are done
     close (clientSocket);
