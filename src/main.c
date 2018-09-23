@@ -99,13 +99,31 @@ int sendFile (int peerSocket, struct stat fileStats, int fd, char *fileSize) {
 
 }
 
+// FIXME: better error handling
 // This handles the connection for each new client that connects
 void *connectionHandler (void *peerSocket) {
 
     int peer = *(int *) peerSocket;
 
+    int readSize;
+    char clientMessage[8];
+
     // send welcome message
     send (peer, welcome, sizeof (welcome), 0);
+
+    // receive a message from client
+    while ((readSize = recv (peer, clientMessage, 8, 0)) > 0 ) {
+        // handle the client request
+        int request = atoi (clientMessage);
+        switch (request) {
+            case 1: fprintf (stdout, "Request type 1\n"); break;
+            case 2: fprintf (stdout, "Request type 2\n"); break;
+            case 3: fprintf (stdout, "Request type 3\n"); break;
+            default: fprintf (stderr, "Invalid request!\n"); break;
+        }
+    }
+
+    if (readSize < 0) fprintf (stderr, "Error getting client message!\n");
 
     close (peer);
     free (peerSocket);
