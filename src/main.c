@@ -26,6 +26,12 @@
 char welcome[256] = "You have reached the Blackrock Server!!";
 const char filepath[64] = "./data/test.txt";
 
+// as of 23/09/2018 -- 18:43 -- we only handle one file
+// file data
+struct stat fileStats;
+char fileSize[256];
+int fd;
+
 int serverSocket;
 int clientSocket;
 
@@ -61,7 +67,7 @@ int initServer (struct sockaddr_in serverAddress) {
 
 }
 
-int fileData (const char *filepath, struct stat fileStats, char fileSize[]) {
+int fileData () {
 
     // prepare the file to send
     int fd = open (filepath, O_RDONLY);
@@ -70,21 +76,20 @@ int fileData (const char *filepath, struct stat fileStats, char fileSize[]) {
     // get file stats
     if (fstat (fd, &fileStats) < 0) error ("Error getting file stats!\n");
 
-    sprintf (fileSize, "%ld", fileStats.st_size);
-
-    fprintf (stdout, "File size: %ld bytes.\n", fileStats.st_size);
-
     return fd;
 
 }
 
-int sendFile (int peerSocket, struct stat fileStats, int fd, char *fileSize) {
+int sendFile (int peerSocket) {
 
     // Seinding file size
     ssize_t len;
 
     len = send (peerSocket, fileSize, sizeof (fileSize), 0);
-    if (len < 0) error ("Error sending file size!\n");
+    if (len < 0) {
+        fprintf (stderr, "Error sending file size!\n");
+        return 1;
+    } 
     else fprintf (stdout, "Server sent %ld bytes for the size.\n", len);
 
     // sending file data
@@ -96,6 +101,9 @@ int sendFile (int peerSocket, struct stat fileStats, int fd, char *fileSize) {
         remainData -= sentBytes;
         fprintf (stdout, "Server sent %d bytes from file's data, offset is now: %ld and remaining data = %d\n", sentBytes, offset, remainData);
     }
+
+    if (sentBytes == fileStats.st_size) return 0;
+    else return 1;
 
 }
 
@@ -112,11 +120,19 @@ void *connectionHandler (void *peerSocket) {
     send (peer, welcome, sizeof (welcome), 0);
 
     // receive a message from client
-    while ((readSize = recv (peer, clientMessage, 8, 0)) > 0 ) {
+    // while (( ) {
+        // FIXME:
+    // }
+
+    if (readSize = recv (peer, clientMessage, 8, 0) > 0) {
         // handle the client request
         int request = atoi (clientMessage);
         switch (request) {
-            case 1: fprintf (stdout, "Request type 1\n"); break;
+            case 1: 
+                fprintf (stdout, "Request type 1\n"); 
+                if (sendFile (peer) == 0) fprintf (stdout, "File sent!\n") ;
+                else fprintf (stderr, "Error sending file!\n");
+                break;
             case 2: fprintf (stdout, "Request type 2\n"); break;
             case 3: fprintf (stdout, "Request type 3\n"); break;
             default: fprintf (stderr, "Invalid request!\n"); break;
@@ -138,9 +154,9 @@ int main (void) {
     serverSocket = initServer (serverAddress);
 
     // get the file data
-    struct stat fileStats;
-    char fileSize[256];
-    int fd = fileData (filepath, fileStats, fileSize);
+    fd = fileData ();
+    sprintf (fileSize, "%ld", fileStats.st_size);
+    fprintf (stdout, "File size: %ld bytes.\n", fileStats.st_size);
 
     // we can now listen for connections
     fprintf (stdout, "Waiting for connections...\n\n");
