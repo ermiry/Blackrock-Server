@@ -124,8 +124,8 @@ void *connectionHandler (void *peerSocket) {
         // FIXME:
     // }
 
+    // handle the client request
     if (readSize = recv (peer, clientMessage, 8, 0) > 0) {
-        // handle the client request
         int request = atoi (clientMessage);
         switch (request) {
             case 1: 
