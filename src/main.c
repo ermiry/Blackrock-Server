@@ -1,196 +1,83 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-
-#include <sys/sendfile.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-#include <errno.h>
-
+#include <signal.h>
 #include <pthread.h>
 
-#define PORT    9001
+#include "server.h"
+#include "network.h"
 
-// FIXME:
-// #define SERVER_ADDRESS  "192.168.1.7"
+#include <utils/log.h>
+#include "utils/myUtils.h"
+#include "utils/config.h"
 
-char welcome[256] = "You have reached the Blackrock Server!!";
-const char filepath[64] = "./data/test.txt";
+/*** THREAD ***/
 
-// as of 23/09/2018 -- 18:43 -- we only handle one file
-// file data
-struct stat fileStats;
-char fileSize[256];
-int fd;
+// TODO: have the idea of creating many virtual servers in different sockets?
+// or maybe we can create many servers and handle the requests via a load balancer,
+// that is only listening on one port?
+// TODO: if we want to send a file, maybe create a new TCP socket in a new port?
 
-int serverSocket;
-int clientSocket;
+// 13/10/2018 -- the idea here is to have multiple servers that serve different purposses, for example:
+// we can have the game servers that handle the in game multiplayer logic,
+// but we can also have a server that can handle other types of requests such as getting files
+// maybe all the requests can arrive to the load balancer and depending on the request type and 
+// any other paramater that we give it, it can redirect the request to the correct server
 
-void error (const char *msg) {
+// TODO: maybe handle this in a separate list by a name?
+Server *gameServer = NULL;
 
-    perror (msg);
+// correctly closes any on-going server and process when quitting the appplication
+void closeProgram (int dummy) {
 
-    close (serverSocket);
-    close (clientSocket);
-
-    exit (1);
-
-}
-
-int initServer (struct sockaddr_in serverAddress) {
-
-    // create the server socket
-    int ssocket = socket (AF_INET, SOCK_STREAM, 0);
-    if (ssocket < 0) error ("Error creating server socket!\n");
-
-    // define the server address
-    memset (&serverAddress, 0, sizeof (serverAddress));
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_addr.s_addr = INADDR_ANY;
-    // inet_pton(AF_INET, SERVER_ADDRESS, &(server_addr.sin_addr));
-    serverAddress.sin_port = htons (PORT);
-
-    // bind the socket to our specify IP and port
-    if (bind (ssocket, (struct sockaddr *) &serverAddress, sizeof (struct sockaddr)) < 0)
-        error ("Error binding server socket!\n");
-
-    return ssocket;
+    if (gameServer) cerver_teardown (gameServer);
+    else logMsg (stdout, NO_TYPE, NO_TYPE, "There isn't any server to teardown. Quitting application.");
 
 }
 
-int fileData () {
-
-    // prepare the file to send
-    int fd = open (filepath, O_RDONLY);
-    if (fd < 0) error ("Error openning file!\n");
-
-    // get file stats
-    if (fstat (fd, &fileStats) < 0) error ("Error getting file stats!\n");
-
-    return fd;
-
-}
-
-int sendFile (int peerSocket) {
-
-    // Seinding file size
-    ssize_t len;
-
-    len = send (peerSocket, fileSize, sizeof (fileSize), 0);
-    if (len < 0) {
-        fprintf (stderr, "Error sending file size!\n");
-        return 1;
-    } 
-    else fprintf (stdout, "Server sent %ld bytes for the size.\n", len);
-
-    // sending file data
-    off_t offset = 0;
-    int remainData = fileStats.st_size;
-    int sentBytes = 0;
-
-    while (((sentBytes = sendfile (peerSocket, fd, &offset, BUFSIZ)) > 0) && (remainData > 0)) {
-        remainData -= sentBytes;
-        fprintf (stdout, "Server sent %d bytes from file's data, offset is now: %ld and remaining data = %d\n", sentBytes, offset, remainData);
-    }
-
-    if (sentBytes == fileStats.st_size) return 0;
-    else return 1;
-
-}
-
-// FIXME: better error handling
-// This handles the connection for each new client that connects
-void *connectionHandler (void *peerSocket) {
-
-    int peer = *(int *) peerSocket;
-
-    int readSize;
-    char clientMessage[8];
-
-    // send welcome message
-    send (peer, welcome, sizeof (welcome), 0);
-
-    // receive a message from client
-    // while (( ) {
-        // FIXME:
-    // }
-
-    // handle the client request
-    if (readSize = recv (peer, clientMessage, 8, 0) > 0) {
-        int request = atoi (clientMessage);
-        switch (request) {
-            case 1: 
-                fprintf (stdout, "Request type 1\n"); 
-                if (sendFile (peer) == 0) fprintf (stdout, "File sent!\n") ;
-                else fprintf (stderr, "Error sending file!\n");
-                break;
-            case 2: fprintf (stdout, "Request type 2\n"); break;
-            case 3: fprintf (stdout, "Request type 3\n"); break;
-            default: fprintf (stderr, "Invalid request!\n"); break;
-        }
-    }
-
-    if (readSize < 0) fprintf (stderr, "Error getting client message!\n");
-
-    close (peer);
-    free (peerSocket);
-
-}
-
+// FIXME: how can we signal the process to end?
+// TODO: recieve signals to init, retsart or teardown a server -> like a control panel
 int main (void) {
 
-    fprintf (stdout, "\n---> Blackrock Server <---\n\n");
+    // TODO: if the server uses tcp, we need to listen and accept connections
+    // but if the server uses udp, we just need to recieve packets
 
-    struct sockaddr_in serverAddress;
-    serverSocket = initServer (serverAddress);
+    /* expected workflow: 
+    - crete server(s) with the desired type
+    - start the servers
+        - tcp servers need to accept connections and handle logic
+            - but what if we can make the game server handle different protocols?
+        - udp servers just need to handle packets
+    */
 
-    // get the file data
-    fd = fileData ();
-    sprintf (fileSize, "%ld", fileStats.st_size);
-    fprintf (stdout, "File size: %ld bytes.\n", fileStats.st_size);
+    // init other program's values...
+    signal (SIGINT, closeProgram);
 
-    // we can now listen for connections
-    fprintf (stdout, "Waiting for connections...\n\n");
-    listen (serverSocket, 5);   // 5 is our number of connections
+    // create a new server
+    gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
+    if (gameServer) {
+        // FIXME: if we have got a valid server, we are now ready to listen for connections
+        // and we can handle requests of the connected clients
 
-    socklen_t sockLen = sizeof (struct sockaddr_in);
+        // pthread_t handlerThread;
+        // if (pthread_create (&handlerThread, NULL, connectionHandler, server) != THREAD_OK)
+        //     die ("Error creating handler thread!");
 
-    // accepting peers
-    struct sockaddr_in peerAddress;
-    int peerSocket;
-    int *newSocket = NULL;
+        // listenForConnections (server);
 
-    while ((peerSocket = accept (serverSocket, (struct sockaddr *) &peerAddress, &sockLen))){
-        fprintf(stdout, "Peer connected: %s\n", inet_ntoa (peerAddress.sin_addr));
+        // // at this point we are ready to listen for connections...
+        // logMsg (stdout, SERVER, NO_TYPE, "Waiting for connections...");
+        // // TODO: we need to tell our game server to listen for connections
+        // listenForConnections (server);
 
-        pthread_t peerThread;
-        newSocket = (int *) malloc (sizeof (int));
-        *newSocket = peerSocket;
-
-        if (pthread_create (&peerThread, NULL, connectionHandler, newSocket) < 0)
-            fprintf (stderr, "Error creating peer thread!\n");
-
-        else printf ("Handler assigned.\n");
-
-        if (pthread_join (peerThread, NULL) < 0) fprintf (stderr, "Error joinning peer thread!\n");
-        else fprintf (stdout, "Client disconnected.\n");
+        // startServer (gameServer);
     }
 
-    if (peerSocket < 0) error ("Error accepting connection!\n");
-
-    // close the socket when we are done
-    close (clientSocket);
-    close (serverSocket);
-
+    // if we reach this point, be sure to correctly clean all of our data...
+    closeProgram (0);
+    
     return 0;
 
 }
