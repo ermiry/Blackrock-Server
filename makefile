@@ -1,10 +1,11 @@
 CC = gcc
-CFLAGS = -I $(IDIR) -l pthread
+CFLAGS = -I $(IDIR) -l pthread -D CERVER_DEBUG
 
 IDIR = ./include/
 SRCDIR = ./src/
 
-SOURCES = $(SRCDIR)*.c 
+SOURCES = $(SRCDIR)*.c \
+		  $(SRCDIR)cerver/
 
 all: server #run #clean
 
