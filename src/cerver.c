@@ -191,6 +191,9 @@ void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr
 
 /*** CLIENTS ***/
 
+// TODO: create a pool of clients inside each server?
+// or maybe if we have a load balancer, that logic can change a little bit?
+
 #pragma region CLIENTS
 
 // FIXME: we can't have infinite ids!!
@@ -385,12 +388,18 @@ void *tcpListenForConnections (void *data) {
 
 #pragma endregion
 
+/*** LOAD BALANCER ***/
+
+#pragma region LOAD BALANCER
+
+// TODO:
+
+#pragma endregion
+
 /*** SERVER ***/
 
 // Here we manage the creation and destruction of servers 
 #pragma region SERVER LOGIC
-
-// FIXME: fix ip address
 
 // TODO: set to non blocking mode for handling the game???
 // if (!sock_setNonBlocking (server))
@@ -806,6 +815,7 @@ void cleanUpClients (Server *server) {
 
 }
 
+// TODO: also destroy the lists and pools inside each server
 // FIXME: we need to join the ongoing threads... 
 // teardown a server
 u8 cerver_teardown (Server *server) {
