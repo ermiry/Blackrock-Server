@@ -5,10 +5,12 @@
 #include <stdbool.h>
 #include <string.h>
 
-// #include "cerver.h"
+#include "cerver.h"
 #include "blackrock.h" 
 #include "game.h"
 
+#include "utils/list.h";
+#include "utils/objectPool.h"
 #include "utils/config.h"
 #include "utils/log.h"
 
@@ -18,6 +20,37 @@
 
 #pragma region GAME MASTER
 
+// FIXME: what is our lobby destroy function?
+// create a pool of game lobbys with a couple of lobbys in it
+// create a list to manage the server lobbys
+void initLobbys (Server *gameServer) {
+
+    if (!gameServer) {
+        logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a NULL server!");
+        return;
+    }
+
+    if (gameServer->type != GAME_SERVER) {
+        logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a server of incorrect type!");
+        return;
+    }
+
+    if (!gameServer->serverData) {
+        logMsg (stderr, ERROR, SERVER, "No server data found in the server!");
+        return;
+    }
+
+    GameServerData *data = (GameServerData *) gameServer->serverData;
+
+    if (data->currentLobbys) logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
+    else data->currentLobbys = initList (free);
+
+    if (data->lobbyPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of lobbys.");
+    else data->lobbyPool = initPool ();
+
+}
+
+// TODO: do we want to have the config file always loaded in memory??
 // loads the settings for the selected game type from a cfg file
 GameSettings *getGameSettings (u8 gameType) {
 
@@ -88,12 +121,27 @@ GameSettings *getGameSettings (u8 gameType) {
 
 }
 
-// TODO: add support for multiple lobbys at the same time
-
+// FIXME:
 // TODO: send feedback back to the player on error
-// TODO: add object pooling to the lobby
 // handles the creation of a new game lobby, requested by a current registered client -> player
-Lobby *newLobby (Player *owner, GameType gameType) {
+Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
+
+    if (!server) {
+        logMsg (stderr, ERROR, SERVER, "Don't know in which server to create the lobby!");
+        return NULL;
+    }
+
+    else {
+        if (server->type != GAME_SERVER) {
+            logMsg (stderr, ERROR, SERVER, "Can't create a lobby in a server of incorrect type!");
+            return NULL;
+        }
+    }
+
+    if (!owner) {
+        logMsg (stderr, ERROR, SERVER, "A NULL player can't create a lobby!");
+        return NULL;
+    }
 
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "Creatting a new lobby...");
@@ -115,13 +163,29 @@ Lobby *newLobby (Player *owner, GameType gameType) {
     // FIXME: where do we want to call this?? sock_setNonBlocking (server);
 
 
-    // TODO: add object pooling to the lobby
-    // create the lobby and player owner data structures
-    Lobby *newLobby = (Lobby *) malloc (sizeof (Lobby));
+    Lobby *newLobby = NULL;
+
+    GameServerData *data = (GameServerData *) server->serverData;
+    if (data->lobbyPool) {
+        if (POOL_SIZE (data->lobbyPool) > 0) {
+            newLobby = (Lobby *) pop (data->lobbyPool);
+            if (!newLobby) newLobby = (Lobby *) malloc (sizeof (Lobby));
+        }
+    }
+
+    else {
+        // FIXME: log from which server is comming...
+        logMsg (stderr, WARNING, SERVER, "Server has no refrence to a lobby pool!");
+        newLobby = (Lobby *) malloc (sizeof (Lobby));
+    }
+
     newLobby->owner = owner;
     newLobby->settings = getGameSettings (gameType);
     if (!newLobby->settings) {
-        free (newLobby);
+        logMsg (stderr, ERROR, GAME, "Failed to get the settings for the new lobby!");
+        newLobby->owner = NULL;
+        // send the lobby back to the object pool
+        push (data->lobbyPool, newLobby);
         return NULL;
     } 
 
@@ -132,17 +196,30 @@ Lobby *newLobby (Player *owner, GameType gameType) {
     newLobby->inGame = false;
     newLobby->owner->inLobby = true;
 
+    // add the lobby the server active ones
+    insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), newLobby);
+
     return newLobby;
 
 }
 
-// TODO: maybe add an object pool because we might be creating and destroying many lobby structures??
-// TODO: also add object pooling to the clients and players?
-
+// FIXME: also add object pooling to the clients and players
 // only the owner of the lobby can destroy the lobby
 // a lobby should only be destroyed when the owner quits or as a garbage collection and the lobby is empty
 // also called if we teardown the server
-u8 destroyLobby (Lobby *lobby) {
+u8 destroyLobby (Server *server, Lobby *lobby) {
+
+    if (!server) {
+        logMsg (stderr, ERROR, SERVER, "Don't know from which server to destroy the lobby!");
+        return NULL;
+    }
+
+    else {
+        if (server->type != GAME_SERVER) {
+            logMsg (stderr, ERROR, SERVER, "Can't destroy a lobby from a server of wrong type!");
+            return NULL;
+        }
+    }
 
     if (!lobby) {
         #ifdef DEBUG
@@ -164,17 +241,29 @@ u8 destroyLobby (Lobby *lobby) {
 
     }
 
-    // TODO: add object pooling here?
-    // we are safe to clear the lobby structure
     lobby->owner = NULL;
     if (lobby->settings) free (lobby->settings);
-    free (lobby);
 
+    // we are safe to clear the lobby structure
+    GameServerData *data = (GameServerData *) server->serverData;
+    if (data) {
+        // first remove the lobby from the active ones, then send it to the inactive ones
+        ListElement *le = getListElement (data->currentLobbys, lobby);
+        if (le) {
+            Lobby *temp = (Lobby *) removeElement (data->currentLobbys, le);
+            if (temp) push (data->lobbyPool, temp);
+        }
+
+        else {
+            logMsg (stdout, WARNING, GAME, "A lobby wasn't found in the current lobby list.");
+            // destroy the lobby forever
+            free (lobby);
+        } 
+    }
+    
     return 0;   // success
 
 }
-
-// TODO: how do we want to manage our current lobbys? --> with a list?
 
 // FIXME: send feedback to the player whatever the output
 // called by a registered player that wants to join a lobby on progress
@@ -262,7 +351,7 @@ u8 leaveLobby (Lobby *lobby, Player *player) {
 
     if (!tempPlayer) {
         #ifdef DEBUG
-        logMsg (stderr, ERROR, GAME, "The player doesn't belongs the the lobby!");
+        logMsg (stderr, ERROR, GAME, "The player doesn't belongs to the lobby!");
         #endif
         return 1;
     }

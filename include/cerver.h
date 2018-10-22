@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "utils/list.h"
+#include "utils/objectPool.h"
 // #include "utils/vector.h"
 // #include "utils/config.h"
 // #include "utils/myUtils.h"
@@ -49,7 +51,9 @@ typedef struct GameServerData {
     size_t updatedGamePacketSize;
     size_t playerInputPacketSize;
 
-    // Vector lobbys;
+    List *currentLobbys;    // a list of the current lobbys
+    Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
+
     // Vector players;
 
 } GameServerData;
