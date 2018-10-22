@@ -4,8 +4,7 @@ CFLAGS = -I $(IDIR) -l pthread -D CERVER_DEBUG
 IDIR = ./include/
 SRCDIR = ./src/
 
-SOURCES = $(SRCDIR)*.c \
-		  $(SRCDIR)cerver/
+SOURCES = $(SRCDIR)*.c 
 
 all: server #run #clean
 
