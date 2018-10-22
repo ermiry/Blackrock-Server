@@ -4,7 +4,7 @@
 // #include "network.h"
 // #include "utils/myTime.h"
 
-// #include "utils/vector.h"
+#include "utils/vector.h"
 
 #define DEFAULT_PLAYER_TIMEOUT      30
 #define DEFAULT_FPS                 20
@@ -12,6 +12,12 @@
 #define DEFAULT_MAX_PLAYERS         4    
 
 #define FPS		20
+
+typedef enum GameType {
+
+	ARCADE = 0
+
+} GameType;
 
 // TODO: what other settings do we need?? map? enemies? loot?
 typedef struct GameSettings {
@@ -79,8 +85,9 @@ typedef struct UpdatedGamePacket {
 typedef struct Player {
 
 	PlayerId id;
+	bool inLobby;
 	
-	struct sockaddr_storage address;
+	// struct sockaddr_storage address;
 
 	PlayerInput input;
 	u32 inputSequenceNum;
@@ -111,7 +118,7 @@ typedef struct Lobby {
 
 /*** GAME FUNCTIONS ***/
 
-extern Lobby *newLobby (Player *);
+extern Lobby *newLobby (Player *, GameType);
 
 extern void spawnPlayer (Player *);
 

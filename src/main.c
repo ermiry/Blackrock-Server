@@ -5,7 +5,6 @@
 
 #include <signal.h>
 
-
 /*** THREAD ***/
 
 // TODO: maybe handle this in a separate list by a name?
