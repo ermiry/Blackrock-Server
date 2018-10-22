@@ -233,6 +233,11 @@ void unregisterClient (Server *server, Client *client) {
 
 }
 
+// TODO: used to check for client timeouts in any type of server
+void checkClientTimeout (Server *server) {
+
+}
+
 #pragma endregion
 
 // Here goes the logic for handling new connections and manage client requests
@@ -859,12 +864,19 @@ u8 cerver_teardown (Server *server) {
 
 #pragma region GAME SERVER
 
-// TODO: maybe we can get this value form a cfg?
-const float PLAYER_TIMEOUT = 30;    // in seconds
-
 // TODO:
-// this is used to clean disconnected players
-void checkTimeouts (void) {
+// this is used to clean disconnected players inside a lobby
+// if we haven't recieved any kind of input from a player, disconnect it 
+void checkPlayerTimeouts (void) {
+}
+
+// when a client creates a lobby or joins one, it becomes a player in that lobby
+void tcpAddPlayer (Server *server) {
+}
+
+// TODO: as of 22/10/2018 -- we only have support for a tcp connection
+// when we recieve a packet from a player that is not in the lobby, we add it to the game session
+void udpAddPlayer () {
 }
 
 // FIXME: handle a limit of players!!
@@ -990,29 +1002,37 @@ void sendGamePackets (Server *server, int to) {
 
 }
 
-// TODO: maybe each server has its warray of lobbys and it uses it to handle new lobby requests and
-// to manage lobby data
-// we need to be sure that a player is not the owner of more than one lobby at the time and 
-// somethings like that
+// FIXME: send feedback to the player
+// request from a from a tcp connected client to create a new lobby 
+// in the server he is actually connected to
+void createLobby (Server *server, Client *client) {
 
-// TODO: get the owner and the type of lobby
-void createLobby (Server *server, i32 client, struct sockaddr_storage clientAddres) {
+    // we need to treat the client as a player now
+    // TODO: 22/10/2018 -- maybe this logic can change if we have a load balancer?
+    Player *owner = NULL;
 
-    // TODO:
-    // we need to check if we are available to create a new lobby, to prevent 
-    // a million requests to create a lobby and we get destroyed
+    GameServerData *data = (GameServerData *) server->data;
+    if (data->playersPool) {
+        if (POOL_SIZE (data->playersPool) > 0) {
+            owner = (Player *) pop (data->playersPool);
+            if (!owner) owner = (Player *) malloc (sizeof (Player));
+        }
+    }
 
-    // TODO: if the client is not registered yet as an active player, 
-    // create a new player struct
+    else {
+        // FIXME: log from which server is comming...
+        logMsg (stderr, WARNING, SERVER, "Server has no refrence to a players pool!");
+        owner = (Player *) malloc (sizeof (Player));
+    }
 
-    Player *owner = (Player *) malloc (sizeof (Player));
     owner->id = nextPlayerId;
     nextPlayerId++;
-    owner->address = clientAddres;
 
     Lobby *lobby = newLobby (owner);
-    if (lobby != NULL) {
+    if (lobby) {
+        #ifdef DEBUG
         logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
+        #endif
 
         // send the lobby info to the owner
         size_t packetSize = packetHeaderSize + lobbyPacketSize;
@@ -1034,10 +1054,9 @@ void createLobby (Server *server, i32 client, struct sockaddr_storage clientAddr
         end += lobbyPacketSize;
 
         lobbyData->settings = lobby->settings;
-        // FIXME: how do we get this owner?
-        lobbyData->owner = NULL;
+        lobbyData->owner = lobby->owner;
 
-        // after the pakcet has been prepare, send it to the dest player...
+        // after the pakcet has been prepared, send it to the dest player...
         sendPacket (server, begin, packetSize, lobby->owner->address);
 
         // TODO: do we want to do this using a request?

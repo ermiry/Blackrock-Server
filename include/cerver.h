@@ -54,6 +54,8 @@ typedef struct GameServerData {
     List *currentLobbys;    // a list of the current lobbys
     Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
 
+    Pool *playersPool;      // 22/10/2018 -- each server has its own player's pool
+
     // Vector players;
 
 } GameServerData;

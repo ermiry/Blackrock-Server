@@ -5,6 +5,10 @@
 
 #include <signal.h>
 
+#include "cerver.h"
+
+#include "utils/log.h"
+
 /*** THREAD ***/
 
 // TODO: maybe handle this in a separate list by a name?
