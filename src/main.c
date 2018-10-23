@@ -64,15 +64,13 @@ int main (void) {
     gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
     if (gameServer) {
         if (!cerver_startServer (gameServer)) {
-            logMsg (stdout, SUCCESS, SERVER, "Game server has started!");
+            // TODO: log which server
+            logMsg (stdout, SUCCESS, SERVER, "Server has started!");
             logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
-        } 
 
-        
+            while (true);
+        }
     } 
-
-    // FIXME: TEST!
-    // while (true) {}
 
     // if we reach this point, be sure to correctly clean all of our data...
     closeProgram (0);

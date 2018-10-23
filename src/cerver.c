@@ -414,13 +414,16 @@ void authenticateClient (void *data) {
 
 #pragma region LISTENING
 
+// FIXME: maybe use poll or select with a non-blocking socekt to correctly exit from this infinite loop??
+
+// FIXME: we need to signal this process to end when we teardown the server!!!
 // tcp needs to accept a connection to communicate with it
 // this is called from a separate thread for each server     20/10/2018
-void *tcpListenForConnections (void *data) {
+void tcpListenForConnections (void *data) {
 
     if (!data) {
         logMsg (stderr, ERROR, SERVER, "Can't listen for tcp connections on a NULL server!");
-        return NULL;
+        return;
     }
 
     Server *server = (Server *) data;
@@ -435,23 +438,32 @@ void *tcpListenForConnections (void *data) {
 
     ServerClient *sc = (ServerClient *) malloc (sizeof (ServerClient));
 
-	while ((clientSocket = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen))) {
-        // first we need to check that we have got a valid client
-        // so, we first add the client to a temp client list, and we ask him to authenticate
-        client = newClient (clientSocket, clientAddress);
+    logMsg (stdout, DEBUG_MSG, SERVER, "Listening for new connections...");
 
-        sc->server = server;
-        sc->client = client;
+    for (;;) {
+        if (server->isRunning) {
+            if (clientSocket = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen)) {
+                // first we need to check that we have got a valid client
+                // so, we first add the client to a temp client list, and we ask him to authenticate
+                client = newClient (clientSocket, clientAddress);
 
-        // TODO: send the client to the on hold structure for authentication....
-        // onHoldClient (server, client);
+                sc->server = server;
+                sc->client = client;
 
-        // authenticate the client before he can make requests
-        thpool_add_work (thpool, (void *) authenticateClient, sc);
+                // TODO: send the client to the on hold structure for authentication....
+                // onHoldClient (server, client);
 
-        // 20/10/2018 -- for now we just register the client to the correct server they reach
-        registerClient (server, client);
-	}
+                // authenticate the client before he can make requests
+                thpool_add_work (thpool, (void *) authenticateClient, sc);
+
+                // 20/10/2018 -- for now we just register the client to the correct server they reach
+                registerClient (server, client);
+            }
+            printf ("hola");
+        }
+
+        break;  // if we are not accepting clients anymore...
+    }
 
     if (sc) free (sc);
 
@@ -492,6 +504,9 @@ void initServerDS (Server *server, ServerType type) {
             GameServerData *data = (GameServerData *) malloc (sizeof (GameServerData));
             // vector_init (&data->players, sizeof (Player));
             // vector_init (&data->lobbys, sizeof (Lobby));
+
+            // FIXME: pass the correct function to destroy lobbys
+            data->currentLobbys = initList (free);
 
             server->serverData = data;
         } break;
@@ -791,16 +806,8 @@ u8 cerver_startServer (Server *server) {
 
     switch (server->protocol) {
         case IPPROTO_TCP: {
-            // tcp needs a thread to accept separte connections
-            pthread_t listenThread;
-            if (pthread_create (&listenThread, NULL, tcpListenForConnections, &server)) {
-                logMsg (stderr, ERROR, SERVER, "Failed to create tcp listen thread!");
-                return 1;
-            }
-
-            // TODO: the main thread will handle the in server logic, it depends on the server type
-
             server->isRunning = true;
+            thpool_add_work (thpool, (void *) tcpListenForConnections, server);
         } break;
         case IPPROTO_UDP: break;
 
@@ -814,14 +821,19 @@ u8 cerver_startServer (Server *server) {
 // TODO: what other logic will we need to handle? -> how to handle players / clients timeouts?
 // what happens with the current lobbys or on going games??
 // disable socket I/O in both ways
+
+// FIXME: getting transport endpoint is not connected if we do not have any clients connected!
 void cerver_shutdownServer (Server *server) {
 
-    if (server->isRunning) {
-        if (shutdown (server->serverSock, SHUT_RDWR) < 0) 
+    /* if (server->isRunning) {
+        if (shutdown (server->serverSock, SHUT_WR) < 0) {
             logMsg (stderr, ERROR, SERVER, "Failed to shutdown the server!");
+            perror ("");
+        }
+            
 
         else server->isRunning = false;
-    }
+    } */
 
 }
 
@@ -893,6 +905,8 @@ void cleanUpClients (Server *server) {
 // teardown a server
 u8 cerver_teardown (Server *server) {
 
+    server->isRunning = false;  // don't accept connections anymore
+
     if (!server) {
         logMsg (stdout, ERROR, SERVER, "Can't destroy a NULL server!");
         return 1;
@@ -917,6 +931,10 @@ u8 cerver_teardown (Server *server) {
         free (server);
         return 1;
     }
+
+    #ifdef CERVER_DEBUG
+    logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
+    #endif
 
     free (server);
 
