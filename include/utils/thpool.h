@@ -34,7 +34,7 @@ typedef struct thpool_* threadpool;
  * @return threadpool    created threadpool on success,
  *                       NULL on error
  */
-threadpool thpool_init(int num_threads);
+extern threadpool thpool_init(int num_threads);
 
 
 /**
@@ -64,7 +64,7 @@ threadpool thpool_init(int num_threads);
  * @param  arg_p         pointer to an argument
  * @return 0 on successs, -1 otherwise.
  */
-int thpool_add_work(threadpool, void (*function_p)(void*), void* arg_p);
+extern int thpool_add_work(threadpool, void (*function_p)(void*), void* arg_p);
 
 
 /**
@@ -94,7 +94,7 @@ int thpool_add_work(threadpool, void (*function_p)(void*), void* arg_p);
  * @param threadpool     the threadpool to wait for
  * @return nothing
  */
-void thpool_wait(threadpool);
+extern void thpool_wait(threadpool);
 
 
 /**
@@ -118,7 +118,7 @@ void thpool_wait(threadpool);
  * @param threadpool    the threadpool where the threads should be paused
  * @return nothing
  */
-void thpool_pause(threadpool);
+extern void thpool_pause(threadpool);
 
 
 /**
@@ -134,7 +134,7 @@ void thpool_pause(threadpool);
  * @param threadpool     the threadpool where the threads should be unpaused
  * @return nothing
  */
-void thpool_resume(threadpool);
+extern void thpool_resume(threadpool);
 
 
 /**
@@ -156,7 +156,7 @@ void thpool_resume(threadpool);
  * @param threadpool     the threadpool to destroy
  * @return nothing
  */
-void thpool_destroy(threadpool);
+extern void thpool_destroy(threadpool);
 
 
 /**
@@ -177,7 +177,7 @@ void thpool_destroy(threadpool);
  * @param threadpool     the threadpool of interest
  * @return integer       number of threads working
  */
-int thpool_num_threads_working(threadpool);
+extern int thpool_num_threads_working(threadpool);
 
 
 #ifdef __cplusplus

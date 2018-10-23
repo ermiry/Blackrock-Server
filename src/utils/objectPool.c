@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "objectPool.h"
+#include "utils/objectPool.h"
 
 // TODO: add the avility to init a pool with some members
 Pool *initPool (void) {

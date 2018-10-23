@@ -9,7 +9,8 @@
 #include "blackrock.h" 
 #include "game.h"
 
-#include "utils/list.h";
+#include "utils/myUtils.h"
+#include "utils/list.h"
 #include "utils/objectPool.h"
 #include "utils/config.h"
 #include "utils/log.h"
@@ -211,13 +212,13 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
 
     if (!server) {
         logMsg (stderr, ERROR, SERVER, "Don't know from which server to destroy the lobby!");
-        return NULL;
+        return 1;
     }
 
     else {
         if (server->type != GAME_SERVER) {
             logMsg (stderr, ERROR, SERVER, "Can't destroy a lobby from a server of wrong type!");
-            return NULL;
+            return 1;
         }
     }
 

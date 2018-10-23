@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -I $(IDIR) -l pthread -D CERVER_DEBUG
+CFLAGS = -I $(IDIR) -l pthread -D CERVER_DEBUG -D DEBUG
 
 IDIR = ./include/
 SRCDIR = ./src/

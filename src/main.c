@@ -7,7 +7,8 @@
 
 #include "cerver.h"
 
-#include "thpool.h"
+#include "utils/myUtils.h"
+#include "utils/thpool.h"
 #include "utils/log.h"
 
 /*** THREAD ***/
@@ -26,8 +27,14 @@ void closeProgram (int dummy) {
     #endif
 
     thpool_destroy (thpool);
-    
+
 }
+
+// TODO: where do we want to put this?
+void *authPacket;
+size_t authPacketSize;
+
+threadpool thpool;
 
 // FIXME: how can we signal the process to end?
 // TODO: recieve signals to init, retsart or teardown a server -> like a control panel
@@ -47,8 +54,25 @@ int main (void) {
 
     thpool = thpool_init (4);
 
-    Server *gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
-    if (gameServer) cerver_startServer (gameServer);
+    // 22/10/2018 -- TODO: where do we want to put this?
+    authPacket = generateClientAuthPacket ();
+    authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, NO_TYPE, createString ("Auth packet size: %i.", authPacketSize));
+    #endif
+
+    gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
+    if (gameServer) {
+        if (!cerver_startServer (gameServer)) {
+            logMsg (stdout, SUCCESS, SERVER, "Game server has started!");
+            logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+        } 
+
+        
+    } 
+
+    // FIXME: TEST!
+    // while (true) {}
 
     // if we reach this point, be sure to correctly clean all of our data...
     closeProgram (0);

@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#include "network.h"
+
 #include "utils/list.h"
 #include "utils/objectPool.h"
 #include "utils/vector.h"
-// #include "utils/myUtils.h"
 
 #define EXIT_FAILURE    1
 
@@ -209,5 +210,9 @@ extern void destroyGameServer (void *data);
 #include "utils/thpool.h"
 
 extern threadpool thpool;
+
+extern void *authPacket;
+extern size_t authPacketSize;
+extern void *generateClientAuthPacket ();
 
 #endif

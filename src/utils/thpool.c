@@ -20,7 +20,7 @@
 #include <sys/prctl.h>
 #endif
 
-#include "thpool.h"
+#include "utils/thpool.h"
 
 #ifdef THPOOL_DEBUG
 #define THPOOL_DEBUG 1

@@ -4,7 +4,7 @@
 
 /*** SOCKETS ***/   
 
-bool sock_setNonBlocking (i32 server) {
+bool sock_setNonBlocking (int32_t server) {
 
     int non_blocking = 1;
 	return fcntl (server, F_SETFL, O_NONBLOCK, non_blocking) != -1;

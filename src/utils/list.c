@@ -180,10 +180,7 @@ bool isInList (List *list, void *data) {
 
     ListElement *ptr = LIST_START (list);
     while (ptr != NULL) {
-        if (ptr->data == data) {
-            fprintf (stdout, "Is in list\n");
-            return true;
-        } 
+        if (ptr->data == data) return true;
         ptr = ptr->next;
     }
 
@@ -211,7 +208,7 @@ ListElement *getListElement (List *list, void *data) {
 // FIXME: as of 27/09/2018 this only works for sorting the leaderboard data!!
 
 // Split a doubly linked list (DLL) into 2 DLLs of half sizes 
-ListElement *split (ListElement *head) { 
+/* ListElement *split (ListElement *head) { 
 
     ListElement *fast = head, *slow = head; 
 
@@ -269,4 +266,4 @@ ListElement *mergeSort (ListElement *head) {
     // Merge the two sorted halves 
     return merge (head, second);
 
-}
+} */

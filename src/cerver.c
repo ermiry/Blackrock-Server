@@ -14,6 +14,7 @@
 #include "utils/log.h"
 #include "utils/vector.h"
 #include "utils/config.h"
+#include "utils/myUtils.h"
 
 /*** VALUES ***/
 
@@ -368,6 +369,31 @@ typedef struct {
 
 } ServerClient;
 
+// 22/10/2018 -- used to auth a new client in the game server
+void *generateClientAuthPacket () {
+
+    size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+
+    // buffer for packets
+    void *packetBuffer = malloc (packetSize);
+
+    void *begin = packetBuffer;
+    char *end = begin; 
+
+    // packet header
+    PacketHeader *header = (PacketHeader *) end;
+    end += sizeof (PacketHeader);
+    initPacketHeader (header, AUTHENTICATION);
+
+    // request data
+    RequestData *data = (RequestData *) end;
+    end += sizeof (RequestData);
+    data->type = REQ_AUTH_CLIENT;
+
+    return begin;
+
+}
+
 // check that we have got a valid client connected, if not, drop him
 void authenticateClient (void *data) {
 
@@ -376,31 +402,10 @@ void authenticateClient (void *data) {
         ServerClient *sc = (ServerClient *) data;
 
         // send a req to the client to authenticate itself
-        // TODO: have a reference to this package because is the same and we don't
-        // want to create it every time
-
-        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
-
-        // buffer for packets
-        void *packetBuffer = malloc (packetSize);
-
-        void *begin = packetBuffer;
-        char *end = begin; 
-
-        // packet header
-        PacketHeader *header = (PacketHeader *) end;
-        end += sizeof (PacketHeader);
-        initPacketHeader (header, AUTHENTICATION);
-
-        // request data
-        RequestData *data = (RequestData *) end;
-        end += sizeof (RequestData);
-        data->type = REQ_AUTH_CLIENT;
-
-        // send the request to the server
-        sendPacket (sc->server, begin, packetSize, sc->client->address);
+        sendPacket (sc->server, authPacket, authPacketSize, sc->client->address);
 
         // we expect a response from the client...
+        logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for the client to authenticate...");
     }
 
 }
@@ -827,11 +832,12 @@ void destroyGameServer (void *data) {
 
     GameServerData *gameData = (GameServerData *) data;
 
+    // FIXME:
     // clean any on going games...
-    if (gameData->lobbys.elements > 0) {
+    if (LIST_SIZE (gameData->currentLobbys) > 0) {
         Lobby *lobby = NULL;
-        for (size_t i_lobby = 0; i_lobby < gameData->lobbys.elements; i_lobby++) {
-            lobby = vector_get (&gameData->lobbys, i_lobby);
+        for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
+            lobby = (Lobby *) e->data;
             // TODO: check if we have players inside the lobby
             // if so... send them a msg to disconnect so that they can handle the disconnect
             // logic on their side, and disconnect each client
@@ -852,11 +858,12 @@ void destroyGameServer (void *data) {
         }
 
         // we can now safely delete each lobby structure
-        while (gameData->lobbys.elements > 0) {
+        while (LIST_SIZE (gameData->currentLobbys) > 0) {
 
         }
-    }
 
+    }
+    
 }
 
 // FIXME:
@@ -968,13 +975,13 @@ void handlePlayerInputPacket (struct sockaddr_storage from, PlayerInputPacket *p
     // TODO: maybe we can have a better way for searching players??
     // check if we have the player already registerd
     Player *player = NULL;
-    for (size_t p = 0; p < players.elements; p++) {
-        player = vector_get (&players, p);
-        if (player != NULL) {
-            if (sock_ip_equal ((struct sockaddr *) &player->address, ((struct sockaddr *) &from)))
-                break;  // we found a match!
-        }
-    }
+    // for (size_t p = 0; p < players.elements; p++) {
+    //     player = vector_get (&players, p);
+    //     if (player != NULL) {
+    //         if (sock_ip_equal ((struct sockaddr *) &player->address, ((struct sockaddr *) &from)))
+    //             break;  // we found a match!
+    //     }
+    // }
     
     // TODO: add players only from the game lobby before the game inits!!
     // if not, add it to the game
@@ -982,7 +989,7 @@ void handlePlayerInputPacket (struct sockaddr_storage from, PlayerInputPacket *p
     // handle the player input
     // player->input = packet->input;   // FIXME:
     // player->inputSequenceNum = packet->sequenceNum;
-    player->lastInputTime = getTimeSpec ();
+    // player->lastInputTime = getTimeSpec ();
 
 }
 
@@ -991,40 +998,40 @@ void handlePlayerInputPacket (struct sockaddr_storage from, PlayerInputPacket *p
 // creates and sends game packets
 void sendGamePackets (Server *server, int to) {
 
-    Player *destPlayer = vector_get (&players, to);
+    // Player *destPlayer = vector_get (&players, to);
 
     // first we need to prepare the packet...
 
     // TODO: clean this a little, but don't forget this can be dynamic!!
-	size_t packetSize = packetHeaderSize + updatedGamePacketSize +
-		players.elements * sizeof (Player);
+	// size_t packetSize = packetHeaderSize + updatedGamePacketSize +
+	// 	players.elements * sizeof (Player);
 
-	// buffer for packets, extend if necessary...
-	static void *packetBuffer = NULL;
-	static size_t packetBufferSize = 0;
-	if (packetSize > packetBufferSize) {
-		packetBufferSize = packetSize;
-		free (packetBuffer);
-		packetBuffer = malloc (packetBufferSize);
-	}
+	// // buffer for packets, extend if necessary...
+	// static void *packetBuffer = NULL;
+	// static size_t packetBufferSize = 0;
+	// if (packetSize > packetBufferSize) {
+	// 	packetBufferSize = packetSize;
+	// 	free (packetBuffer);
+	// 	packetBuffer = malloc (packetBufferSize);
+	// }
 
-	void *begin = packetBuffer;
-	char *end = begin; 
+	// void *begin = packetBuffer;
+	// char *end = begin; 
 
-	// packet header
-	PacketHeader *header = (PacketHeader *) end;
-    end += sizeof (PacketHeader);
-    initPacketHeader (header, GAME_UPDATE_TYPE);
+	// // packet header
+	// PacketHeader *header = (PacketHeader *) end;
+    // end += sizeof (PacketHeader);
+    // initPacketHeader (header, GAME_UPDATE_TYPE);
 
-    // TODO: do we need to send the game settings each time?
-	// game settings and other non-array data
-    UpdatedGamePacket *gameUpdate = (UpdatedGamePacket *) end;
-    end += updatedGamePacketSize;
-    // gameUpdate->sequenceNum = currentTick;  // FIXME:
-	// tick_packet->ack_input_sequence_num = dest_player->input_sequence_num;  // FIXME:
-    gameUpdate->playerId = destPlayer->id;
-    gameUpdate->gameSettings.playerTimeout = 30;    // FIXME:
-    gameUpdate->gameSettings.fps = 20;  // FIXME:
+    // // TODO: do we need to send the game settings each time?
+	// // game settings and other non-array data
+    // UpdatedGamePacket *gameUpdate = (UpdatedGamePacket *) end;
+    // end += updatedGamePacketSize;
+    // // gameUpdate->sequenceNum = currentTick;  // FIXME:
+	// // tick_packet->ack_input_sequence_num = dest_player->input_sequence_num;  // FIXME:
+    // gameUpdate->playerId = destPlayer->id;
+    // gameUpdate->gameSettings.playerTimeout = 30;    // FIXME:
+    // gameUpdate->gameSettings.fps = 20;  // FIXME:
 
     // TODO: maybe add here some map elements, dropped items and enemies??
     // such as the players or explosions?
@@ -1059,7 +1066,7 @@ void sendGamePackets (Server *server, int to) {
     // assert (end == (char *) begin + packetSize); */
 
     // after the pakcet has been prepare, send it to the dest player...
-    sendPacket (server, begin, packetSize, destPlayer->address);
+    // sendPacket (server, begin, packetSize, destPlayer->address);
 
 }
 
@@ -1089,7 +1096,7 @@ void createLobby (Server *server, Client *client, GameType gameType) {
     owner->id = nextPlayerId;
     nextPlayerId++;
 
-    Lobby *lobby = newLobby (owner, gameType);
+    Lobby *lobby = newLobby (server, owner, gameType);
     if (lobby) {
         #ifdef DEBUG
         logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
@@ -1117,8 +1124,9 @@ void createLobby (Server *server, Client *client, GameType gameType) {
         lobbyData->settings = lobby->settings;
         lobbyData->owner = lobby->owner;
 
+        // FIXME:
         // after the pakcet has been prepared, send it to the dest player...
-        sendPacket (server, begin, packetSize, lobby->owner->address);
+        // sendPacket (server, begin, packetSize, lobby->owner->address);
 
         // TODO: do we want to do this using a request?
         // FIXME: we need to wait for an ack of the ownwer and then we can do this...

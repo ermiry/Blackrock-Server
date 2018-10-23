@@ -1,6 +1,8 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include "cerver.h"
+
 // #include "network.h"
 // #include "utils/myTime.h"
 
@@ -91,7 +93,7 @@ typedef struct Player {
 
 	PlayerInput input;
 	u32 inputSequenceNum;
-	TimeSpec lastInputTime;
+	// TimeSpec lastInputTime;
 
 	bool alive;
 
@@ -118,7 +120,7 @@ typedef struct Lobby {
 
 /*** GAME FUNCTIONS ***/
 
-extern Lobby *newLobby (Player *, GameType);
+extern Lobby *newLobby (Server *,Player *, GameType);
 
 extern void spawnPlayer (Player *);
 
