@@ -6,8 +6,7 @@
 
 #include "utils/list.h"
 #include "utils/objectPool.h"
-// #include "utils/vector.h"
-// #include "utils/config.h"
+#include "utils/vector.h"
 // #include "utils/myUtils.h"
 
 #define EXIT_FAILURE    1
@@ -60,13 +59,12 @@ typedef struct GameServerData {
 
 } GameServerData;
 
-// TODO: what other info do we need to store?
 // anyone that connects to the server
 typedef struct Client {
 
     u32 clientID;
     i32 clientSock;
-    // struct sockaddr_storage address;
+    struct sockaddr_storage address;
 
 } Client;
 
@@ -91,7 +89,7 @@ typedef struct Server {
     // to recieve packets and specific functions to cast the packet to the type that we need?
 
     // do web servers need this?
-    // Vector clients;     // connected clients
+    Vector clients;     // connected clients
 
     // 20/10/2018 -- i dont like this...
     // Vector holdClients;     // hold on the clients until they authenticate
@@ -146,7 +144,9 @@ typedef enum RequestType {
     REQ_GET_FILE = 1,
     POST_SEND_FILE,
     
-    REQ_CREATE_LOBBY = 3,
+    REQ_AUTH_CLIENT,
+
+    REQ_CREATE_LOBBY,
 
     REQ_TEST = 100,
 
@@ -178,6 +178,7 @@ extern Version PROTOCOL_VERSION;
 typedef enum PacketType {
 
 	REQUEST = 1,
+    AUTHENTICATION,
     CREATE_GAME,
 	GAME_UPDATE_TYPE,
 	PLAYER_INPUT_TYPE,
@@ -202,5 +203,11 @@ extern void checkTimeouts (void);
 extern void sendGamePackets (Server *server, int to) ;
 
 extern void destroyGameServer (void *data);
+
+/*** TESTING ***/
+
+#include "utils/thpool.h"
+
+extern threadpool thpool;
 
 #endif

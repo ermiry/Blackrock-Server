@@ -10,6 +10,7 @@
 
 #include "game.h"
 
+#include "utils/thpool.h"
 #include "utils/log.h"
 #include "utils/vector.h"
 #include "utils/config.h"
@@ -166,6 +167,7 @@ void initPacketHeader (void *header, PacketType type) {
 
 }
 
+// TODO: 22/10/2018 -- 22:57 - if we have a lb, does all the traffic goes out from there?
 // sends a packet from a server to the client address
 void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr_storage address) {
 
@@ -199,12 +201,14 @@ void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr
 // FIXME: we can't have infinite ids!!
 u32 nextClientID = 0;
 
-Client *newClient (i32 sock) {
+Client *newClient (i32 sock, struct sockaddr_storage address) {
 
     Client *new = (Client *) malloc (sizeof (Client));
     
     new->clientID = nextClientID;
     new->clientSock = sock;
+
+    new->address = address;
 
     return new;
 
@@ -299,9 +303,9 @@ void *connectionHandler (void *data) {
                 GameServerData *data = (GameServerData *) server->serverData;
 
                 // TODO: update each game lobby
-                if (data->lobbys.elements > 0) {
+                // if (data->lobbys.elements > 0) {
 
-                }
+                // }
             } break;
 
             default: break;
@@ -356,7 +360,54 @@ void onHoldClient (Server *server, Client *client) {
 
 }
 
+// FIXME: move this form here if we are going to need it...
+typedef struct {
+
+    Server *server;
+    Client *client;
+
+} ServerClient;
+
+// check that we have got a valid client connected, if not, drop him
+void authenticateClient (void *data) {
+
+    if (!data) logMsg (stderr, ERROR, NO_TYPE, "Can't autenticate a NULL client!");
+    else {
+        ServerClient *sc = (ServerClient *) data;
+
+        // send a req to the client to authenticate itself
+        // TODO: have a reference to this package because is the same and we don't
+        // want to create it every time
+
+        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+
+        // buffer for packets
+        void *packetBuffer = malloc (packetSize);
+
+        void *begin = packetBuffer;
+        char *end = begin; 
+
+        // packet header
+        PacketHeader *header = (PacketHeader *) end;
+        end += sizeof (PacketHeader);
+        initPacketHeader (header, AUTHENTICATION);
+
+        // request data
+        RequestData *data = (RequestData *) end;
+        end += sizeof (RequestData);
+        data->type = REQ_AUTH_CLIENT;
+
+        // send the request to the server
+        sendPacket (sc->server, begin, packetSize, sc->client->address);
+
+        // we expect a response from the client...
+    }
+
+}
+
 #pragma endregion
+
+#pragma region LISTENING
 
 // tcp needs to accept a connection to communicate with it
 // this is called from a separate thread for each server     20/10/2018
@@ -377,17 +428,27 @@ void *tcpListenForConnections (void *data) {
 	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
     socklen_t sockLen = sizeof (struct sockaddr_storage);
 
+    ServerClient *sc = (ServerClient *) malloc (sizeof (ServerClient));
+
 	while ((clientSocket = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen))) {
         // first we need to check that we have got a valid client
         // so, we first add the client to a temp client list, and we ask him to authenticate
-        client = newClient (clientSocket);
+        client = newClient (clientSocket, clientAddress);
 
-        // FIXME: send the client to the on hold structure for authentication....
+        sc->server = server;
+        sc->client = client;
+
+        // TODO: send the client to the on hold structure for authentication....
         // onHoldClient (server, client);
+
+        // authenticate the client before he can make requests
+        thpool_add_work (thpool, (void *) authenticateClient, sc);
 
         // 20/10/2018 -- for now we just register the client to the correct server they reach
         registerClient (server, client);
 	}
+
+    if (sc) free (sc);
 
 }
 
@@ -424,8 +485,8 @@ void initServerDS (Server *server, ServerType type) {
         case WEB_SERVER: break;
         case GAME_SERVER: {
             GameServerData *data = (GameServerData *) malloc (sizeof (GameServerData));
-            vector_init (&data->players, sizeof (Player));
-            vector_init (&data->lobbys, sizeof (Lobby));
+            // vector_init (&data->players, sizeof (Player));
+            // vector_init (&data->lobbys, sizeof (Lobby));
 
             server->serverData = data;
         } break;
@@ -1005,13 +1066,13 @@ void sendGamePackets (Server *server, int to) {
 // FIXME: send feedback to the player
 // request from a from a tcp connected client to create a new lobby 
 // in the server he is actually connected to
-void createLobby (Server *server, Client *client) {
+void createLobby (Server *server, Client *client, GameType gameType) {
 
     // we need to treat the client as a player now
     // TODO: 22/10/2018 -- maybe this logic can change if we have a load balancer?
     Player *owner = NULL;
 
-    GameServerData *data = (GameServerData *) server->data;
+    GameServerData *data = (GameServerData *) server->serverData;
     if (data->playersPool) {
         if (POOL_SIZE (data->playersPool) > 0) {
             owner = (Player *) pop (data->playersPool);
@@ -1028,7 +1089,7 @@ void createLobby (Server *server, Client *client) {
     owner->id = nextPlayerId;
     nextPlayerId++;
 
-    Lobby *lobby = newLobby (owner);
+    Lobby *lobby = newLobby (owner, gameType);
     if (lobby) {
         #ifdef DEBUG
         logMsg (stdout, GAME, NO_TYPE, "New lobby created.");

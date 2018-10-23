@@ -7,6 +7,7 @@
 
 #include "cerver.h"
 
+#include "thpool.h"
 #include "utils/log.h"
 
 /*** THREAD ***/
@@ -20,6 +21,12 @@ void closeProgram (int dummy) {
     if (gameServer) cerver_teardown (gameServer);
     else logMsg (stdout, NO_TYPE, NO_TYPE, "There isn't any server to teardown. Quitting application.");
 
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, NO_TYPE, "Clearing thread pool...");
+    #endif
+
+    thpool_destroy (thpool);
+    
 }
 
 // FIXME: how can we signal the process to end?
@@ -38,11 +45,14 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
-    
+    thpool = thpool_init (4);
+
+    Server *gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
+    if (gameServer) cerver_startServer (gameServer);
 
     // if we reach this point, be sure to correctly clean all of our data...
     closeProgram (0);
-    
+
     return 0;
 
 }
