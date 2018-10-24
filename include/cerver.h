@@ -181,7 +181,8 @@ extern Version PROTOCOL_VERSION;
 // maybe something like our request type?
 typedef enum PacketType {
 
-	REQUEST = 1,
+    ERROR_PACKET = 1,
+	REQUEST,
     AUTHENTICATION,
     CREATE_GAME,
 	GAME_UPDATE_TYPE,
@@ -198,6 +199,26 @@ typedef struct PacketHeader {
 	PacketType packetType;
 
 } PacketHeader;
+
+/*** ERRORS ***/
+
+// 23/10/2018 -- lests test how this goes...
+typedef enum ErrorType {
+
+    ERR_SERVER_ERROR = 0,   // internal server error, like no memory
+
+    ERR_Create_Lobby = 1,
+
+} ErrorType;
+
+typedef struct ErrorData {
+
+    ErrorType type;
+    char msg[256];
+
+} ErrorData;
+
+extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
 
 /*** GAME SERVER ***/
 

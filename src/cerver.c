@@ -180,6 +180,32 @@ void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr
 
 }
 
+// creates and sends an error packet to the player to hanlde it
+u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
+
+    // first create the packet with the necesarry info
+    size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
+    
+    void *packetBuffer = malloc (packetSize);
+    void *begin = packetBuffer;
+    char *end = begin; 
+
+    PacketHeader *header = (PacketHeader *) end;
+    end += sizeof (PacketHeader);
+    initPacketHeader (header, ERROR_PACKET);
+
+    ErrorData *edata = (ErrorData *) end;
+    end += sizeof (ErrorData);
+    edata->type = type;
+    if (msg) strcpy (edata->msg, msg);
+
+    // send the packet to the client
+    sendPacket (server, begin, packetSize, client->address);
+
+    return 0;
+
+}
+
 #pragma endregion
 
 /*** REQUESTS ***/

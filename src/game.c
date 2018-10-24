@@ -119,25 +119,6 @@ GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
 // they use udp and they set the socket to non-blocking mode...
 // 23/10/2018 -- what about using poll? or select?
 
-// 23/10/2018 -- lests test how this goes...
-typedef enum ErrorType {
-
-    ERR_SERVER_ERROR = 0,   // internal server error, like no memory
-
-    ERR_Create_Lobby = 1,
-
-} ErrorType;
-
-// TODO: add the ability to add some text
-// creates and sends an error packet to the player to hanlde it
-u8 sendErrorPacket (Client *client, ErrorType type) {
-
-    // first create the packet with the necesarry info
-
-    // send the packet to the client
-
-}
-
 // handles the creation of a new game lobby, requested by a current registered client -> player
 Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
 
@@ -167,7 +148,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
         #endif
-        if (sendErrorPacket (owner->client, ERR_Create_Lobby)) {
+        if (sendErrorPacket (server, owner->client, ERR_Create_Lobby, "Player is already in a lobby!")) {
             #ifdef DEBUG
             logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
             #endif
@@ -199,7 +180,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
         push (data->lobbyPool, newLobby);
 
         // send feedback to the player
-        sendErrorPacket (owner->client, ERR_SERVER_ERROR);
+        sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, "Game server failed to create new lobby!");
 
         return NULL;
     } 
