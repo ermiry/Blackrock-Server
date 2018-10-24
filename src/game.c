@@ -51,15 +51,8 @@ void initLobbys (Server *gameServer) {
 
 }
 
-// TODO: do we want to have the config file always loaded in memory??
-// loads the settings for the selected game type from a cfg file
-GameSettings *getGameSettings (u8 gameType) {
-
-    Config *gameConfig = parseConfigFile ("./config/gameSettings.cfg");
-    if (!gameConfig) {
-        logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
-        return NULL;
-    } 
+// loads the settings for the selected game type from the game server data
+GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
 
     ConfigEntity *cfgEntity = getEntityWithId (gameConfig, gameType);
 	if (!cfgEntity) {
@@ -122,8 +115,29 @@ GameSettings *getGameSettings (u8 gameType) {
 
 }
 
-// FIXME:
-// TODO: send feedback back to the player on error
+// TODO: do we want to set the sock to nonblocking to handle the game? remember that in space-shooters
+// they use udp and they set the socket to non-blocking mode...
+// 23/10/2018 -- what about using poll? or select?
+
+// 23/10/2018 -- lests test how this goes...
+typedef enum ErrorType {
+
+    ERR_SERVER_ERROR = 0,   // internal server error, like no memory
+
+    ERR_Create_Lobby = 1,
+
+} ErrorType;
+
+// TODO: add the ability to add some text
+// creates and sends an error packet to the player to hanlde it
+u8 sendErrorPacket (Client *client, ErrorType type) {
+
+    // first create the packet with the necesarry info
+
+    // send the packet to the client
+
+}
+
 // handles the creation of a new game lobby, requested by a current registered client -> player
 Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
 
@@ -153,16 +167,13 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
         #endif
-        // TODO: send feedback to the player
+        if (sendErrorPacket (owner->client, ERR_Create_Lobby)) {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+            #endif
+        }
         return NULL;
     }
-
-
-    // FIXME:!!!!!!!
-    // TODO: set the server socket to no blocking and make sure we have a udp connection
-    // make sure that we have the correct config for the server in other func
-    // FIXME: where do we want to call this?? sock_setNonBlocking (server);
-
 
     Lobby *newLobby = NULL;
 
@@ -175,18 +186,21 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
     }
 
     else {
-        // FIXME: log from which server is comming...
-        logMsg (stderr, WARNING, SERVER, "Server has no refrence to a lobby pool!");
+        logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a lobby pool!");
         newLobby = (Lobby *) malloc (sizeof (Lobby));
     }
 
     newLobby->owner = owner;
-    newLobby->settings = getGameSettings (gameType);
+    newLobby->settings = getGameSettings (data->gameSettingsConfig, gameType);
     if (!newLobby->settings) {
         logMsg (stderr, ERROR, GAME, "Failed to get the settings for the new lobby!");
         newLobby->owner = NULL;
         // send the lobby back to the object pool
         push (data->lobbyPool, newLobby);
+
+        // send feedback to the player
+        sendErrorPacket (owner->client, ERR_SERVER_ERROR);
+
         return NULL;
     } 
 

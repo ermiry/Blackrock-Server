@@ -459,7 +459,6 @@ void tcpListenForConnections (void *data) {
                 // 20/10/2018 -- for now we just register the client to the correct server they reach
                 registerClient (server, client);
             }
-            printf ("hola");
         }
 
         break;  // if we are not accepting clients anymore...
@@ -529,6 +528,13 @@ void initServerValues (Server *server, ServerType type) {
         case WEB_SERVER: break;
         case GAME_SERVER: {
             GameServerData *data = (GameServerData *) server->serverData;
+
+            // get game modes info from a config file
+            data->gameSettingsConfig  = parseConfigFile ("./config/gameSettings.cfg");
+            if (!data->gameSettingsConfig) {
+                logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
+                return NULL;
+            } 
 
             data->lobbyPacketSize = sizeof (lobbyPacketSize);
             data->updatedGamePacketSize = sizeof (UpdatedGamePacket);
@@ -875,6 +881,12 @@ void destroyGameServer (void *data) {
         }
 
     }
+
+    // clean any other game server values
+    clearConfig (gameData->gameSettingsConfig);     // clean game modes info
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "Done clearing game settings config.");
+    #endif
     
 }
 

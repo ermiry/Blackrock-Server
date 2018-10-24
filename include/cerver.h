@@ -7,6 +7,7 @@
 #include "network.h"
 
 #include "utils/list.h"
+#include "utils/config.h"
 #include "utils/objectPool.h"
 #include "utils/vector.h"
 
@@ -43,9 +44,11 @@ typedef enum ServerType {
 
 } ServerType;
 
-// game server data
 typedef struct GameServerData {
 
+    Config *gameSettingsConfig;     // stores game modes info
+
+    // TODO: do we want these here?
     // const packet sizes
     size_t lobbyPacketSize;
     size_t updatedGamePacketSize;

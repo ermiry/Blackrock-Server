@@ -86,6 +86,8 @@ typedef struct UpdatedGamePacket {
 // TODO: maybe add the game components here? as in the client?
 typedef struct Player {
 
+	Client *client;		// client network data associated to this player
+
 	PlayerId id;
 	bool inLobby;
 	
