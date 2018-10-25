@@ -92,7 +92,7 @@ void vector_insert (Vector *vector, size_t i_new_elem, const void *new_elem) {
 
 }
 
-void vector_delete(Vector *vector, size_t i_elem) {
+void vector_delete (Vector *vector, size_t i_elem) {
 
 	assert (i_elem < vector->elements);
 

@@ -26,8 +26,8 @@ typedef struct Pool {
 
 
 extern Pool *initPool (void);
-extern void push (Pool *, void *data);
-extern void *pop (Pool *);
+extern void pool_push (Pool *, void *data);
+extern void *pool_pop (Pool *);
 extern void clearPool (Pool *);
 
 #endif

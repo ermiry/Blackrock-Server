@@ -1202,8 +1202,6 @@ void createLobby (Server *server, Client *client, GameType gameType) {
 
         else logMsg (stderr, ERROR, PACKET, "Failed to create lobby packet!");
 
-        // FIXME: what happens with the buffer that we just created? do we need to free it?
-
         // TODO: do we want to do this using a request?
         // FIXME: we need to wait for an ack of the ownwer and then we can do this...
         // the ack is when the player is ready in its lobby screen, and only then we can

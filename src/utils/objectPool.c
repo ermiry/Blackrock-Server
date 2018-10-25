@@ -22,7 +22,7 @@ Pool *initPool (void) {
 
 }
 
-void push (Pool *pool, void *data) {
+void pool_push (Pool *pool, void *data) {
 
     if (data == NULL) return;
 
@@ -37,7 +37,7 @@ void push (Pool *pool, void *data) {
 
 }
 
-void *pop (Pool *pool) {
+void *pool_pop (Pool *pool) {
 
     void *data;
 

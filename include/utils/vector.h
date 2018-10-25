@@ -18,5 +18,6 @@ typedef struct Vector {
 extern void vector_init (Vector *vector, size_t elementSize);
 extern void *vector_get (Vector *vector, size_t i_elem);
 extern void vector_push (Vector *vector, const void *elem);
+extern void vector_delete (Vector *vector, size_t i_elem);
 
 #endif

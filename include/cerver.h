@@ -186,6 +186,7 @@ typedef enum PacketType {
     CREATE_GAME,
     LOBBY_CREATE,
     LOBBY_UPDATE,
+    LOBBY_DESTROY,
 	GAME_UPDATE_TYPE,
 	PLAYER_INPUT_TYPE,
 
@@ -201,7 +202,10 @@ typedef struct PacketHeader {
 
 } PacketHeader;
 
+extern void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr_storage address);
+
 extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 
+
 
 /*** ERRORS ***/
 
@@ -225,6 +229,8 @@ typedef struct ErrorData {
 extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
 
 /*** GAME SERVER ***/
+
+extern u16 nextPlayerId;
 
 extern void recievePackets (void);  // FIXME: is this a game server specific?
 
