@@ -90,8 +90,6 @@ typedef struct Player {
 
 	PlayerId id;
 	bool inLobby;
-	
-	// struct sockaddr_storage address;
 
 	PlayerInput input;
 	u32 inputSequenceNum;
@@ -122,7 +120,7 @@ typedef struct Lobby {
 
 /*** GAME FUNCTIONS ***/
 
-extern Lobby *newLobby (Server *,Player *, GameType);
+// extern Lobby *newLobby (Server *server, Player *owner, GameType gameType);
 
 extern void spawnPlayer (Player *);
 

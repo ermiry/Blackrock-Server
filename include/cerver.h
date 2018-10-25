@@ -54,12 +54,11 @@ typedef struct GameServerData {
     size_t updatedGamePacketSize;
     size_t playerInputPacketSize;
 
-    List *currentLobbys;    // a list of the current lobbys
     Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
+    List *currentLobbys;    // a list of the current lobbys
 
     Pool *playersPool;      // 22/10/2018 -- each server has its own player's pool
-
-    // Vector players;
+    List *players;          // players connected to the server, but outside a lobby -> 24/10/2018
 
 } GameServerData;
 
@@ -208,6 +207,7 @@ typedef enum ErrorType {
     ERR_SERVER_ERROR = 0,   // internal server error, like no memory
 
     ERR_Create_Lobby = 1,
+    ERR_Join_Lobby,
 
 } ErrorType;
 
@@ -228,6 +228,24 @@ extern void checkTimeouts (void);
 extern void sendGamePackets (Server *server, int to) ;
 
 extern void destroyGameServer (void *data);
+
+
+/*** SERIALIZATION ***/
+
+// 24/10/2018 -- lets try how this works --> our goal with serialization is to send 
+// a packet without our data structures but whitout any ptrs
+
+typedef struct SLobby {
+
+    GameSettings settings;      // 24/10/2018 -- we dont have any ptr in this struct
+    bool inGame;
+
+    // FIXME: how do we want to send this info?
+    // Player owner;               // how do we want to send which is the owner
+    // Vector players;             // ecah client also needs to keep track of other players in the lobby
+
+} SLobby;
+
 
 /*** TESTING ***/
 

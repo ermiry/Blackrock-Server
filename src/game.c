@@ -261,9 +261,10 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
 
 }
 
+// TODO: add a time stamp when the player joins the lobby
 // FIXME: send feedback to the player whatever the output
 // called by a registered player that wants to join a lobby on progress
-u8 joinLobby (Lobby *lobby, Player *player) {
+u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
     if (!lobby) {
         #ifdef DEBUG
@@ -287,7 +288,7 @@ u8 joinLobby (Lobby *lobby, Player *player) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player tries to join the same lobby he is in.");
             #endif
-            // TODO: send feedback to the player...
+            sendErrorPacket (server, player->client, ERR_Join_Lobby, "You can't join the same lobby you are in!");
             return 1;
         }
     }
@@ -297,7 +298,7 @@ u8 joinLobby (Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join a lobby that is in game.");
         #endif
-        // TODO: send feedback to the player...
+        sendErrorPacket (server, player->client, ERR_Join_Lobby, "A game is in progress in the lobby!");
         return 1;
     }
 
@@ -305,17 +306,64 @@ u8 joinLobby (Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join an already full lobby.");
         #endif
-        // TODO: send feedback to the player...
+        sendErrorPacket (server, player->client, ERR_Join_Lobby, "The lobby is already full!");
         return 1;
     }
 
-    // FIXME:
     // the player is clear to join the lobby...
     // move the player from the server's players to the in lobby players
-    // sync the in lobby player(s) and the new player
-    // TODO: send feedback to the players
+    GameServerData *gameData = (GameServerData *) server->serverData;
+    tempPlayer = dllist_getPlayerById (gameData->players, player->id);
+    if (!tempPlayer) {
+        logMsg (stderr, ERROR, GAME, "A player wan't found in the current player -- join lobby");
+        return 1;
+    }
 
-    player->inLobby = true;
+    vector_push (&lobby->players, tempPlayer);      // add the player to the lobby
+    player->inLobby = true;     // mark the player as in a lobby
+
+    // sync the in lobby player(s) and the new player
+    // we need to send again the lobby packages and mark it as an update
+    // TODO: maybe is a good idea to add a time stamp?
+    
+    // TODO: create a function for this? -- this can be used in all the lobby functions
+    // generate the new lobby package
+
+    size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby);
+    
+    void *packetBuffer = malloc (packetSize);
+    void *begin = packetBuffer;
+    char *end = begin; 
+
+    PacketHeader *header = (PacketHeader *) end;
+    end += sizeof (PacketHeader);
+    initPacketHeader (header, CREATE_GAME); // FIXME: change type to lobby update
+
+    // serialized lobby data
+    SLobby *slobby = (SLobby *) end;
+    end += sizeof (SLobby);
+    slobby->settings.fps = lobby->settings->fps;
+    slobby->settings.minPlayers = lobby->settings->minPlayers;
+    slobby->settings.maxPlayers = lobby->settings->maxPlayers;
+    slobby->settings.playerTimeout = lobby->settings->playerTimeout;
+
+    slobby->inGame = false;
+
+    // update the players inside the lobby
+    // FIXME: send owner info and the vector ot players
+
+    // send the packet to each player inside the lobby...
+    for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
+        tempPlayer = vector_get (&lobby->players, i_player);
+        if (tempPlayer) sendPacket (server, begin, packetSize, tempPlayer->client->address);
+        else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
+    }
+
+    // FIXME: do we need to free the packet buffer?
+
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "A new player has joined the lobby");
+    #endif
 
     return 0;   // success
 
@@ -347,7 +395,7 @@ u8 leaveLobby (Lobby *lobby, Player *player) {
 
     if (!tempPlayer) {
         #ifdef DEBUG
-        logMsg (stderr, ERROR, GAME, "The player doesn't belongs to the lobby!");
+        logMsg (stderr, ERROR, GAME, "The player doesn't belong to the lobby!");
         #endif
         return 1;
     }
@@ -364,6 +412,7 @@ u8 leaveLobby (Lobby *lobby, Player *player) {
 
 }
 
+// TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
 // TODO: maybe later we can pass the socket of the server?
 // TODO: do we need to pass the lobby struct and settings??
 // this is called from a request from the owner of the lobby

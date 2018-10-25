@@ -149,20 +149,6 @@ bool insertAfter (List *list, ListElement *element, void *data) {
 
 /*** TRAVERSING --- SEARCHING ***/
 
-// void *searchById (List *list, GameComponent type, i32 id) {
-
-//     ListElement *ptr = LIST_START (list);
-//     while (ptr != NULL) { 
-        
-//         //if (ptr->data == data) return ptr->data;
-//         ptr = ptr->next;
-//     }
-
-//     // not found
-//     return NULL;
-
-// }
-
 void *searchList (List *list, void *data) {
 
     ListElement *ptr = LIST_START (list);
@@ -267,3 +253,27 @@ ListElement *mergeSort (ListElement *head) {
     return merge (head, second);
 
 } */
+
+/*** CUSTOM ***/
+
+#include "game.h"
+
+// 24/10/2018 -- removes the list element from the list and returns the player data
+Player *dllist_getPlayerById (List *list, uint16_t playerID) {
+
+    if (!list) return NULL;
+
+    Player *player = NULL;
+    for (ListElement *e = LIST_START (list); e != NULL; e = e->next) {
+        if (e->data) {
+            player = (Player *) e->data;
+            if (player->id == playerID) {
+                removeElement (list, e);
+                break;
+            }
+        }
+    }
+
+    return player;
+
+}

@@ -352,6 +352,8 @@ void *connectionHandler (void *data) {
 // TODO: handle ipv6 configuration
 // TODO: do we need to hanlde time here?
 
+#pragma endregion
+
 // FIXME:
 /*** AUTHENTICATE THE CLIENT CONNECTION ***/
 
@@ -1126,79 +1128,82 @@ void sendGamePackets (Server *server, int to) {
 
 }
 
-// FIXME: send feedback to the player
+// FIXME:
 // request from a from a tcp connected client to create a new lobby 
 // in the server he is actually connected to
 void createLobby (Server *server, Client *client, GameType gameType) {
+
+    // TODO: how do we check if the current client isn't associated with a player?
 
     // we need to treat the client as a player now
     // TODO: 22/10/2018 -- maybe this logic can change if we have a load balancer?
     Player *owner = NULL;
 
-    GameServerData *data = (GameServerData *) server->serverData;
-    if (data->playersPool) {
-        if (POOL_SIZE (data->playersPool) > 0) {
-            owner = (Player *) pop (data->playersPool);
+    GameServerData *gameData = (GameServerData *) server->serverData;
+    if (gameData->playersPool) {
+        if (POOL_SIZE (gameData->playersPool) > 0) {
+            owner = (Player *) pop (gameData->playersPool);
             if (!owner) owner = (Player *) malloc (sizeof (Player));
         }
     }
 
     else {
-        // FIXME: log from which server is comming...
-        logMsg (stderr, WARNING, SERVER, "Server has no refrence to a players pool!");
+        logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a players pool!");
         owner = (Player *) malloc (sizeof (Player));
     }
 
     owner->id = nextPlayerId;
     nextPlayerId++;
 
+    owner->client = client;     // reference to the client network data
+
     Lobby *lobby = newLobby (server, owner, gameType);
     if (lobby) {
         #ifdef DEBUG
         logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
-        #endif
+        #endif  
 
         // send the lobby info to the owner
-        size_t packetSize = packetHeaderSize + lobbyPacketSize;
+        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby);
         
         void *packetBuffer = malloc (packetSize);
         void *begin = packetBuffer;
         char *end = begin; 
 
-        // packet header
         PacketHeader *header = (PacketHeader *) end;
         end += sizeof (PacketHeader);
         initPacketHeader (header, CREATE_GAME);
 
-        // 04/10/2018 -- 22:28
-        // TODO: do we need to serialize this data?
-        // TODO: does ptrs work? or do we have to send data without ptrs??
-        // lobby data
-        Lobby *lobbyData = (Lobby *) end;
-        end += lobbyPacketSize;
+        // serialized lobby data
+        SLobby *slobby = (SLobby *) end;
+        end += sizeof (SLobby);
+        slobby->settings.fps = lobby->settings->fps;
+        slobby->settings.minPlayers = lobby->settings->minPlayers;
+        slobby->settings.maxPlayers = lobby->settings->maxPlayers;
+        slobby->settings.playerTimeout = lobby->settings->playerTimeout;
 
-        lobbyData->settings = lobby->settings;
-        lobbyData->owner = lobby->owner;
+        slobby->inGame = false;
 
-        // FIXME:
+        // TODO: send owner info and the vector ot players
+
         // after the pakcet has been prepared, send it to the dest player...
-        // sendPacket (server, begin, packetSize, lobby->owner->address);
+        sendPacket (server, begin, packetSize, owner->client->address);
+
+        // FIXME: what happens with the buffer that we just created? do we need to free it?
 
         // TODO: do we want to do this using a request?
         // FIXME: we need to wait for an ack of the ownwer and then we can do this...
         // the ack is when the player is ready in its lobby screen, and only then we can
         // handle requests from other players to join
 
-        // TODO: we can now wait for more players to join the lobby...
-
-        // TODO: make sure that all the players have the same game settings, 
-        // so send to them that infofprintf (stdout, "[GAME]: !\n"); when they connect!!
+        // if the owner send us an ack packet of the lobby, is because the client is the lobby screen
+        // and the lobby is ready to recieve more players... but that is handled from other client reqs
     }
 
     else {
         logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
 
-        // FIXME: send an error to the player to hanlde it
+        // 24/10/2018 -- newLobby () sends an error message to the player...
     } 
 
 }

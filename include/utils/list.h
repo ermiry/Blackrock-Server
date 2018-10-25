@@ -49,4 +49,10 @@ ListElement *getListElement (List *, void *data);
 
 // extern ListElement *mergeSort (ListElement *head);
 
+/*** CUSTOM ***/
+
+#include "game.h"
+
+extern Player *dllist_getPlayerById (List *list, uint16_t playerID);
+
 #endif
