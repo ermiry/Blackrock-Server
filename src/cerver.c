@@ -206,6 +206,35 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
 }
 
+// FIXME: handle the players inside the lobby
+// creates a lobby packet with the passed lobby info
+void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize) {
+
+    void *packetBuffer = malloc (packetSize);
+    void *begin = packetBuffer;
+    char *end = begin; 
+
+    PacketHeader *header = (PacketHeader *) end;
+    end += sizeof (PacketHeader);
+    initPacketHeader (header, packetType); 
+
+    // serialized lobby data
+    SLobby *slobby = (SLobby *) end;
+    end += sizeof (SLobby);
+    slobby->settings.fps = lobby->settings->fps;
+    slobby->settings.minPlayers = lobby->settings->minPlayers;
+    slobby->settings.maxPlayers = lobby->settings->maxPlayers;
+    slobby->settings.playerTimeout = lobby->settings->playerTimeout;
+
+    slobby->inGame = false;
+
+    // update the players inside the lobby
+    // FIXME: get owner info and the vector ot players
+
+    return begin;
+
+}
+
 #pragma endregion
 
 /*** REQUESTS ***/
@@ -1163,31 +1192,15 @@ void createLobby (Server *server, Client *client, GameType gameType) {
         logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
         #endif  
 
-        // send the lobby info to the owner
-        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby);
-        
-        void *packetBuffer = malloc (packetSize);
-        void *begin = packetBuffer;
-        char *end = begin; 
+        // send the lobby info to the owner -- we only have one player in the lobby vector
+        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + sizeof (SPlayer);
+        void *lobbyPacket = createLobbyPacket (LOBBY_CREATE, lobby, packetSize);
+        if (lobbyPacket) {
+            sendPacket (server, lobbyPacket, packetSize, owner->client->address);
+            free (lobbyPacket);
+        }
 
-        PacketHeader *header = (PacketHeader *) end;
-        end += sizeof (PacketHeader);
-        initPacketHeader (header, CREATE_GAME);
-
-        // serialized lobby data
-        SLobby *slobby = (SLobby *) end;
-        end += sizeof (SLobby);
-        slobby->settings.fps = lobby->settings->fps;
-        slobby->settings.minPlayers = lobby->settings->minPlayers;
-        slobby->settings.maxPlayers = lobby->settings->maxPlayers;
-        slobby->settings.playerTimeout = lobby->settings->playerTimeout;
-
-        slobby->inGame = false;
-
-        // TODO: send owner info and the vector ot players
-
-        // after the pakcet has been prepared, send it to the dest player...
-        sendPacket (server, begin, packetSize, owner->client->address);
+        else logMsg (stderr, ERROR, PACKET, "Failed to create lobby packet!");
 
         // FIXME: what happens with the buffer that we just created? do we need to free it?
 

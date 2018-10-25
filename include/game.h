@@ -124,4 +124,13 @@ typedef struct Lobby {
 
 extern void spawnPlayer (Player *);
 
+/*** SERIALIZATION ***/
+
+// game serialized data
+
+typedef struct Splayer {
+
+
+} SPlayer;
+
 #endif

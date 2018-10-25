@@ -184,6 +184,8 @@ typedef enum PacketType {
 	REQUEST,
     AUTHENTICATION,
     CREATE_GAME,
+    LOBBY_CREATE,
+    LOBBY_UPDATE,
 	GAME_UPDATE_TYPE,
 	PLAYER_INPUT_TYPE,
 
@@ -198,6 +200,8 @@ typedef struct PacketHeader {
 	PacketType packetType;
 
 } PacketHeader;
+
+extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 
 
 /*** ERRORS ***/
 

@@ -261,8 +261,14 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
 
 }
 
+// 24/20/2018
+// TODO: is sending packets to the players any different if each one has a thread?
+    // do we want to send the packets in a separte thread?? think if each client has its own thread
+
 // TODO: add a time stamp when the player joins the lobby
-// FIXME: send feedback to the player whatever the output
+
+// 24/10/2018 the client is responsible of displaying the correct message depending on the packet we send him
+
 // called by a registered player that wants to join a lobby on progress
 u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
@@ -326,40 +332,22 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
     // we need to send again the lobby packages and mark it as an update
     // TODO: maybe is a good idea to add a time stamp?
     
-    // TODO: create a function for this? -- this can be used in all the lobby functions
     // generate the new lobby package
-
-    size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby);
-    
-    void *packetBuffer = malloc (packetSize);
-    void *begin = packetBuffer;
-    char *end = begin; 
-
-    PacketHeader *header = (PacketHeader *) end;
-    end += sizeof (PacketHeader);
-    initPacketHeader (header, CREATE_GAME); // FIXME: change type to lobby update
-
-    // serialized lobby data
-    SLobby *slobby = (SLobby *) end;
-    end += sizeof (SLobby);
-    slobby->settings.fps = lobby->settings->fps;
-    slobby->settings.minPlayers = lobby->settings->minPlayers;
-    slobby->settings.maxPlayers = lobby->settings->maxPlayers;
-    slobby->settings.playerTimeout = lobby->settings->playerTimeout;
-
-    slobby->inGame = false;
-
-    // update the players inside the lobby
-    // FIXME: send owner info and the vector ot players
+    size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
+    void *packetBegin = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
+    if (!packetBegin) {
+        logMsg (stderr, ERROR, PACKET, "Failed to create lobby update packet!");
+        return 1;
+    }
 
     // send the packet to each player inside the lobby...
     for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
         tempPlayer = vector_get (&lobby->players, i_player);
-        if (tempPlayer) sendPacket (server, begin, packetSize, tempPlayer->client->address);
+        if (tempPlayer) sendPacket (server, packetBegin, packetSize, tempPlayer->client->address);
         else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
     }
 
-    // FIXME: do we need to free the packet buffer?
+    if (packetBegin) free (packetBegin);    // free the lobby packet
 
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "A new player has joined the lobby");
@@ -368,6 +356,9 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
     return 0;   // success
 
 }
+
+// TODO: same problem as in the join lobby structure --> do we need to change the logic of how we 
+// broadcast all the players inside the lobby about the same action? --> how do we keep them in sync?
 
 // FIXME: send feedback to the player whatever the output
 u8 leaveLobby (Lobby *lobby, Player *player) {
@@ -386,29 +377,35 @@ u8 leaveLobby (Lobby *lobby, Player *player) {
         return 1;
     }
 
-    // check if the current player is in the correct lobby
+    // remove the player from the lobby structure -> this stops the lobby from sending & recieving packets
+    // to the player
+    // TODO: maybe we might need to refactor this in the future to just pop the data from the vector
     Player *tempPlayer = NULL;
+    bool found = false;
     for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
         tempPlayer = vector_get (&lobby->players, i_player);
-        if (player->id == tempPlayer->id) break;    // the player is in the lobby
+        if (player->id == tempPlayer->id) {
+            // create a new player
+            // Player *newPlayer = 
+
+            // add the player to the lobby players list so that we can listen for new requests from h
+            player->inLobby = false;
+
+            // broadcast the other players that the player left
+
+            // handle if they are in the lobby scene or in current game
+                // if the player is the owner -> the lobby gets destroyed...
+        } 
     }
 
-    if (!tempPlayer) {
+    if (!found) {
         #ifdef DEBUG
         logMsg (stderr, ERROR, GAME, "The player doesn't belong to the lobby!");
         #endif
         return 1;
     }
 
-    // remove the player from the lobby structure -> this stops the lobby from sending & recieving packets
-    // to the player
-    // broadcast the other players that he left
-    // handle if they are in the lobby scene or in current game
-        // if the player is the owner -> the lobby gets destroyed...
-
-    player->inLobby = false;
-
-    return 0;   // the player left successfully
+    return 0;   // the player left the lobby successfully
 
 }
 
