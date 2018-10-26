@@ -5,6 +5,7 @@ IDIR = ./include/
 SRCDIR = ./src/
 
 SOURCES = $(SRCDIR)*.c \
+		  $(SRCDIR)/game/*.c \
 		  $(SRCDIR)/utils/*.c
 
 all: server #run #clean

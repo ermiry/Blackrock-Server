@@ -510,6 +510,8 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
 #pragma region GAME MASTER
 
+#include "game/map.h"
+
 void generateLevel (World *world) {
 
 }
