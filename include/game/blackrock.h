@@ -24,10 +24,6 @@ typedef int64_t i64;
 
 typedef unsigned char asciiChar;
 
-#define internal    static
-#define localPersist    static
-#define global  static
-
 #define THREAD_OK   0
 
 #endif
