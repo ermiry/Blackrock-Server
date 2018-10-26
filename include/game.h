@@ -102,6 +102,21 @@ typedef struct Player {
 
 } Player;
 
+typedef struct Level {
+
+    u8 levelNum;
+    bool **mapCells;    // dungeon map
+
+} Level;
+
+// TODO: move this from here for a cleaner code
+// in game data structres
+typedef struct World {
+
+	Level *level;
+
+} World;
+
 typedef struct Lobby {
 
 	GameSettings *settings;
@@ -109,6 +124,8 @@ typedef struct Lobby {
 
 	Player *owner;			// the client that created the lobby -> he has higher privileges
 	Vector players;			// the clients connected to the lobby
+
+	World world;			// in game data structres
 
 } Lobby;
 

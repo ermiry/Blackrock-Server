@@ -50,11 +50,11 @@ Player *newPlayer (Pool *pool, Player *player) {
 
 #pragma endregion
 
-/*** GAME MASTER ***/
+/*** LOBBY ***/
 
 /* All the logic that can handle the creation and management of the games goes here! */
 
-#pragma region GAME MASTER
+#pragma region LOBBY
 
 // FIXME: what is our lobby destroy function? -> must be similar to destroy lobby,
 // but we must not send the lobby to the pool but free it
@@ -251,7 +251,6 @@ u8 removePlayerFromLobby (GameServerData *gameData, Vector players, size_t i_pla
 
 }
 
-// FIXME:
 // only the owner of the lobby can destroy the lobby
 // a lobby should only be destroyed when the owner quits or if we teardown the server
 u8 destroyLobby (Server *server, Lobby *lobby) {
@@ -275,6 +274,8 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
         return 1;
     }
 
+    GameServerData *gameData = (GameServerData *) server->serverData;
+
     if (lobby->players.elements > 0) {
         // send the players the correct package so they can handle their logic
         size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
@@ -285,31 +286,30 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
         }
 
         Player *tempPlayer = NULL;
+        // send the lobby destriy packet to the players
         for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
             tempPlayer = vector_get (&lobby->players, i_player);
             if (tempPlayer) sendPacket (server, lobbyPacket, packetSize, tempPlayer->client->address);
             else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
         }
 
-        // FIXME: finalize the game
-        if (lobby->inGame) {}
-
         // remove the players from this structure and send them to the server's players list
-
-        // TODO: dont forget to player->inLobby = false;
+        while (lobby->players.elements > 0) {
+            tempPlayer = vector_get (&lobby->players, 0);
+            removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
+        }
     }
 
     lobby->owner = NULL;
     if (lobby->settings) free (lobby->settings);
 
     // we are safe to clear the lobby structure
-    GameServerData *data = (GameServerData *) server->serverData;
-    if (data) {
+    if (gameData) {
         // first remove the lobby from the active ones, then send it to the inactive ones
-        ListElement *le = getListElement (data->currentLobbys, lobby);
+        ListElement *le = getListElement (gameData->currentLobbys, lobby);
         if (le) {
-            Lobby *temp = (Lobby *) removeElement (data->currentLobbys, le);
-            if (temp) push (data->lobbyPool, temp);
+            Lobby *temp = (Lobby *) removeElement (gameData->currentLobbys, le);
+            if (temp) push (gameData->lobbyPool, temp);
         }
 
         else {
@@ -486,33 +486,124 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
-// TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
-// TODO: maybe later we can pass the socket of the server?
-// TODO: do we need to pass the lobby struct and settings??
-// this is called from a request from the owner of the lobby
-void startGame (void) {
+#pragma endregion
 
-    // TODO: init here other game structures like the map and enemies
+/*** GAME MASTER ***/
 
-    // TODO: we need to send the players a request to init their game, and we need to send
-    // them our game settings
+/* Here goes all the logic that makes the in game work */
 
-    // TODO: make sure that all the players are sync and have inited their own game
+// 25/10/2018 -- what do we want to do server and client side?
+/***
+ * at the start of the game, we need to be sure that the client has the correct dbs and files
+ * 
+ * server: - init the map
+ *         - init enemies
+ *         - calculate enemy pathfinding and send to client the result
+ *         - enemy loot
+ *         - score and leaderboards
+ *         - keyframes to sync the clients every so often
+ *         - server can send messages to the clients' message log
+ * 
+ * client: - calculate fov: and send server the result
+ *         - comabt and send the result
+ * **/
 
-    // if all the players are fine, start the game
-    // inGame = true;
-    // gameLoop ();
+#pragma region GAME MASTER
+
+void generateLevel (World *world) {
 
 }
 
-#pragma endregion
+void enterDungeon (World *world) {
 
-/*** MULTIPLAYER ***/
+    if (world->level == NULL) {
+        world->level = (Level *) malloc (sizeof (Level));
+        world->level->levelNum = 1;
+        world->level->mapCells = (bool **) calloc (MAP_WIDTH, sizeof (bool *));
+        for (u8 i = 0; i < MAP_WIDTH; i++)
+            world->level->mapCells[i] = (bool *) calloc (MAP_HEIGHT, sizeof (bool));
 
-/* Here goes all the logic that make the in game logic work */
+    } 
+    
+    // generate a random world froms scratch
+    // TODO: maybe later we want to specify some parameters based on difficulty?
+    // or based on the type of terrain that we want to generate.. we don't want to have the same algorithms
+    // to generate rooms and for generating caves or open fields
 
-#pragma region MULTIPLAYER GAME
+    // after we have allocated the new level structure, we can start generating the first level
+    generateLevel (world);
 
+}
 
+// inits the world data inside the lobby
+void initWorld (World *world) {
+
+    enterDungeon (world);
+    
+}
+
+// TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
+// TODO: maybe later we can pass the socket of the server?
+// TODO: do we need to pass the lobby struct and settings??
+// this is called from by the owner of the lobby
+void startGame (void) {
+
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "Starting the game...");
+    #endif
+
+    // FIXME: support a retry function -> we don't need to generate this things again!
+    // first init the in game structures
+
+    // server side
+    // init map
+    // init enemies
+    // place stairs and other map elements
+
+    // client side
+    // init their player
+    // generate map and enemies based on our data
+
+    // place each player in a near spot to each other
+    // get the fov structure
+
+    // TODO: make sure that all the players are sync and have inited their own game
+
+    // FIXME: send messages to the client log
+    // TODO: add different texts here!!
+    // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
+
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
+    #endif
+
+    // init the game
+    // start calculating pathfinding
+    // sync fov of all players
+    // sync player data like health
+    // keep track of players score
+    // sync players movement
+
+}
+
+// FIXME:
+// stops the current game in progress
+// called when the players don't finish the current game
+void stopGame (void) {
+
+    // logic to stop the current game in progress
+
+}
+
+// FIXME:
+// called when the win condition has been reached inside a lobby
+void endGame (void) {
+
+    // logic to stop the current game in the server
+    // send feedback to the players that the game has finished
+    // send players the scores and leaderboard
+    // the lobby owner can retry the game or exit to the lobby screen
+
+}
 
 #pragma endregion
