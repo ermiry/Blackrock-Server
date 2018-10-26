@@ -25,6 +25,8 @@ unsigned int randomInt (unsigned int min, unsigned int max) {
 
 /** STRINGS ***/
 
+#pragma region STRINGS
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,3 +57,49 @@ char *createString (const char *stringWithFormat, ...) {
     return str;
 
 }
+
+char **splitString (char *str, const char delim) {
+
+    char **result = 0;
+    size_t count = 0;
+    char *temp = str;
+    char *last = 0;
+    char dlm[2];
+    dlm[0] = delim;
+    dlm[1] = 0;
+
+    // count how many elements will be extracted
+    while (*temp) {
+        if (delim == *temp) {
+            count++;
+            last = temp;
+        }
+
+        temp++;
+    }
+
+    count += last < (str + strlen (str) - 1);
+
+    count++;
+
+    result = (char **) calloc (count, sizeof (char *));
+
+    if (result) {
+        size_t idx = 0;
+        char *token = strtok (str, dlm);
+
+        while (token) {
+            assert (idx < count);
+            *(result + idx++) = strdup (token);
+            token = strtok (0, dlm);
+        }
+
+        // assert (idx == count - 1);
+        *(result + idx) = 0;
+    }
+
+    return result;
+
+}
+
+#pragma endregion

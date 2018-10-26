@@ -125,7 +125,7 @@ typedef struct Lobby {
 	Player *owner;			// the client that created the lobby -> he has higher privileges
 	Vector players;			// the clients connected to the lobby
 
-	World world;			// in game data structres
+	World *world;			// in game data structres
 
 } Lobby;
 
