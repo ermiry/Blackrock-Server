@@ -540,13 +540,13 @@ void tcpListenForConnections (void *data) {
 // Here we manage the creation and destruction of servers 
 #pragma region SERVER LOGIC
 
-// TODO: set to non blocking mode for handling the game???
-// if (!sock_setNonBlocking (server))
-    // die ("\n[ERROR]: Failed to set server socket to non-blocking mode!\n");
+// TODO: do we want to set the sock to nonblocking to handle the game? remember that in space-shooters
+// they use udp and they set the socket to non-blocking mode...
+// 23/10/2018 -- what about using poll? or select?
 
 const char welcome[64] = "Welcome to cerver!";
 
-// TODO:
+// FIXME:
 // init server type independent data structs
 void initServerDS (Server *server, ServerType type) {
 
@@ -558,11 +558,14 @@ void initServerDS (Server *server, ServerType type) {
         case WEB_SERVER: break;
         case GAME_SERVER: {
             GameServerData *data = (GameServerData *) malloc (sizeof (GameServerData));
-            // vector_init (&data->players, sizeof (Player));
-            // vector_init (&data->lobbys, sizeof (Lobby));
 
-            // FIXME: pass the correct function to destroy lobbys
-            data->currentLobbys = initList (free);
+            // init the lobbys with n innactive in the pool
+            // TODO: option to select how many lobbys we want to init in the pool
+            game_initLobbys (server, 1);
+
+            // FIXME: pass the correct function to delete the players
+            data->players = initList (free);
+            data->playersPool = pool_init (free);
 
             server->serverData = data;
         } break;
@@ -850,6 +853,7 @@ Server *cerver_restartServer (Server *server) {
 
 }
 
+// FIXME:
 // TODO: handle logic when we have a load balancer --> that will be the one in charge to listen for
 // connections and accept them -> then it will send them to the correct server
 // TODO: 13/10/2018 -- we can only handle a tcp server
@@ -907,15 +911,39 @@ void destroyGameServer (void *data) {
 
     GameServerData *gameData = (GameServerData *) data;
 
-    // FIXME:
-    // clean any on going games...
+    // clean any on going game...
     if (LIST_SIZE (gameData->currentLobbys) > 0) {
         Lobby *lobby = NULL;
         for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
             lobby = (Lobby *) e->data;
-            // TODO: check if we have players inside the lobby
-            // if so... send them a msg to disconnect so that they can handle the disconnect
-            // logic on their side, and disconnect each client
+            // check if we have players inside the lobby
+            if (lobby->players.elements > 0) {
+
+            }
+
+            // FIXME:
+            // send the players the correct package so they can handle their logic
+            /* size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
+            void *lobbyPacket = createLobbyPacket (LOBBY_DESTROY, lobby, packetSize);
+            if (!lobbyPacket) {
+                logMsg (stderr, ERROR, PACKET, "Failed to create lobby destroy packet!");
+                // TODO: how to better handle this error?
+            }
+
+            Player *tempPlayer = NULL;
+            // send the lobby destriy packet to the players
+            for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
+                tempPlayer = vector_get (&lobby->players, i_player);
+                if (tempPlayer) sendPacket (server, lobbyPacket, packetSize, tempPlayer->client->address);
+                else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
+            } 
+
+            // remove the players from this structure and send them to the server's players list
+            while (lobby->players.elements > 0) {
+                tempPlayer = vector_get (&lobby->players, 0);
+                removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
+            } */
+
             for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
 
             }
@@ -931,13 +959,15 @@ void destroyGameServer (void *data) {
 
             }
         }
-
-        // we can now safely delete each lobby structure
-        while (LIST_SIZE (gameData->currentLobbys) > 0) {
-
-        }
-
     }
+
+     // TODO: shall we use the destroylist ()? it has the delete lobby
+    // we can now safely delete each lobby structure
+
+    // TODO: clean up the lobby pool
+
+    // TODO: clean the players list and pool
+    // TODO: send a msg to any active player, so that he can handle its own logic
 
     // clean any other game server values
     clearConfig (gameData->gameSettingsConfig);     // clean game modes info
@@ -969,7 +999,6 @@ void cleanUpClients (Server *server) {
 
 }
 
-// TODO: also destroy the lists and pools inside each server
 // FIXME: we need to join the ongoing threads... 
 // teardown a server
 u8 cerver_teardown (Server *server) {
@@ -988,11 +1017,11 @@ u8 cerver_teardown (Server *server) {
 
     // TODO: join the on going threads?? -> just the listen ones?? or also the ones handling the lobby?
 
-    // clean common server structs
-    cleanUpClients (server);
-
     // clean independent server type structs
     if (server->destroyServerdata) server->destroyServerdata (server->serverData);
+
+    // clean common server structs
+    cleanUpClients (server);
 
     // close the server socket
     if (close (server->serverSock) < 0) {

@@ -1,21 +1,18 @@
 // Implementation of a simple object pool system using a stack
 
-// 08/08/2018 --> for now we only need one global pool for the GameObjects like monsters and various items
-// the map is handled differntly using an array.
-
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "utils/objectPool.h"
 
-// TODO: add the avility to init a pool with some members
-Pool *initPool (void) {
+Pool *pool_init (void (*destroy)(void *data)) {
 
     Pool *pool = (Pool *) malloc (sizeof (Pool));
 
     if (pool != NULL) {
         pool->size = 0;
         pool->top = NULL;
+        pool->destroy = destroy;
     }
 
     return pool;
@@ -50,22 +47,21 @@ void *pool_pop (Pool *pool) {
 
 }
 
-void clearPool (Pool *pool) {
+void pool_clear (Pool *pool) {
 
-    if (POOL_SIZE (pool) > 0) {
-        PoolMember *ptr, *temp;
-        void *data;
-        ptr = POOL_TOP (pool);
-        while (ptr != NULL) {
-            temp = pool->top;
-            data = pool->top->data;
-            free (data);
-            pool->top = pool->top->next;
-            free (temp);
-            ptr = pool->top;
+    if (pool) {
+        if (POOL_SIZE (pool) > 0) {
+            void *data = NULL;
+            while (pool->size > 0) {
+                data = pool_pop (pool);
+                if (data) {
+                    if (pool->destroy) pool->destroy (data);
+                    else free (data);
+                }
+            }
         }
+
+        free (pool);
     }
-    
-    free (pool);
 
 }

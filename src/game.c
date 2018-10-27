@@ -21,7 +21,6 @@
 
 #pragma region PLAYER
 
-// TODO: where do we want to put this?
 // constructor for a new player, option for an object pool
 Player *newPlayer (Pool *pool, Player *player) {
 
@@ -50,6 +49,23 @@ Player *newPlayer (Pool *pool, Player *player) {
 
 }
 
+// removes a player from the lobby's players vector and sends it to the game server's players list
+u8 removePlayerFromLobby (GameServerData *gameData, Vector players, size_t i_player, Player *player) {
+
+    // create a new player and add it to the server's players list
+    Player *p = newPlayer (gameData->playersPool, player);
+    insertAfter (gameData->players, LIST_END (gameData->players), p);
+    p->inLobby = false;
+
+    // delete the player from the lobby
+    vector_delete (&players, i_player);
+
+    return 0;
+
+}
+
+void deletePlayer (Player *player) {}
+
 #pragma endregion
 
 /*** LOBBY ***/
@@ -58,12 +74,42 @@ Player *newPlayer (Pool *pool, Player *player) {
 
 #pragma region LOBBY
 
-// FIXME: what is our lobby destroy function? -> must be similar to destroy lobby,
-// but we must not send the lobby to the pool but free it
+// FIXME:
+// deletes a lobby for ever -- called when we teardown the server
+// we do not need to give any feedback to the players if there is any inside
+void deleteLobby (void *data) {
 
-// TODO: create a pool of game lobbys with a couple of lobbys in it
+    if (!data) return;
+
+    Lobby *lobby = (Lobby *) data;
+
+    lobby->inGame = false;      // just to be sure
+    lobby->owner = NULL;
+
+    // check that the lobby is empty
+    if (lobby->players.elements > 0) {
+        // send the players to the server player list
+        Player *tempPlayer = NULL;
+        while (lobby->players.elements > 0) {
+            tempPlayer = vector_get (&lobby->players, 0);
+            // removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
+            // 26/10/2018 -- just delete the player, it may be a left behind
+            deletePlayer (tempPlayer);
+        }
+    }
+
+    // clear lobby data
+    if (lobby->settings) free (lobby->settings);
+    // FIXME: is this a cerver function or a blackrock one??
+    // if (lobby->world) deleteWorld (world);   
+
+    free (lobby);
+
+}
+
 // create a list to manage the server lobbys
-void initLobbys (Server *gameServer) {
+// called when we init the game server
+void game_initLobbys (Server *gameServer, u8 n_lobbys) {
 
     if (!gameServer) {
         logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a NULL server!");
@@ -83,10 +129,12 @@ void initLobbys (Server *gameServer) {
     GameServerData *data = (GameServerData *) gameServer->serverData;
 
     if (data->currentLobbys) logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
-    else data->currentLobbys = initList (free);
+    else data->currentLobbys = initList (deleteLobby);
 
     if (data->lobbyPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of lobbys.");
-    else data->lobbyPool = initPool ();
+    else data->lobbyPool = pool_init (deleteLobby);
+
+    for (u8 i = 0; i < n_lobbys; i++) pool_push (data->lobbyPool, malloc (sizeof (Lobby)));
 
 }
 
@@ -154,10 +202,6 @@ GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
 
 }
 
-// TODO: do we want to set the sock to nonblocking to handle the game? remember that in space-shooters
-// they use udp and they set the socket to non-blocking mode...
-// 23/10/2018 -- what about using poll? or select?
-
 // handles the creation of a new game lobby, requested by a current registered client -> player
 Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
 
@@ -211,6 +255,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
     }
 
     newLobby->owner = owner;
+    if (newLobby->settings) free (newLobby->settings);
     newLobby->settings = getGameSettings (data->gameSettingsConfig, gameType);
     if (!newLobby->settings) {
         logMsg (stderr, ERROR, GAME, "Failed to get the settings for the new lobby!");
@@ -235,21 +280,6 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
     insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), newLobby);
 
     return newLobby;
-
-}
-
-// removes a player from the lobby's players vector and sends it to the game server's players list
-u8 removePlayerFromLobby (GameServerData *gameData, Vector players, size_t i_player, Player *player) {
-
-    // create a new player and add it to the server's players list
-    Player *p = newPlayer (gameData->playersPool, player);
-    insertAfter (gameData->players, LIST_END (gameData->players), p);
-    p->inLobby = false;
-
-    // delete the player from the lobby
-    vector_delete (&players, i_player);
-
-    return 0;
 
 }
 

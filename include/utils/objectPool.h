@@ -11,23 +11,20 @@ typedef struct PoolMember {
 // The pool is just a custom stack implementation
 typedef struct Pool {
 
-    unsigned int size;
-
+    uint32_t size;
     PoolMember *top;
+    void (*destroy)(void *data);
 
 } Pool;
 
 
 #define POOL_SIZE(pool) ((pool)->size)
-
 #define POOL_TOP(pool) ((pool)->top)
-
 #define POOL_DATA(member) ((member)->data)
 
-
-extern Pool *initPool (void);
+extern Pool *pool_init (void (*destroy)(void *data));
 extern void pool_push (Pool *, void *data);
 extern void *pool_pop (Pool *);
-extern void clearPool (Pool *);
+extern void pool_clear (Pool *);
 
 #endif

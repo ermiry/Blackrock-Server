@@ -16,10 +16,10 @@
 #include "utils/config.h"
 #include "utils/log.h"
 
-#include "blackrock.h"      // blackrock dependent types --> same as in the client
+#include "game/blackrock.h"      // blackrock dependent types --> same as in the client
 #include "game/map.h"
 
-#pragma region BLACKROCK
+#pragma region BLACKROCK INIT
 
 const char *itemsDBPath = "./data/items.db";
 sqlite3 *itemsDB;
@@ -182,6 +182,10 @@ void getGameData (void) {
     logMsg (stdout, GAME, NO_TYPE, "Done loading enemy data from db.");
 
 }
+
+#pragma endregion
+
+#pragma region BLACKROCK GAME
 
 // FIXME:
 void generateLevel (World *world) {

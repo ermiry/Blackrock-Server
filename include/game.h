@@ -3,9 +3,7 @@
 
 #include "cerver.h"
 
-// #include "network.h"
 // #include "utils/myTime.h"
-
 #include "utils/vector.h"
 
 #define DEFAULT_PLAYER_TIMEOUT      30
@@ -129,13 +127,9 @@ typedef struct Lobby {
 
 } Lobby;
 
-/*** IN GAME DATA STRUCTURES ***/
+/*** GAME SERVER FUNCTIONS ***/
 
-// #include "utils/vector.h"
-
-// extern Vector players;
-
-/*** GAME FUNCTIONS ***/
+extern void game_initLobbys (Server *gameServer, u8 n_lobbys);
 
 // extern Lobby *newLobby (Server *server, Player *owner, GameType gameType);
 
