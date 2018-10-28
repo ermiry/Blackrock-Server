@@ -44,6 +44,8 @@ typedef enum ServerType {
 
 } ServerType;
 
+#define GS_LOBBY_POOL_INIT      1   // the number of lobbys we want to init in the lobby
+
 typedef struct GameServerData {
 
     Config *gameSettingsConfig;     // stores game modes info
@@ -84,7 +86,7 @@ typedef struct Server {
 
     ServerType type;
     void *serverData;
-    void (*destroyServerdata) (void *data);
+    void (*destroyServerData) (void *data);
     // TODO: maybe we can add more delegates here such as how packets need to be send, or what packets does the
     // server expect, how to hanlde player input... all of that to make a more dynamic framework in the end...
 
@@ -181,6 +183,7 @@ extern Version PROTOCOL_VERSION;
 typedef enum PacketType {
 
     ERROR_PACKET = 1,
+    SERVER_TEARDOWN,
 	REQUEST,
     AUTHENTICATION,
     CREATE_GAME,
