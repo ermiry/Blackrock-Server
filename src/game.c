@@ -49,6 +49,18 @@ Player *newPlayer (Pool *pool, Player *player) {
 
 }
 
+// FIXME: clean up the player structure
+// deletes a player struct for ever
+void deletePlayer (void *data) {
+
+    if (data) {
+        Player *player = (Player *) data;
+
+        free (player);
+    }
+
+}
+
 // removes a player from the lobby's players vector and sends it to the game server's players list
 u8 removePlayerFromLobby (GameServerData *gameData, Vector players, size_t i_player, Player *player) {
 
@@ -64,7 +76,27 @@ u8 removePlayerFromLobby (GameServerData *gameData, Vector players, size_t i_pla
 
 }
 
-void deletePlayer (Player *player) {}
+// inits the players server's structures
+void game_initPlayers (GameServerData *gameData, u8 n_players) {
+
+    if (!gameData) {
+        logMsg (stderr, ERROR, SERVER, "Can't init players in a NULL game data!");
+        return;
+    }
+
+    if (gameData->players) logMsg (stdout, WARNING, SERVER, "The server has already a list of players.");
+    else gameData->players = initList (deletePlayer);
+
+    if (gameData->playersPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of players.");
+    else gameData->playersPool = pool_init (deletePlayer);
+
+    for (u8 i = 0; i < n_players; i++) pool_push (gameData->playersPool, malloc (sizeof (Player)));
+
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "Players have been init in the game server.");
+    #endif
+
+}
 
 #pragma endregion
 
@@ -74,7 +106,7 @@ void deletePlayer (Player *player) {}
 
 #pragma region LOBBY
 
-// FIXME:
+// FIXME: clear the world
 // deletes a lobby for ever -- called when we teardown the server
 // we do not need to give any feedback to the players if there is any inside
 void deleteLobby (void *data) {
@@ -109,32 +141,25 @@ void deleteLobby (void *data) {
 
 // create a list to manage the server lobbys
 // called when we init the game server
-void game_initLobbys (Server *gameServer, u8 n_lobbys) {
+void game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
 
-    if (!gameServer) {
-        logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a NULL server!");
+    if (!gameData) {
+        logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a NULL game data!");
         return;
     }
 
-    if (gameServer->type != GAME_SERVER) {
-        logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a server of incorrect type!");
-        return;
-    }
+    if (gameData->currentLobbys) logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
+    else gameData->currentLobbys = initList (deleteLobby);
 
-    if (!gameServer->serverData) {
-        logMsg (stderr, ERROR, SERVER, "No server data found in the server!");
-        return;
-    }
+    if (gameData->lobbyPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of lobbys.");
+    else gameData->lobbyPool = pool_init (deleteLobby);
 
-    GameServerData *data = (GameServerData *) gameServer->serverData;
+    for (u8 i = 0; i < n_lobbys; i++) pool_push (gameData->lobbyPool, malloc (sizeof (Lobby)));
 
-    if (data->currentLobbys) logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
-    else data->currentLobbys = initList (deleteLobby);
 
-    if (data->lobbyPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of lobbys.");
-    else data->lobbyPool = pool_init (deleteLobby);
-
-    for (u8 i = 0; i < n_lobbys; i++) pool_push (data->lobbyPool, malloc (sizeof (Lobby)));
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "Lobbys have been init in the game server.");
+    #endif
 
 }
 

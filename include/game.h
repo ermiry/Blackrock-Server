@@ -129,11 +129,12 @@ typedef struct Lobby {
 
 /*** GAME SERVER FUNCTIONS ***/
 
-extern void game_initLobbys (Server *gameServer, u8 n_lobbys);
+extern void game_initLobbys (GameServerData *gameData, u8 n_lobbys);
+extern void game_initPlayers (GameServerData *gameData, u8 n_players);
 
 // extern Lobby *newLobby (Server *server, Player *owner, GameType gameType);
 
-extern void spawnPlayer (Player *);
+// extern void spawnPlayer (Player *);
 
 /*** SERIALIZATION ***/
 

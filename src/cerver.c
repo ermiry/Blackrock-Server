@@ -120,6 +120,7 @@ u8 checkPacket (ssize_t packetSize, unsigned char *packetData, PacketType type) 
 
 }
 
+// THIS IS ONLY FOR UDP
 // FIXME: when the owner of the lobby has quit the game, we ned to stop listenning for that lobby
     // also destroy the lobby and all its mememory
 // Also check if there are no players left in the lobby for any reason
@@ -243,7 +244,7 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
     slobby->settings.maxPlayers = lobby->settings->maxPlayers;
     slobby->settings.playerTimeout = lobby->settings->playerTimeout;
 
-    slobby->inGame = false;
+    slobby->inGame = lobby->inGame;
 
     // update the players inside the lobby
     // FIXME: get owner info and the vector ot players
@@ -563,7 +564,6 @@ void tcpListenForConnections (void *data) {
 
 const char welcome[64] = "Welcome to cerver!";
 
-// FIXME:
 // init server type independent data structs
 void initServerDS (Server *server, ServerType type) {
 
@@ -574,16 +574,13 @@ void initServerDS (Server *server, ServerType type) {
         case FILE_SERVER: break;
         case WEB_SERVER: break;
         case GAME_SERVER: {
-            GameServerData *data = (GameServerData *) malloc (sizeof (GameServerData));
+            GameServerData *gameData = (GameServerData *) malloc (sizeof (GameServerData));
 
             // init the lobbys with n inactive in the pool
-            game_initLobbys (server, GS_LOBBY_POOL_INIT);
+            game_initLobbys (gameData, GS_LOBBY_POOL_INIT);
+            game_initPlayers (gameData, GS_PLAYER_POOL_INT);
 
-            // FIXME: pass the correct function to delete the players
-            data->players = initList (free);
-            data->playersPool = pool_init (free);
-
-            server->serverData = data;
+            server->serverData = gameData;
         } break;
         default: break;
     }
@@ -843,6 +840,8 @@ Server *cerver_createServer (Server *server, ServerType type, void (*destroyServ
 Server *cerver_restartServer (Server *server) {
 
     if (server) {
+        logMsg (stdout, SERVER, NO_TYPE, "Restarting the server...");
+
         Server temp = { 
             .useIpv6 = server->useIpv6, .protocol = server->protocol, .port = server->port,
             .connectionQueue = server->connectionQueue, .type = server->type };
@@ -931,6 +930,7 @@ void destroyGameServer (void *data) {
     Server *server = (Server *) data;
     GameServerData *gameData = (GameServerData *) server->serverData;
 
+    // FIXME: clean on going games
     // clean any on going game...
     if (LIST_SIZE (gameData->currentLobbys) > 0) {
         Lobby *lobby = NULL;
@@ -942,11 +942,10 @@ void destroyGameServer (void *data) {
                 // if we have players inside the lobby, send them a msg so that they can handle
                 // their own logic to leave the logic
 
-                // 27/10/2018 -- we war just sending a generic packet to the player and 
+                // 27/10/2018 -- we are just sending a generic packet to the player and 
                 // he must handle his own logic
                 size_t packetSize = sizeof (PacketHeader);
                 void *packet = generatePacket (SERVER_TEARDOWN);
-                // TODO: better eror handling here
                 if (packet) {
                     for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
                         tempPlayer = vector_get (&lobby->players, i_player);
@@ -954,6 +953,8 @@ void destroyGameServer (void *data) {
                         else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
                     }
                 }
+
+                else logMsg (stderr, ERROR, PACKET, "Failed to generate server teardown packet!");
 
                 // send the players back to the server's players list
                 while (lobby->players.elements > 0) {
@@ -979,9 +980,23 @@ void destroyGameServer (void *data) {
     logMsg (stdout, DEBUG_MSG, GAME, "Lobby list and pool have been cleared.");
     #endif
 
-    // TODO: no all the players were inside a lobby, so...
+    // not all the players were inside a lobby, so...
     // send a msg to any player in the server structure, so that they can handle
     // their own logic to disconnect from the server
+    if (LIST_SIZE (gameData->players) > 0) {
+        // we have players connected to the server
+        Player *tempPlayer = NULL;
+
+        size_t packetSize = sizeof (PacketHeader);
+        void *packet = generatePacket (SERVER_TEARDOWN);
+        if (!packet) logMsg (stderr, ERROR, PACKET, "Failed to generate server teardown packet!");
+
+        for (ListElement *e = NULL; e != NULL; e = e->next) {
+            tempPlayer = (Player *) e->data;
+            if (tempPlayer) 
+                if (packet) sendPacket (server, packet, packetSize, tempPlayer->client->address);
+        }
+    }
 
     // clean the players list and pool
     destroyList (gameData->players);
