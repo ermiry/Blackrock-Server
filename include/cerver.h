@@ -36,6 +36,8 @@ typedef unsigned char asciiChar;
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515
 
+#define poll_n_fds      100           // n of fds for the pollfd array
+
 typedef enum ServerType {
 
     FILE_SERVER = 1,
@@ -83,7 +85,12 @@ typedef struct Server {
     u16 port; 
     u16 connectionQueue;    // each server can handle connection differently
 
-    bool isRunning;           // 19/10/2018 - the server is recieving and/or sending packetss
+    bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
+
+    // 28/10/2018 -- poll test
+    struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
+    u16 nfds;                           // n of active fds in the pollfd array
+    u32 pollTimeout;                    // TODO: add this option on the cfg file
 
     ServerType type;
     void *serverData;

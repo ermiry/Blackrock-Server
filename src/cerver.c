@@ -886,17 +886,41 @@ u8 cerver_startServer (Server *server) {
     // we are, specially if we are closing the application we won't have a direct reference to the 
     // thread we are using
 
+    u8 retval = 1;
+
     switch (server->protocol) {
         case IPPROTO_TCP: {
-            server->isRunning = true;
-            thpool_add_work (thpool, (void *) tcpListenForConnections, server);
+            // server->isRunning = true;
+            // thpool_add_work (thpool, (void *) tcpListenForConnections, server);
+
+            // 28/10/2018 -- taking into account ibm poll example
+            // we expect the socket to be already in non blocking mode
+            if (!listen (server->serverSock, server->connectionQueue)) {
+                // initialize pollfd structure
+                memset (server->fds, 0, sizeof (server->fds));
+
+                // set up the initial listening socket     
+                server->fds[0].fd = server->serverSock;
+                server->fds[0].events = POLLIN;
+                server->nfds++; // FIXME: DONT FORGET TO INIT TO 0!!!
+
+                // the timeout is set when we create the socket
+                // we are now ready to start the poll loop -> traverse the fds array
+                retval = 0;
+            }
+
+            else {
+                logMsg (stderr, ERROR, SERVER, "Failed to listen in server socket!");
+                close (server->serverSock);
+                retval = 1;
+            }
         } break;
         case IPPROTO_UDP: break;
 
         default: break;
     }
 
-    return 0;
+    return retval;
 
 }
 
