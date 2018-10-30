@@ -5,8 +5,6 @@
 
 #include <signal.h>
 
-#include <errno.h>
-
 #include "cerver.h"
 
 #include "utils/myUtils.h"
@@ -64,132 +62,10 @@ int main (void) {
 
     gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
     if (gameServer) {
-        if (!cerver_startServer (gameServer)) {
-            // TODO: log which server
-            logMsg (stdout, SUCCESS, SERVER, "Server has started!");
-            logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+        if (!cerver_startServer (gameServer)) 
+            logMsg (stdout, SUCCESS, SERVER, "Server started properly!");
 
-            // FIXME: we don't want to code this here manually!!
-            // start the poll loop
-            int poll_retval;    // ret val from poll function
-            int currfds;        // copy of n active server poll fds
-
-            int newfd;          // fd of new connection
-            while (gameServer->isRunning) {
-                poll_retval = poll (gameServer->fds, gameServer->nfds, gameServer->pollTimeout);
-
-                // poll failed
-                if (poll_retval < 0) {
-                    logMsg (stderr, ERROR, SERVER, "Poll failed!");
-                    perror ("Error");
-                    gameServer->isRunning = false;
-                    break;
-                }
-
-                // if poll has timed out, just continue to the next loop... 
-                if (poll_retval == 0) {
-                    #ifdef DEBUG
-                    logMsg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
-                    #endif
-                    continue;
-                }
-
-                // one or more fd(s) are readable, need to determine which ones they are
-                currfds = gameServer->nfds;
-                for (u8 i = 0; i < currfds; i++) {
-                    if (gameServer->fds[i].revents == 0) continue;
-
-                    // FIXME: how to hanlde an unexpected result??
-                    if (gameServer->fds[i].revents != POLLIN) {
-                        // TODO: log more detailed info about the fd, or client, etc
-                        // printf("  Error! revents = %d\n", fds[i].revents);
-                        logMsg (stderr, ERROR, SERVER, "Unexpected poll result!");
-                    }
-
-                    // listening fd is readable (sever socket)
-                    if (gameServer->fds[i].fd == gameServer->serverSock) {
-                        //  printf("  Listening socket is readable\n");
-
-                        // accept incoming connections that are queued
-                        do {
-                            newfd = accept (gameServer->serverSock, NULL, NULL);
-
-                            if (newfd < 0) {
-                                // if we get EWOULDBLOCK, we have accepted all connections
-                                if (errno != EWOULDBLOCK) {
-                                    // if not, accept failed
-                                    // FIXME: how to handle this??
-                                    logMsg (stderr, ERROR, SERVER, "Accept failed!");
-                                }
-                            }
-
-                            // we have a new connection
-                            // FIXME: try merging the logic with my own accept function
-                                // we want to get a new thread from th poll to authenticate the client
-                            gameServer->fds[gameServer->nfds].fd = newfd;
-                            gameServer->fds[gameServer->nfds].events = POLLIN;
-                            gameServer->nfds++;
-
-                            #ifdef DEBUG
-                            logMsg (stdout, DEBUG_MSG, SERVER, "Accepted a new connection.");
-                            #endif
-                        } while (newfd != -1);
-                    }
-
-                    // TODO: do we want to hanlde this using a separte thread???
-                    // not the server socket, so a connection fd must be readable
-                    else {
-                        size_t rc;          // retval from recv
-                        char buffer[1024];  // buffer for data recieved from fd
-                        // TODO: better handlde the lenght of this buffer!
-
-                        // printf("  Descriptor %d is readable\n", fds[i].fd);
-                        // recive all incoming data from this socket
-                        do {
-                            rc = recv (gameServer->fds[i].fd, buffer, sizeof (buffer), 0);
-                            
-                            // recv error
-                            if (rc < 0) {
-                                if (errno != EWOULDBLOCK) {
-                                    // FIXME: better handle this error!
-                                    logMsg (stderr, ERROR, SERVER, "Recv failed!");
-                                    perror ("Error:");
-                                }
-                            }
-
-                            // check if the connection has been closed by the client
-                            if (rc == 0) {
-                                #ifdef DEBUG
-                                logMsg (stdout, DEBUG_MSG, SERVER, "Client closed the connection.");
-                                #endif
-                                // TODO: what to do next?
-                            }
-
-
-                            // FIXME: handle the request/packet from the client
-                            // data was recieved
-                            // len = rc;
-                            // printf("  %d bytes received\n", len);
-                        } while (true);
-
-                        // FIXME: set the end connection flag in the recv loop
-                        // end the connection if we were indicated
-                        /* if (close_conn) {
-                            close(fds[i].fd);
-                            fds[i].fd = -1;
-                            compress_array = TRUE;
-                        } */
-                    }
-
-                }
-
-                // FIXME: if we removed a file descriptor, we need to compress the pollfd array
-
-                // FIXME: when we close a connection, we need to delete it from the fd array
-                    // this happens when a client disconnects or we teardown the server...
-
-            }
-        }
+        else logMsg (stderr, ERROR, SERVER, "Failed to start server!");
     } 
 
     // if we reach this point, be sure to correctly clean all of our data...
