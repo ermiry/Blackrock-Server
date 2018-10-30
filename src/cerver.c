@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include <sys/ioctl.h>      // to set server socket to nonblocking mode
+
 #include <pthread.h>
 
 #include <poll.h>
@@ -708,6 +710,7 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
 
 }
 
+// TODO: 29/10/2018 - do we want to mark the sock fd as reusable as in the ibm example?
 // init a server of a given type
 u8 initServer (Server *server, Config *cfg, ServerType type) {
 
@@ -757,6 +760,21 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
     logMsg (stdout, DEBUG_MSG, SERVER, "Created server socket");
     #endif
 
+    // 29/10/2018 -- we do this to allow polling
+    // set the socket to non blocking mode
+    if (!sock_setBlocking (server->serverSock, server->blocking)) {
+        logMsg (stderr, ERROR, SERVER, "Failed to set server socket to non blocking mode!");
+        // perror ("Error");
+        close (server->serverSock);
+        return 1;
+    }
+
+    else {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, "Server socket set to non blocking mode.");
+        #endif
+    }
+
     struct sockaddr_storage address;
 	memset (&address, 0, sizeof (struct sockaddr_storage));
 
@@ -802,7 +820,13 @@ Server *newServer (Server *server) {
         new->protocol = server->protocol;
         new->port = server->port;
         new->connectionQueue = server->connectionQueue;
+        new->pollTimeout = server->pollTimeout;
     }
+
+    new->isRunning = false;
+
+    // by default the socket is assumed to be non blocking
+    new->blocking = false;
     
     return new;
 
@@ -855,7 +879,7 @@ Server *cerver_createServer (Server *server, ServerType type, void (*destroyServ
 
 }
 
-// FIXME: add debuging infor about the data of the new server
+// FIXME: add debuging info about the data of the new server
 // FIXME: make sure to destroy our previos poll structure and create a new one -> reset respective values
 // teardowns the server and creates a fresh new one with the same parameters
 Server *cerver_restartServer (Server *server) {
@@ -865,7 +889,7 @@ Server *cerver_restartServer (Server *server) {
 
         Server temp = { 
             .useIpv6 = server->useIpv6, .protocol = server->protocol, .port = server->port,
-            .connectionQueue = server->connectionQueue, .type = server->type .pollTimeout = server->pollTimeout};
+            .connectionQueue = server->connectionQueue, .type = server->type, .pollTimeout = server->pollTimeout};
 
         if (!cerver_teardown (server)) logMsg (stdout, SUCCESS, SERVER, "Done with server teardown");
         else logMsg (stderr, ERROR, SERVER, "Failed to teardown the server!");
@@ -889,21 +913,37 @@ Server *cerver_restartServer (Server *server) {
 
 }
 
+// FIXME:
+// FIXME: we need to signal this process to end when we teardown the server!!!
 // server poll loop to handle events in the registered socket's fds
 u8 serverPoll (Server *server) {
+
+    if (!server) {
+        logMsg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
+        return 1;
+    }
+
+    Client *client = NULL;
+    i32 clientSocket;
+	struct sockaddr_storage clientAddress;
+	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
+    socklen_t sockLen = sizeof (struct sockaddr_storage);
+
+    logMsg (stdout, SUCCESS, SERVER, "Server has started!");
+    logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
 
     int poll_retval;    // ret val from poll function
     int currfds;        // copy of n active server poll fds
 
     int newfd;          // fd of new connection
-    while (gameServer->isRunning) {
-        poll_retval = poll (gameServer->fds, gameServer->nfds, gameServer->pollTimeout);
+    while (server->isRunning) {
+        poll_retval = poll (server->fds, server->nfds, server->pollTimeout);
 
         // poll failed
         if (poll_retval < 0) {
             logMsg (stderr, ERROR, SERVER, "Poll failed!");
             perror ("Error");
-            gameServer->isRunning = false;
+            server->isRunning = false;
             break;
         }
 
@@ -916,27 +956,27 @@ u8 serverPoll (Server *server) {
         }
 
         // one or more fd(s) are readable, need to determine which ones they are
-        currfds = gameServer->nfds;
+        currfds = server->nfds;
         for (u8 i = 0; i < currfds; i++) {
-            if (gameServer->fds[i].revents == 0) continue;
+            if (server->fds[i].revents == 0) continue;
 
             // FIXME: how to hanlde an unexpected result??
-            if (gameServer->fds[i].revents != POLLIN) {
+            if (server->fds[i].revents != POLLIN) {
                 // TODO: log more detailed info about the fd, or client, etc
                 // printf("  Error! revents = %d\n", fds[i].revents);
                 logMsg (stderr, ERROR, SERVER, "Unexpected poll result!");
             }
 
             // listening fd is readable (sever socket)
-            if (gameServer->fds[i].fd == gameServer->serverSock) {
+            if (server->fds[i].fd == server->serverSock) {
                 //  printf("  Listening socket is readable\n");
 
                 // accept incoming connections that are queued
                 do {
-                    newfd = accept (gameServer->serverSock, NULL, NULL);
+                    newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
 
+                    // if we get EWOULDBLOCK, we have accepted all connections
                     if (newfd < 0) {
-                        // if we get EWOULDBLOCK, we have accepted all connections
                         if (errno != EWOULDBLOCK) {
                             // if not, accept failed
                             // FIXME: how to handle this??
@@ -947,9 +987,29 @@ u8 serverPoll (Server *server) {
                     // we have a new connection
                     // FIXME: try merging the logic with my own accept function
                         // we want to get a new thread from th poll to authenticate the client
-                    gameServer->fds[gameServer->nfds].fd = newfd;
-                    gameServer->fds[gameServer->nfds].events = POLLIN;
-                    gameServer->nfds++;
+
+
+                    // FIXME: logic from listen for tcp connections afeter we have accepted a new connection
+                    // first we need to check that we have got a valid client
+                    // so, we first add the client to a temp client list, and we ask him to authenticate
+                    /* client = newClient (clientSocket, clientAddress);
+
+                    sc->server = server;
+                    sc->client = client;
+
+                    // TODO: send the client to the on hold structure for authentication....
+                    // onHoldClient (server, client);
+
+                    // authenticate the client before he can make requests
+                    thpool_add_work (thpool, (void *) authenticateClient, sc);
+
+                    // 20/10/2018 -- for now we just register the client to the correct server they reach
+                    registerClient (server, client); */
+
+
+                    server->fds[server->nfds].fd = newfd;
+                    server->fds[server->nfds].events = POLLIN;
+                    server->nfds++;
 
                     #ifdef DEBUG
                     logMsg (stdout, DEBUG_MSG, SERVER, "Accepted a new connection.");
@@ -967,7 +1027,7 @@ u8 serverPoll (Server *server) {
                 // printf("  Descriptor %d is readable\n", fds[i].fd);
                 // recive all incoming data from this socket
                 do {
-                    rc = recv (gameServer->fds[i].fd, buffer, sizeof (buffer), 0);
+                    rc = recv (server->fds[i].fd, buffer, sizeof (buffer), 0);
                     
                     // recv error
                     if (rc < 0) {
@@ -1013,7 +1073,6 @@ u8 serverPoll (Server *server) {
 
 }
 
-// FIXME:
 // TODO: handle logic when we have a load balancer --> that will be the one in charge to listen for
 // connections and accept them -> then it will send them to the correct server
 // TODO: 13/10/2018 -- we can only handle a tcp server
@@ -1024,12 +1083,6 @@ u8 cerver_startServer (Server *server) {
         logMsg (stdout, WARNING, SERVER, "The server is already running.");
         return 1;
     }
-
-    // 20/10/2018 -- 12:03 -- we are managing only one server at the time, so this is just for testing!!
-
-    // TODO: threads must be managed from a pool thread, so that we can close them independently from where
-    // we are, specially if we are closing the application we won't have a direct reference to the 
-    // thread we are using
 
     u8 retval = 1;
 
@@ -1050,9 +1103,6 @@ u8 cerver_startServer (Server *server) {
 
                 // the timeout is set when we create the socket
                 // we are now ready to start the poll loop -> traverse the fds array
-                logMsg (stdout, SUCCESS, SERVER, "Server has started!");
-                logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
-
                 serverPoll (server);
 
                 retval = 0;

@@ -1,15 +1,30 @@
 #include <string.h>
 
+#include <fcntl.h>
+
 #include "network.h"
 
-/*** SOCKETS ***/   
+/*** SOCKETS ***/  
 
-bool sock_setNonBlocking (int32_t server) {
+// enable/disable blocking on a socket
+// true on success, false if there was an eroror
+bool sock_setBlocking (int32_t fd, bool blocking) {
+
+    if (fd < 0) return false;
+
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) return false;
+    flags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+    return (fcntl (fd, F_SETFL, flags) == 0) ? true : false;
+
+}
+
+/* bool sock_setNonBlocking (int32_t server) {
 
     int non_blocking = 1;
 	return fcntl (server, F_SETFL, O_NONBLOCK, non_blocking) != -1;
 
-}
+} */
 
 const char *sock_ip_to_string (const struct sockaddr *address, char *string, size_t string_size) {
 

@@ -87,6 +87,7 @@ typedef struct Server {
     u16 connectionQueue;    // each server can handle connection differently
 
     bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
+    bool blocking;          // 29/10/2018 - sokcet fd is blocking?
 
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
