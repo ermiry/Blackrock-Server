@@ -280,6 +280,7 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
 // FIXME: we can't have infinite ids!!
 u32 nextClientID = 0;
 
+// FIXME: take into account the server pool
 Client *newClient (i32 sock, struct sockaddr_storage address) {
 
     Client *new = (Client *) malloc (sizeof (Client));
@@ -474,6 +475,7 @@ void *generateClientAuthPacket (void) {
 
 }
 
+// FIXME:
 // check that we have got a valid client connected, if not, drop him
 void authenticateClient (void *data) {
 
@@ -485,7 +487,26 @@ void authenticateClient (void *data) {
         sendPacket (sc->server, authPacket, authPacketSize, sc->client->address);
 
         // we expect a response from the client...
+        #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for the client to authenticate...");
+        #endif
+
+        // if we have got a valid client...
+        // register the client to the server
+
+        // add the client to the poll fd array
+        /* server->fds[server->nfds].fd = newfd;
+        server->fds[server->nfds].events = POLLIN;
+        server->nfds++;
+
+        // TODO: send feedback to the client that he is conncted to the server
+
+        #ifdef DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, "Accepted a new connection.");
+        #endif */
+
+        // if not, drop the client structure and send feedback to player that
+        // he has been denied
     }
 
 }
@@ -969,8 +990,6 @@ u8 serverPoll (Server *server) {
 
             // listening fd is readable (sever socket)
             if (server->fds[i].fd == server->serverSock) {
-                //  printf("  Listening socket is readable\n");
-
                 // accept incoming connections that are queued
                 do {
                     newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
@@ -984,36 +1003,16 @@ u8 serverPoll (Server *server) {
                         }
                     }
 
-                    // we have a new connection
-                    // FIXME: try merging the logic with my own accept function
-                        // we want to get a new thread from th poll to authenticate the client
+                    // we have a new connection from a new client
+                    client = newClient (newfd, clientAddress);
 
+                    // FIXME: send the client to the on hold structure 
 
-                    // FIXME: logic from listen for tcp connections afeter we have accepted a new connection
-                    // first we need to check that we have got a valid client
-                    // so, we first add the client to a temp client list, and we ask him to authenticate
-                    /* client = newClient (clientSocket, clientAddress);
+                    /* sc->server = server;
+                    sc->client = client; */
 
-                    sc->server = server;
-                    sc->client = client;
-
-                    // TODO: send the client to the on hold structure for authentication....
-                    // onHoldClient (server, client);
-
-                    // authenticate the client before he can make requests
-                    thpool_add_work (thpool, (void *) authenticateClient, sc);
-
-                    // 20/10/2018 -- for now we just register the client to the correct server they reach
-                    registerClient (server, client); */
-
-
-                    server->fds[server->nfds].fd = newfd;
-                    server->fds[server->nfds].events = POLLIN;
-                    server->nfds++;
-
-                    #ifdef DEBUG
-                    logMsg (stdout, DEBUG_MSG, SERVER, "Accepted a new connection.");
-                    #endif
+                    // FIXME: authenticate the client before he can start making requests
+                    // thpool_add_work (thpool, (void *) authenticateClient, sc);
                 } while (newfd != -1);
             }
 
@@ -1238,6 +1237,7 @@ void destroyGameServer (void *data) {
 }
 
 // FIXME:
+// TODO: clean the on hold client structures
 // cleans up the client's structure in the current server
 // if ther are clients connected, it sends a req to disconnect
 void cleanUpClients (Server *server) {
