@@ -449,40 +449,124 @@ void checkClientTimeout (Server *server) {
 // FIXME:
 /*** AUTHENTICATE THE CLIENT CONNECTION ***/
 
-// FIXME: 01/11/2018 -- 18:06 -- do we want to have a separte poll in another thread to handle
-// the on hold clients so that they can authentcate themselves?
-
-#pragma region AUTHENTICATE CLIENT
+#pragma region CLIENT AUTHENTICATION
 
 // 01/11/2018 -- we can use this later to have a better authentication checking some 
 // accounts and asking the client to provide us with some credentials
 
-void handleOnHoldClients () {
+// TODO: 02/11/2018 -- 16:09 -- create the function that actually hanldes the authentication request
 
-    // if (onHoldClients > 0) {
-    //     foreach client in onholdclients
-    //     // for each client being on hold, send an authentication request
-    //     // and handle the authentication    
-    // }
+// TODO: if the client failed to authenticate, drop the client and free the fd 
+// else, register the client to the correct server --> maybe later this logic can be handle 
+// by the load balancer and then it can decides to which server to register the client
 
-    // check for the correct version and protocol id and any securtity stuff we need
-    // if it is correct, pass the client to the server
-    // if not, reject the connection to the client and disconnect it
+// FIXME: 01/11/2018 -- 18:06 -- do we want to have a separte poll in another thread to handle
+// the on hold clients so that they can authentcate themselves?
 
-    // register the client to correct server
-    // registerClient (server, client);
+// TODO: add the option to ask for client authentication or not in the server config
+// FIXME: take into account the correct poll and on hold structures (avl tree)
+// poll to listen to on hold clients so that they can authenticate themselves
+// before sending them to the main poll
+u8 handleOnHoldClients (Server *server) {
 
-    // TODO: log to which server it connects and maybe from where
+    if (!server) {
+        logMsg (stderr, ERROR, SERVER, "Can't handle on hold clients on a NULL server!");
+        return 1;
+    }
+
+    size_t rc;                                  // retval from recv -> size of buffer
+    char packetBuffer[MAX_UDP_PACKET_SIZE];     // buffer for data recieved from fd
+
     #ifdef CERVER_DEBUG
-    logMsg (stdout, SERVER, NO_TYPE, "New client connected.");
+    logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
     #endif
+
+    int poll_retval;    // ret val from poll function
+    int currfds;        // copy of n active server poll fds
+
+    int newfd;          // fd of new connection
+
+    // FIXME:
+    /* while (server->isRunning) {
+        poll_retval = poll (server->fds, server->nfds, server->pollTimeout);
+
+        // poll failed
+        if (poll_retval < 0) {
+            logMsg (stderr, ERROR, SERVER, "Poll failed!");
+            perror ("Error");
+            server->isRunning = false;
+            break;
+        }
+
+        // if poll has timed out, just continue to the next loop... 
+        if (poll_retval == 0) {
+            #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
+            #endif
+            continue;
+        }
+
+        // one or more fd(s) are readable, need to determine which ones they are
+        currfds = server->nfds;
+        for (u8 i = 0; i < currfds; i++) {
+            if (server->fds[i].revents == 0) continue;
+
+            // FIXME: how to hanlde an unexpected result??
+            if (server->fds[i].revents != POLLIN) {
+                // TODO: log more detailed info about the fd, or client, etc
+                // printf("  Error! revents = %d\n", fds[i].revents);
+                logMsg (stderr, ERROR, SERVER, "Unexpected poll result!");
+            }
+
+            // recive all incoming data from this socket
+            // FIXME: add support for multiple reads to the socket
+            // FIXME: 02/11/2018 -- 16:02 -- maybe add the expexted size in the header of the file
+            // we need to correctly handle a large buffer when creating a new packet info!!!
+            do {
+                rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
+                
+                // recv error
+                if (rc < 0) {
+                    if (errno != EWOULDBLOCK) {
+                        logMsg (stderr, ERROR, SERVER, "Recv failed!");
+                        perror ("Error:");
+                    }
+
+                    break;  // there is no more data to handle
+                }
+
+                // check if the connection has been closed by the client
+                if (rc == 0) {
+                    #ifdef DEBUG
+                    logMsg (stdout, DEBUG_MSG, SERVER, "Client closed the connection.");
+                    #endif
+                    // TODO: what to do next?
+                }
+
+                // FIXME: packet buffer type in packet info and packet size
+                PacketInfo *info = newPacketInfo (server, 
+                    getClientBySock (server, server->fds[i].fd), packetBuffer, sizeof (packetBuffer));
+
+                thpool_add_work (thpool, (void *) handlePacket, info);
+            } while (true);
+        }
+
+    } */
 
 }
 
 // 20/10/2018 -- we are managing only one server... so each one has his on hold clients
 // hold the client until he authenticates 
-// 01/11/2018 - they might onlye be used in with the file server and game server?
+// 01/11/2018 - TODO: we are just thinking on how a file and game server should work
+// we need to investigate what happens when we are accessing a web server
 void onHoldClient (Server *server, Client *client) {
+
+    // TODO:
+    // add the client to the on hold structre --> an avl structue
+        // we will have a separte poll function to listen for on hold clients
+    // then send an authentication request
+    // get the authentication packet from the client and verify it
+        // if it is a legit client, send it to the main poll structre to handle requests
 
     // adds a client to the on hold structure
     if (server->onHoldClients)
@@ -921,6 +1005,12 @@ Server *cerver_restartServer (Server *server) {
 
 }
 
+// TODO: 02/11/2018 -- this is only intended for file and game servers only,
+// maybe a web server works different when accesing from the browser
+// TODO: 02/11/2018 -- also this only works with one server, we might need to change
+// a bit the logic when using a load balancer
+// TODO: 02/11/2018 -- also THIS poll function only works with a tcp connection because we are
+// accepting each new connection, but for udp might be the same
 // FIXME: packet info!!!
 // FIXME: we need to signal this process to end when we teardown the server!!!
 // server poll loop to handle events in the registered socket's fds
@@ -1000,6 +1090,7 @@ u8 serverPoll (Server *server) {
             else {
                 // recive all incoming data from this socket
                 // FIXME: add support for multiple reads to the socket
+                // FIXME: 02/11/2018 -- 16:02 -- maybe add the expexted size in the header of the file
                 // we need to correctly handle a large buffer when creating a new packet info!!!
                 do {
                     rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
@@ -1040,7 +1131,20 @@ u8 serverPoll (Server *server) {
 
         }
 
-        // FIXME: if we removed a file descriptor, we need to compress the pollfd array
+        // FIXME: where do we want to put this to avoid race conditions?
+        // TODO: when we remove the client from the server, we also need to remove it from
+        // the avl and the poll structures
+        // we set to -1 the fd we want to remove and we compress the array
+        /* if (compress_array) {
+            compress_array = FALSE;
+            for (i = 0; i < nfds; i++) {
+                if (fds[i].fd == -1) {
+                for (j = i; j < nfds; j++) fds[j].fd = fds[j+1].fd;
+                i--;
+                nfds--;
+                }
+            }
+        } */
 
         // FIXME: when we close a connection, we need to delete it from the fd array
             // this happens when a client disconnects or we teardown the server...
