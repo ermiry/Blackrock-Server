@@ -563,6 +563,8 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
 /*** GAME THREAD ***/
 
+#pragma region GAME LOGIC
+
 // TODO: does this logic goes here on in blackrock???
 
 // TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
@@ -629,3 +631,20 @@ void endGame (void) {
     // the lobby owner can retry the game or exit to the lobby screen
 
 }
+
+#pragma endregion
+
+#pragma region GAME PACKETS
+
+void gameServer_handlePacket (PacketInfo *packet) {
+
+    RequestData *reqData = (RequestData *) (packet->packetData + sizeof (PacketHeader));
+    switch (reqData->type) {
+        case LOBBY_CREATE: break;
+        case LOBBY_JOIN: break;
+        case LOBBY_DESTROY: break;
+    }
+
+}
+
+#pragma endregion

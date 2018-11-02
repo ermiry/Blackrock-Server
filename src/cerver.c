@@ -76,6 +76,37 @@ ssize_t lobbyPacketSize;
 ssize_t updatedGamePacketSize;
 ssize_t playerInputPacketSize;
 
+    Server *server;
+    Client *client;
+    char *packetData;
+    size_t packetSize;
+
+// FIXME: packet data
+PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize) {
+
+    PacketInfo *new = NULL;
+
+    if (server->packetPool) {
+        if (POOL_SIZE (server->packetPool) > 0) {
+            new = pool_pop (server->packetPool);
+            if (!new) new = (PacketInfo *) malloc (sizeof (PacketInfo));
+        }
+    }
+
+    else new = (PacketInfo *) malloc (sizeof (PacketInfo));
+
+    new->server = server;
+    new->client = client;
+    // new->packetData = FIXME:
+    new->packetSize = packetSize;
+
+    return new;
+
+}
+
+// FIXME: used to destroy remaining packet info in the pools
+void destroyPacketInfo (void *data) {}
+
 // FIXME:
 // check for packets with bad size, protocol, version, etc
 u8 checkPacket (ssize_t packetSize, char *packetData) {
@@ -98,7 +129,8 @@ u8 checkPacket (ssize_t packetSize, char *packetData) {
         return 1;
     }
 
-    switch (type) {
+    // FIXME: check that we have got a least the minimun size of each packet type
+    /* switch (type) {
         case REQUEST: 
             if (packetSize < requestPacketSize) {
                 logMsg (stderr, WARNING, PACKET, "Received a too small request packet.");
@@ -119,7 +151,7 @@ u8 checkPacket (ssize_t packetSize, char *packetData) {
         case TEST_PACKET_TYPE: break;
         
         default: logMsg (stderr, WARNING, PACKET, "Got a pakcet of incompatible type."); return 1;
-    }
+    } */
 
     return 0;   // packet is fine
 
@@ -258,16 +290,6 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
 
 }
 
-// 01/11/2018 - info from a recieved packet to be handle
-typedef struct PacketInfo {
-
-    Server *server;
-    Client *client;
-    char *packetData;
-    size_t packetSize;
-
-} PacketInfo;
-
 // 01/11/2018 -- called with the th pool to handle a new packet
 void handlePacket (void *data) {
 
@@ -281,20 +303,34 @@ void handlePacket (void *data) {
     PacketInfo *packet = (PacketInfo *) data;
 
     if (!checkPacket (packet->packetSize, packet->packetData))  {
-        // TODO: create a switch that can handle each type of request or packet
+        PacketHeader *header = (PacketHeader *) packet->packetData;
+
+        switch (header->packetType) {
+            // handles an error from the client
+            case ERROR_PACKET: break;
+
+            // a client is trying to authenticate himself
+            case AUTHENTICATION: break;
+
+            // handles a request made from the client
+            case REQUEST: break;
+
+            // handle a game packet sent from a client
+            case GAME_PACKET: gameServer_handlePacket (packet); break;
+
+            case TEST_PACKET: 
+                logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                pool_push (packet->server->packetPool, packet);
+                break;
+
+            default: 
+                logMsg (stderr, WARNING, PACKET, "Got a pakcet of incompatible type."); 
+                pool_push (packet->server->packetPool, packet);
+                break;
+        }
     }
 
 }
-
-#pragma endregion
-
-/*** REQUESTS ***/
-
-// All clients can make any request, but if they make a game request, 
-// they are now treated as players...
-
-#pragma region REQUESTS
-
 
 #pragma endregion
 
@@ -330,6 +366,19 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
 }
 
+// deletes a client forever
+void destroyClient (void *data) {
+
+    if (data) {
+        Client *client = (Client *) data;
+
+        close (client->clientSock);
+
+        free (client);
+    }
+
+}
+
 // 13/10/2018 - I think register a client only works for tcp? but i might be wrong...
 
 // TODO: hanlde a max number of clients connected to a server at the same time?
@@ -357,55 +406,6 @@ void unregisterClient (Server *server, Client *client) {
 void checkClientTimeout (Server *server) {
 
 }
-
-#pragma endregion
-
-// Here goes the logic for handling new connections and manage client requests
-// also here we manage some server logic and server responses
-#pragma region CONNECTION HANDLER
-
-// TODO: check again the recieve packets function --> do we need also to pass
-    // the sockaddr? or hanlde just the socket?
-
-// FIXME: don't forget to check that tha packet type is a request!!!
-// TODO: how can we handle other parameters for requests?
-/* void connectionHandler (Server *server, i32 client, struct sockaddr_storage clientAddres) {
-
-	// send welcome message
-	send (client, welcome, sizeof (welcome), 0);
-
-    // recieving packets from a client
-    unsigned char packetData[MAX_UDP_PACKET_SIZE];
-    ssize_t packetSize;
-        
-    if ((packetSize = recv (client, packetData, sizeof (packetData), 0)) > 0) {
-        logMsg (stdout, TEST, PACKET, createString ("Recieved request pakcet size: %ld.", packetSize));
-        // check the packet
-        if (!checkPacket (packetSize, packetData, REQUEST)) {
-            // handle the request
-            RequestData *reqData = (RequestData *) (packetData + sizeof (PacketHeader));
-            switch (reqData->type) {
-                case REQ_GET_FILE: logMsg (stdout, REQ, FILE_REQ, "Requested a file."); break;
-                case POST_SEND_FILE: logMsg (stdout, REQ, FILE_REQ, "Client wants to send a file."); break;
-
-                case REQ_CREATE_LOBBY: createLobby (server, client, clientAddres); break;
-
-                case REQ_TEST:  logMsg (stdout, TEST, NO_TYPE, "Packet recieved correctly!!"); break;
-
-                default: logMsg (stderr, ERROR, REQ, "Invalid request type!");
-            }
-        }
-            
-        else logMsg (stderr, ERROR, REQ, "Recieved an invalid request packet from the client!");
-    }
-
-    // FIXME: better error handling I guess...
-    else logMsg (stderr, ERROR, REQ, "No client request!");
-
-}*/
-
-// TODO: handle ipv6 configuration
-// TODO: do we need to hanlde time here?
 
 #pragma endregion
 
@@ -580,32 +580,27 @@ void tcpListenForConnections (void *data) {
 
 #pragma endregion
 
-/*** LOAD BALANCER ***/
-
-#pragma region LOAD BALANCER
-
-// TODO:
-
-#pragma endregion
-
 /*** SERVER ***/
+
+// TODO: handle ipv6 configuration
+// TODO: create some helpful timestamps
+// TODO: add the option to log our output to a .log file
 
 // Here we manage the creation and destruction of servers 
 #pragma region SERVER LOGIC
 
-// TODO: do we want to set the sock to nonblocking to handle the game? remember that in space-shooters
-// they use udp and they set the socket to non-blocking mode...
-// 23/10/2018 -- what about using poll? or select?
-
 const char welcome[64] = "Welcome to cerver!";
 
-// FIXME: client destroy function
 // init server type independent data structs
 void initServerDS (Server *server, ServerType type) {
 
-    server->clients = initList (free);
-    server->onHoldClients = initList (free);
-    server->clientsPool = pool_init (free);
+    server->clients = initList (destroyClient);
+    server->onHoldClients = initList (destroyClient);
+    server->clientsPool = pool_init (destroyClient);
+
+    server->packetPool = pool_init (destroyPacketInfo);
+    // by default init the packet pool with some members
+    for (u8 i = 0; i < 3; i++) pool_push (server->packetPool, malloc (sizeof (PacketInfo)));
 
     switch (type) {
         case FILE_SERVER: break;
@@ -944,7 +939,7 @@ Server *cerver_restartServer (Server *server) {
 
 }
 
-// FIXME:
+// FIXME: packet info!!!
 // FIXME: we need to signal this process to end when we teardown the server!!!
 // server poll loop to handle events in the registered socket's fds
 u8 serverPoll (Server *server) {
@@ -1043,8 +1038,10 @@ u8 serverPoll (Server *server) {
                         // TODO: what to do next?
                     }
 
-                    // FIXME: data was recieved -> handle the request/packet from the client
-                    thpool_add_work (thpool, (void *) handlePacket, );
+                    // FIXME: client and how do we copy the data from the buffer? also the size!!!
+                    PacketInfo *info = newPacketInfo (server, NULL, packetBuffer, sizeof (packetBuffer));
+
+                    thpool_add_work (thpool, (void *) handlePacket, info);
                 } while (true);
 
                 // FIXME: set the end connection flag in the recv loop
@@ -1254,6 +1251,7 @@ void cleanUpClients (Server *server) {
 
 }
 
+// FIXME: 02/11/2018 -- be sure to clean up all the new server data structures!!!
 // FIXME: correctly clean up the poll structures!!!
 // FIXME: we need to join the ongoing threads... 
 // teardown a server
@@ -1297,6 +1295,14 @@ u8 cerver_teardown (Server *server) {
     return 0;   // teardown was successfull
 
 }
+
+#pragma endregion
+
+/*** LOAD BALANCER ***/
+
+#pragma region LOAD BALANCER
+
+// TODO:
 
 #pragma endregion
 

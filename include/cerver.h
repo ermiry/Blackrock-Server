@@ -27,8 +27,6 @@ typedef int64_t i64;
 
 typedef unsigned char asciiChar;
 
-/*** SEVER ***/
-
 #define DEFAULT_PROTOCOL                IPPROTO_TCP
 #define DEFAULT_PORT                    7001
 #define DEFAULT_CONNECTION_QUEUE        7
@@ -38,6 +36,25 @@ typedef unsigned char asciiChar;
 #define MAX_UDP_PACKET_SIZE     65515
 
 #define poll_n_fds      100           // n of fds for the pollfd array
+
+/*** CLIENT ***/
+
+#pragma region CLIENT
+
+// anyone that connects to the server
+typedef struct Client {
+
+    u32 clientID;
+    i32 clientSock;
+    struct sockaddr_storage address;
+
+} Client;
+
+#pragma endregion
+
+/*** SEVER ***/
+
+#pragma region SERVER
 
 typedef enum ServerType {
 
@@ -68,15 +85,6 @@ typedef struct GameServerData {
 
 } GameServerData;
 
-// anyone that connects to the server
-typedef struct Client {
-
-    u32 clientID;
-    i32 clientSock;
-    struct sockaddr_storage address;
-
-} Client;
-
 // this is the generic server struct, used to create different server types
 typedef struct Server {
 
@@ -97,11 +105,6 @@ typedef struct Server {
     ServerType type;
     void *serverData;
     void (*destroyServerData) (void *data);
-    // TODO: maybe we can add more delegates here such as how packets need to be send, or what packets does the
-    // server expect, how to hanlde player input... all of that to make a more dynamic framework in the end...
-
-    // TODO: 14/10/2018 - maybe we can have listen and handle connections as generir functions, also a generic function
-    // to recieve packets and specific functions to cast the packet to the type that we need? 
 
     // 01/11/2018 - lets try this
     // do web servers need this?
@@ -109,20 +112,24 @@ typedef struct Server {
     Pool *clientsPool;
     List *onHoldClients;        // hold on the clients until they authenticate
 
-} Server;
+    // 02/11/2018 - packet info
+    Pool *packetPool;
 
-/*** SERVER FUNCS ***/
+} Server;
 
 extern Server *cerver_createServer (Server *, ServerType, void (*destroyServerdata) (void *data));
 
 extern u8 cerver_startServer (Server *);
 
-
 extern void cerver_shutdownServer (Server *);
 extern u8 cerver_teardown (Server *);
 extern Server *cerver_restartServer (Server *);
 
+#pragma endregion
+
 /*** LOAD BALANCER ***/
+
+#pragma region LOAD BALANCER
 
 // this is the generic load balancer struct, used to configure a load balancer
 typedef struct LoadBalancer {
@@ -149,35 +156,21 @@ typedef struct LoadBalancer {
 
 } LoadBalancer;
 
-/*** REQUESTS ***/
-
-// TODO: Change the name
-// 01/11/2018
-// this indicates the data and more info about the packet type
-// for example if we have a game packet type, with this we can send a create lobby packet or join lobby
-// if we have an authenticate packet, here goes the data of a success authentication or a failed one
-
-typedef enum RequestType {
-
-    REQ_GET_FILE = 1,
-    POST_SEND_FILE,
-    
-    REQ_AUTH_CLIENT,
-
-    REQ_CREATE_LOBBY,
-
-    REQ_TEST = 100,
-
-} RequestType;
-
-// here we can add things like file names or game types
-typedef struct RequestData {
-
-    RequestType type;
-
-} RequestData;
+#pragma endregion
 
 /*** PACKETS ***/
+
+#pragma region PACKETS
+
+// 01/11/2018 - info from a recieved packet to be handle
+typedef struct PacketInfo {
+
+    Server *server;
+    Client *client;
+    char *packetData;
+    size_t packetSize;
+
+} PacketInfo;
 
 typedef u32 ProtocolId;
 
@@ -200,17 +193,13 @@ extern Version PROTOCOL_VERSION;
 typedef enum PacketType {
 
     ERROR_PACKET = 1,
-    SERVER_TEARDOWN,
 	REQUEST,
     AUTHENTICATION,
-    CREATE_GAME,
-    LOBBY_CREATE,
-    LOBBY_UPDATE,
-    LOBBY_DESTROY,
-	GAME_UPDATE_TYPE,
-	PLAYER_INPUT_TYPE,
+    GAME_PACKET,
 
-    TEST_PACKET_TYPE = 100
+    SERVER_TEARDOWN,    // FIXME: create a better packet type for server functions
+
+    TEST_PACKET = 100,
 
 } PacketType;
 
@@ -222,22 +211,41 @@ typedef struct PacketHeader {
 
 } PacketHeader;
 
-extern void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr_storage address);
+// TODO: Change the name
+// 01/11/2018
+// this indicates the data and more info about the packet type
+// for example if we have a game packet type, with this we can send a create lobby packet or join lobby
+// if we have an authenticate packet, here goes the data of a success authentication or a failed one
 
-extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 
+// the type of request we want to make to the server
+typedef enum RequestType {
 
+    REQ_GET_FILE = 1,
+    POST_SEND_FILE,
+    
+    REQ_AUTH_CLIENT,
 
-/*** ERRORS ***/
+    LOBBY_CREATE,
+    LOBBY_JOIN,
+    LOBBY_UPDATE,
+    LOBBY_DESTROY,
 
-// TODO: 01/11/2018 - move this to the packet type section
+} RequestType;
+
+// here we can add things like file names or game types
+typedef struct RequestData {
+
+    RequestType type;
+
+} RequestData;
 
 // 23/10/2018 -- lests test how this goes...
 typedef enum ErrorType {
 
     ERR_SERVER_ERROR = 0,   // internal server error, like no memory
 
-    ERR_Create_Lobby = 1,
-    ERR_Join_Lobby,
+    ERR_CREATE_LOBBY = 1,
+    ERR_JOIN_LOBBY,
 
 } ErrorType;
 
@@ -248,7 +256,12 @@ typedef struct ErrorData {
 
 } ErrorData;
 
+extern void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr_storage address);
 extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
+
+extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 
+
+#pragma endregion
 
 /*** GAME SERVER ***/
 
