@@ -11,6 +11,8 @@
 #include "utils/objectPool.h"
 #include "utils/vector.h"
 
+#include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
+
 #define EXIT_FAILURE    1
 
 #define THREAD_OK       0

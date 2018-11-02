@@ -21,6 +21,8 @@
 #include "utils/config.h"
 #include "utils/myUtils.h"
 
+#include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
+
 /*** VALUES ***/
 
 // these 2 are used to manage the packets
@@ -404,6 +406,15 @@ void unregisterClient (Server *server, Client *client) {
 
 // TODO: used to check for client timeouts in any type of server
 void checkClientTimeout (Server *server) {
+
+}
+
+// comparator for client's avl tree
+int clientComparator (void *a, void *b) {
+
+    if (*((int *) a) >  *((int *)b)) return 1;
+    else if (*((int *) a) == *((int *)b)) return 0;
+    else return -1;
 
 }
 
