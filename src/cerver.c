@@ -23,7 +23,6 @@
 
 /*** VALUES ***/
 
-// TODO: maybe move these to the config file??
 // these 2 are used to manage the packets
 ProtocolId PROTOCOL_ID = 0x4CA140FF; // randomly chosen
 Version PROTOCOL_VERSION = { 1, 1 };
@@ -37,6 +36,7 @@ u16 nextPlayerId = 0;
 #include <stdint.h>
 #include <assert.h>
 
+// TODO:
 #pragma region SERIALIZATION 
 
 typedef int32_t RelativePtr;
@@ -78,7 +78,7 @@ ssize_t playerInputPacketSize;
 
 // FIXME:
 // check for packets with bad size, protocol, version, etc
-u8 checkPacket (ssize_t packetSize, unsigned char *packetData, PacketType type) {
+u8 checkPacket (ssize_t packetSize, char *packetData) {
 
     if ((unsigned) packetSize < sizeof (PacketHeader)) {
         logMsg (stderr, WARNING, PACKET, "Recieved a to small packet!");
@@ -258,6 +258,34 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
 
 }
 
+// 01/11/2018 - info from a recieved packet to be handle
+typedef struct PacketInfo {
+
+    Server *server;
+    Client *client;
+    char *packetData;
+    size_t packetSize;
+
+} PacketInfo;
+
+// 01/11/2018 -- called with the th pool to handle a new packet
+void handlePacket (void *data) {
+
+    if (!data) {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, WARNING, PACKET, "Can't handle NULL packet data.");
+        #endif
+        return;
+    }
+
+    PacketInfo *packet = (PacketInfo *) data;
+
+    if (!checkPacket (packet->packetSize, packet->packetData))  {
+        // TODO: create a switch that can handle each type of request or packet
+    }
+
+}
+
 #pragma endregion
 
 /*** REQUESTS ***/
@@ -280,13 +308,21 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
 // FIXME: we can't have infinite ids!!
 u32 nextClientID = 0;
 
-// FIXME: take into account the server pool
-Client *newClient (i32 sock, struct sockaddr_storage address) {
+Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address) {
 
-    Client *new = (Client *) malloc (sizeof (Client));
+    Client *new = NULL;
+
+    if (server->clientsPool) {
+        if (POOL_SIZE (server->clientsPool) > 0) {
+            new = pool_pop (server->clientsPool);
+            if (!new) new = (Client *) malloc (sizeof (Client));
+        }
+    }
+
+    else new = (Client *) malloc (sizeof (Client));
     
     new->clientID = nextClientID;
-    new->clientSock = sock;
+    new->clientSock = clientSock;
 
     new->address = address;
 
@@ -368,40 +404,6 @@ void checkClientTimeout (Server *server) {
 
 }*/
 
-// this a multiplexor to handle data transmissios to clients
-void *connectionHandler (void *data) {
-
-    Server *server = (Server *) data;
-
-    if (server->clients.elements > 0) {
-        // TODO: handle client requests
-
-        switch (server->type) {
-            case FILE_SERVER: break;
-            case WEB_SERVER: break;
-            case GAME_SERVER: {
-                GameServerData *data = (GameServerData *) server->serverData;
-
-                // TODO: update each game lobby
-                // if (data->lobbys.elements > 0) {
-
-                // }
-            } break;
-
-            default: break;
-        }
-    } 
-
-}
-
-// 04/10/2018 -- 22:56
-// TODO: maybe a way to handle multiple clients, is having an array of clients, and each time
-// we get a new connection we add the client to the struct and assign a new connection handler to it
-// NOTE: not all clients are players, so we can handle anyone that connects as a client, 
-// and if they make a game request, we can now treat them as players...
-
-// FIXME: try a similar like in the recieve packets function --> maybe with that,
-// we can handle different client requests at the same time
 // TODO: handle ipv6 configuration
 // TODO: do we need to hanlde time here?
 
@@ -410,7 +412,13 @@ void *connectionHandler (void *data) {
 // FIXME:
 /*** AUTHENTICATE THE CLIENT CONNECTION ***/
 
+// FIXME: 01/11/2018 -- 18:06 -- do we want to have a separte poll in another thread to handle
+// the on hold clients so that they can authentcate themselves?
+
 #pragma region AUTHENTICATE CLIENT
+
+// 01/11/2018 -- we can use this later to have a better authentication checking some 
+// accounts and asking the client to provide us with some credentials
 
 void handleOnHoldClients () {
 
@@ -436,9 +444,12 @@ void handleOnHoldClients () {
 
 // 20/10/2018 -- we are managing only one server... so each one has his on hold clients
 // hold the client until he authenticates 
+// 01/11/2018 - they might onlye be used in with the file server and game server?
 void onHoldClient (Server *server, Client *client) {
 
     // adds a client to the on hold structure
+    if (server->onHoldClients)
+        insertAfter (server->onHoldClients, LIST_END (server->onHoldClients), client);
 
 }
 
@@ -515,8 +526,6 @@ void authenticateClient (void *data) {
 
 #pragma region LISTENING
 
-// FIXME: maybe use poll or select with a non-blocking socekt to correctly exit from this infinite loop??
-
 // FIXME: we need to signal this process to end when we teardown the server!!!
 // tcp needs to accept a connection to communicate with it
 // this is called from a separate thread for each server     20/10/2018
@@ -590,11 +599,13 @@ void tcpListenForConnections (void *data) {
 
 const char welcome[64] = "Welcome to cerver!";
 
+// FIXME: client destroy function
 // init server type independent data structs
 void initServerDS (Server *server, ServerType type) {
 
-    // all the server types have a client's vector
-    vector_init (&server->clients, sizeof (Client));
+    server->clients = initList (free);
+    server->onHoldClients = initList (free);
+    server->clientsPool = pool_init (free);
 
     switch (type) {
         case FILE_SERVER: break;
@@ -759,7 +770,7 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
             logMsg (stdout, SUCCESS, SERVER, "Done getting cfg server values");
     }
 
-    // init the server
+    // init the server with the selected protocol
     switch (server->protocol) {
         case IPPROTO_TCP: 
             server->serverSock = socket ((server->useIpv6 == 1 ? AF_INET6 : AF_INET), SOCK_STREAM, 0);
@@ -768,8 +779,7 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
             server->serverSock = socket ((server->useIpv6 == 1 ? AF_INET6 : AF_INET), SOCK_DGRAM, 0);
             break;
 
-        default:
-            logMsg (stderr, ERROR, SERVER, "Unkonw protocol type!"); return 1;
+        default: logMsg (stderr, ERROR, SERVER, "Unkonw protocol type!"); return 1;
     }
     
     if (server->serverSock < 0) {
@@ -950,6 +960,9 @@ u8 serverPoll (Server *server) {
 	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
     socklen_t sockLen = sizeof (struct sockaddr_storage);
 
+    size_t rc;                                  // retval from recv -> size of buffer
+    char packetBuffer[MAX_UDP_PACKET_SIZE];     // buffer for data recieved from fd
+
     logMsg (stdout, SUCCESS, SERVER, "Server has started!");
     logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
 
@@ -995,46 +1008,31 @@ u8 serverPoll (Server *server) {
                     newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
 
                     // if we get EWOULDBLOCK, we have accepted all connections
-                    if (newfd < 0) {
-                        if (errno != EWOULDBLOCK) {
-                            // if not, accept failed
-                            // FIXME: how to handle this??
-                            logMsg (stderr, ERROR, SERVER, "Accept failed!");
-                        }
-                    }
+                    if (newfd < 0)
+                        if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
 
                     // we have a new connection from a new client
-                    client = newClient (newfd, clientAddress);
+                    client = newClient (server, newfd, clientAddress);
 
-                    // FIXME: send the client to the on hold structure 
-
-                    /* sc->server = server;
-                    sc->client = client; */
-
-                    // FIXME: authenticate the client before he can start making requests
-                    // thpool_add_work (thpool, (void *) authenticateClient, sc);
+                    // hold the client until he authenticates
+                    onHoldClient (server, client);
                 } while (newfd != -1);
             }
 
-            // TODO: do we want to hanlde this using a separte thread???
             // not the server socket, so a connection fd must be readable
             else {
-                size_t rc;          // retval from recv
-                char buffer[1024];  // buffer for data recieved from fd
-                // TODO: better handlde the lenght of this buffer!
-
-                // printf("  Descriptor %d is readable\n", fds[i].fd);
                 // recive all incoming data from this socket
                 do {
-                    rc = recv (server->fds[i].fd, buffer, sizeof (buffer), 0);
+                    rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                     
                     // recv error
                     if (rc < 0) {
                         if (errno != EWOULDBLOCK) {
-                            // FIXME: better handle this error!
                             logMsg (stderr, ERROR, SERVER, "Recv failed!");
                             perror ("Error:");
                         }
+
+                        break;  // there is no more data to handle
                     }
 
                     // check if the connection has been closed by the client
@@ -1045,11 +1043,8 @@ u8 serverPoll (Server *server) {
                         // TODO: what to do next?
                     }
 
-
-                    // FIXME: handle the request/packet from the client
-                    // data was recieved
-                    // len = rc;
-                    // printf("  %d bytes received\n", len);
+                    // FIXME: data was recieved -> handle the request/packet from the client
+                    thpool_add_work (thpool, (void *) handlePacket, );
                 } while (true);
 
                 // FIXME: set the end connection flag in the recv loop

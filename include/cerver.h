@@ -92,7 +92,7 @@ typedef struct Server {
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
     u16 nfds;                           // n of active fds in the pollfd array
-    u32 pollTimeout;                    // TODO: add this option on the cfg file
+    u32 pollTimeout;                    
 
     ServerType type;
     void *serverData;
@@ -101,13 +101,13 @@ typedef struct Server {
     // server expect, how to hanlde player input... all of that to make a more dynamic framework in the end...
 
     // TODO: 14/10/2018 - maybe we can have listen and handle connections as generir functions, also a generic function
-    // to recieve packets and specific functions to cast the packet to the type that we need?
+    // to recieve packets and specific functions to cast the packet to the type that we need? 
 
+    // 01/11/2018 - lets try this
     // do web servers need this?
-    Vector clients;     // connected clients
-
-    // 20/10/2018 -- i dont like this...
-    // Vector holdClients;     // hold on the clients until they authenticate
+    List *clients;              // connected clients
+    Pool *clientsPool;
+    List *onHoldClients;        // hold on the clients until they authenticate
 
 } Server;
 
@@ -117,9 +117,6 @@ extern Server *cerver_createServer (Server *, ServerType, void (*destroyServerda
 
 extern u8 cerver_startServer (Server *);
 
-// TODO: do we need this to be public?
-extern void *connectionHandler (void *);
-extern void listenForConnections (Server *);
 
 extern void cerver_shutdownServer (Server *);
 extern u8 cerver_teardown (Server *);
@@ -153,6 +150,12 @@ typedef struct LoadBalancer {
 } LoadBalancer;
 
 /*** REQUESTS ***/
+
+// TODO: Change the name
+// 01/11/2018
+// this indicates the data and more info about the packet type
+// for example if we have a game packet type, with this we can send a create lobby packet or join lobby
+// if we have an authenticate packet, here goes the data of a success authentication or a failed one
 
 typedef enum RequestType {
 
@@ -190,6 +193,10 @@ extern Version PROTOCOL_VERSION;
 
 // TODO: I think we can use this for manu more applications?
 // maybe something like our request type?
+
+// 01/11/2018 -- this indicates what type of packet we are sending/recieving
+// for exmaple if it is an error packet, a game packet, an auth packet or any other
+// type of request
 typedef enum PacketType {
 
     ERROR_PACKET = 1,
@@ -221,6 +228,8 @@ extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t pack
 
 
 /*** ERRORS ***/
+
+// TODO: 01/11/2018 - move this to the packet type section
 
 // 23/10/2018 -- lests test how this goes...
 typedef enum ErrorType {
