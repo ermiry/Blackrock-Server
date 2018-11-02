@@ -110,9 +110,10 @@ typedef struct Server {
 
     // 01/11/2018 - lets try this
     // do web servers need this?
-    List *clients;              // connected clients
+    // List *clients;               // connected clients
+    AVLTree *clients;               // 02/11/2018 -- connected clients with avl tree
     Pool *clientsPool;
-    List *onHoldClients;        // hold on the clients until they authenticate
+    List *onHoldClients;            // hold on the clients until they authenticate
 
     // 02/11/2018 - packet info
     Pool *packetPool;

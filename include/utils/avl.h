@@ -19,11 +19,12 @@ typedef struct AVLTree {
 
     AVLNode* root;
     CompPointer comparator;
+    void (*destroy)(void *data);
 
 } AVLTree;
 
-extern AVLTree *avl_init (CompPointer comparator);
-extern void avl_clearTree (AVLNode **node);
+extern AVLTree *avl_init (CompPointer comparator, void (*destroy)(void *data));
+extern void avl_clearTree (AVLNode **node, void (*destroy)(void *data));
 extern bool avl_isEmpty (AVLTree *tree);
 extern void *avl_getNodeData (AVLTree *tree, void *id);
 extern void avl_insertNode (AVLTree *tree, void *data);

@@ -1,11 +1,12 @@
 #include "utils/avl.h"
 
-AVLTree *avl_init (CompPointer comparator) {
+AVLTree *avl_init (CompPointer comparator, void (*destroy)(void *data)) {
 
     AVLTree *tree = (AVLTree *) malloc (sizeof (AVLTree));
     if (tree) {
         tree->root = NULL;
         tree->comparator = comparator;
+        if (destroy) tree->destroy = destroy;
     }
 
     return tree;
@@ -13,13 +14,16 @@ AVLTree *avl_init (CompPointer comparator) {
 }
 
 // removes all nodes from an avl tree
-void avl_clearTree (AVLNode **node) {
+void avl_clearTree (AVLNode **node, void (*destroy)(void *data)) {
 
     if (node) {
         AVLNode *ptr = *node;
-        avl_clearTree (&(ptr->right));
-        avl_clearTree (&(ptr->left));
-        free (ptr->id);
+        avl_clearTree (&(ptr->right), destroy);
+        avl_clearTree (&(ptr->left), destroy);
+
+        if (destroy) destroy (ptr->id);
+        else free (ptr->id);
+
         free (ptr);
         *node = NULL;
     }

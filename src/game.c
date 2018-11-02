@@ -256,7 +256,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
         #endif
-        if (sendErrorPacket (server, owner->client, ERR_Create_Lobby, "Player is already in a lobby!")) {
+        if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
             #ifdef DEBUG
             logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
             #endif
@@ -412,7 +412,7 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player tries to join the same lobby he is in.");
             #endif
-            sendErrorPacket (server, player->client, ERR_Join_Lobby, "You can't join the same lobby you are in!");
+            sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "You can't join the same lobby you are in!");
             return 1;
         }
     }
@@ -422,7 +422,7 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join a lobby that is in game.");
         #endif
-        sendErrorPacket (server, player->client, ERR_Join_Lobby, "A game is in progress in the lobby!");
+        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "A game is in progress in the lobby!");
         return 1;
     }
 
@@ -430,7 +430,7 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join an already full lobby.");
         #endif
-        sendErrorPacket (server, player->client, ERR_Join_Lobby, "The lobby is already full!");
+        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "The lobby is already full!");
         return 1;
     }
 

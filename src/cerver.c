@@ -343,6 +343,7 @@ void handlePacket (void *data) {
 
 #pragma region CLIENTS
 
+// TODO: 02/11/2018 -- maybe the socket fd is the client id??
 // FIXME: we can't have infinite ids!!
 u32 nextClientID = 0;
 
@@ -381,6 +382,40 @@ void destroyClient (void *data) {
 
 }
 
+// comparator for client's avl tree
+int clientComparator (void *a, void *b) {
+
+    if (a && b) {
+        Client *client_a = (Client *) a;
+        Client *client_b = (Client *) b;
+
+        if (client_a->clientSock > client_b->clientSock) return 1;
+        else if (client_a->clientSock == client_b->clientSock) return 0;
+        else return -1;
+
+        // if (*((int *) a) >  *((int *)b)) return 1;
+        // else if (*((int *) a) == *((int *)b)) return 0;
+        // else return -1;
+    }
+
+}
+
+// search a client in the server's client by the sock's fd
+Client *getClientBySock (Server *server, i32 fd) {
+
+    if (server) {
+        Client temp = { .clientSock = fd };
+        void *data = avl_getNodeData (server->clients, &temp);
+        if (data) return (Client *) data;
+        else {
+            logMsg (stderr, ERROR, SERVER, 
+                createString ("Couldn't find a client associated with the passed fd: %i.", fd));
+            return NULL;
+        } 
+    }
+
+}
+
 // 13/10/2018 - I think register a client only works for tcp? but i might be wrong...
 
 // TODO: hanlde a max number of clients connected to a server at the same time?
@@ -406,15 +441,6 @@ void unregisterClient (Server *server, Client *client) {
 
 // TODO: used to check for client timeouts in any type of server
 void checkClientTimeout (Server *server) {
-
-}
-
-// comparator for client's avl tree
-int clientComparator (void *a, void *b) {
-
-    if (*((int *) a) >  *((int *)b)) return 1;
-    else if (*((int *) a) == *((int *)b)) return 0;
-    else return -1;
 
 }
 
@@ -535,62 +561,6 @@ void authenticateClient (void *data) {
 
 #pragma endregion
 
-#pragma region LISTENING
-
-// FIXME: we need to signal this process to end when we teardown the server!!!
-// tcp needs to accept a connection to communicate with it
-// this is called from a separate thread for each server     20/10/2018
-void tcpListenForConnections (void *data) {
-
-    if (!data) {
-        logMsg (stderr, ERROR, SERVER, "Can't listen for tcp connections on a NULL server!");
-        return;
-    }
-
-    Server *server = (Server *) data;
-
-    listen (server->serverSock, server->connectionQueue);
-
-    Client *client = NULL;
-    i32 clientSocket;
-	struct sockaddr_storage clientAddress;
-	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
-    socklen_t sockLen = sizeof (struct sockaddr_storage);
-
-    ServerClient *sc = (ServerClient *) malloc (sizeof (ServerClient));
-
-    logMsg (stdout, DEBUG_MSG, SERVER, "Listening for new connections...");
-
-    for (;;) {
-        if (server->isRunning) {
-            if (clientSocket = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen)) {
-                // first we need to check that we have got a valid client
-                // so, we first add the client to a temp client list, and we ask him to authenticate
-                client = newClient (clientSocket, clientAddress);
-
-                sc->server = server;
-                sc->client = client;
-
-                // TODO: send the client to the on hold structure for authentication....
-                // onHoldClient (server, client);
-
-                // authenticate the client before he can make requests
-                thpool_add_work (thpool, (void *) authenticateClient, sc);
-
-                // 20/10/2018 -- for now we just register the client to the correct server they reach
-                registerClient (server, client);
-            }
-        }
-
-        break;  // if we are not accepting clients anymore...
-    }
-
-    if (sc) free (sc);
-
-}
-
-#pragma endregion
-
 /*** SERVER ***/
 
 // TODO: handle ipv6 configuration
@@ -605,7 +575,8 @@ const char welcome[64] = "Welcome to cerver!";
 // init server type independent data structs
 void initServerDS (Server *server, ServerType type) {
 
-    server->clients = initList (destroyClient);
+    // server->clients = initList (destroyClient);
+    server->clients = avl_init (clientComparator, destroyClient);
     server->onHoldClients = initList (destroyClient);
     server->clientsPool = pool_init (destroyClient);
 
@@ -1028,6 +999,8 @@ u8 serverPoll (Server *server) {
             // not the server socket, so a connection fd must be readable
             else {
                 // recive all incoming data from this socket
+                // FIXME: add support for multiple reads to the socket
+                // we need to correctly handle a large buffer when creating a new packet info!!!
                 do {
                     rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                     
@@ -1049,8 +1022,9 @@ u8 serverPoll (Server *server) {
                         // TODO: what to do next?
                     }
 
-                    // FIXME: client and how do we copy the data from the buffer? also the size!!!
-                    PacketInfo *info = newPacketInfo (server, NULL, packetBuffer, sizeof (packetBuffer));
+                    // FIXME: packet buffer type in packet info and packet size
+                    PacketInfo *info = newPacketInfo (server, 
+                        getClientBySock (server, server->fds[i].fd), packetBuffer, sizeof (packetBuffer));
 
                     thpool_add_work (thpool, (void *) handlePacket, info);
                 } while (true);
@@ -1239,13 +1213,13 @@ void destroyGameServer (void *data) {
     
 }
 
-// FIXME:
+// FIXME: 02/11/2018 -- client structs have changed!!
 // TODO: clean the on hold client structures
 // cleans up the client's structure in the current server
 // if ther are clients connected, it sends a req to disconnect
 void cleanUpClients (Server *server) {
 
-    if (server->clients.elements > 0) {
+    /* if (server->clients.elements > 0) {
         Client *client = NULL;
         
         for (size_t i_client = 0; i_client < server->clients.elements; i_client++) {
@@ -1256,7 +1230,7 @@ void cleanUpClients (Server *server) {
         while (server->clients.elements > 0) {
             
         }
-    }
+    } */
 
     // TODO: make sure destroy the client vector
 
