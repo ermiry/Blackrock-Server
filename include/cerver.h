@@ -75,12 +75,6 @@ typedef struct GameServerData {
 
     Config *gameSettingsConfig;     // stores game modes info
 
-    // TODO: do we want these here?
-    // const packet sizes
-    size_t lobbyPacketSize;
-    size_t updatedGamePacketSize;
-    size_t playerInputPacketSize;
-
     Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
     List *currentLobbys;    // a list of the current lobbys
 
@@ -180,7 +174,7 @@ typedef struct PacketInfo {
 
     Server *server;
     Client *client;
-    char *packetData;
+    char packetData[MAX_UDP_PACKET_SIZE];
     size_t packetSize;
 
 } PacketInfo;

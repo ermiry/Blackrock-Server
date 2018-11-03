@@ -72,13 +72,6 @@ void s_array_init (void *array, void *begin, size_t n_elems) {
 
 #pragma region PACKETS
 
-ssize_t packetHeaderSize;
-ssize_t requestPacketSize;
-ssize_t lobbyPacketSize;
-ssize_t updatedGamePacketSize;
-ssize_t playerInputPacketSize;
-
-// FIXME: packet data
 PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize) {
 
     PacketInfo *new = NULL;
@@ -94,8 +87,10 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
 
     new->server = server;
     new->client = client;
-    // new->packetData = FIXME:
     new->packetSize = packetSize;
+
+    // copy the contents from the entry buffer to the packet info
+    strcpy (new->packetData, packetData);
 
     return new;
 
@@ -104,51 +99,41 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
 // FIXME: used to destroy remaining packet info in the pools
 void destroyPacketInfo (void *data) {}
 
-// FIXME:
 // check for packets with bad size, protocol, version, etc
-u8 checkPacket (ssize_t packetSize, char *packetData) {
+u8 checkPacket (size_t packetSize, char *packetData) {
 
-    if ((unsigned) packetSize < sizeof (PacketHeader)) {
+    if (packetSize < sizeof (PacketHeader)) {
+        #ifdef CERVER_DEBUG
         logMsg (stderr, WARNING, PACKET, "Recieved a to small packet!");
+        #endif
         return 1;
     } 
 
     PacketHeader *header = (PacketHeader *) packetData;
 
     if (header->protocolID != PROTOCOL_ID) {
-        logMsg (stderr, WARNING, PACKET, "Packet with unknown protocol ID.");
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, WARNING, PACKET, "Packet with unknown protocol ID.");
+        #endif
         return 1;
     }
 
     Version version = header->protocolVersion;
     if (version.major != PROTOCOL_VERSION.major) {
-        logMsg (stderr, WARNING, PACKET, "Packet with incompatible version.");
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, WARNING, PACKET, "Packet with incompatible version.");
+        #endif
         return 1;
     }
 
-    // FIXME: check that we have got a least the minimun size of each packet type
-    /* switch (type) {
-        case REQUEST: 
-            if (packetSize < requestPacketSize) {
-                logMsg (stderr, WARNING, PACKET, "Received a too small request packet.");
-                return 1;
-            } break;
-        case GAME_UPDATE_TYPE: 
-            if (packetSize < updatedGamePacketSize) {
-                logMsg (stderr, WARNING, PACKET, "Received a too small game update packet.");
-                return 1;
-            } break;
-        case PLAYER_INPUT_TYPE: 
-            if (packetSize < playerInputPacketSize) {
-                logMsg (stderr, WARNING, PACKET, "Received a too small player input packet.");
-                return 1;
-            } break;
-
-        // TODO:
-        case TEST_PACKET_TYPE: break;
-        
-        default: logMsg (stderr, WARNING, PACKET, "Got a pakcet of incompatible type."); return 1;
-    } */
+    // compare the size we got from recv () against what is the expected packet size
+    // that the client created 
+    if (packetSize != header->packetSize) {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
+        #endif
+        return 1;
+    }
 
     return 0;   // packet is fine
 
@@ -192,12 +177,13 @@ void recievePackets (void) {
 
 }
 
-void initPacketHeader (void *header, PacketType type) {
+void initPacketHeader (void *header, PacketType type, u32 packetSize) {
 
     PacketHeader h;
     h.protocolID = PROTOCOL_ID;
     h.protocolVersion = PROTOCOL_VERSION;
     h.packetType = type;
+    h.packetSize = pakcetSize;
 
     memcpy (header, &h, sizeof (PacketHeader));
 
@@ -214,20 +200,20 @@ void *generatePacket (PacketType packetType) {
 
     PacketHeader *header = (PacketHeader *) end;
     end += sizeof (PacketHeader);
-    initPacketHeader (header, packetType); 
+    initPacketHeader (header, packetType, sizeof (PacketHeader)); 
 
     return begin;
 
 }
 
-// TODO: 22/10/2018 -- 22:57 - if we have a lb, does all the traffic goes out from there?
-// sends a packet from a server to the client address
-void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr_storage address) {
+// TODO: 03/11/2018 - does this works better for udp, what about a fd -> fd send function for tcp?
+// sends a packet from a socket to the specified address
+void sendPacket (Server *server, const void *begin, size_t packetSize, struct sockaddr_storage address) {
 
-    ssize_t sentBytes = sendto (server->serverSock, (const char *) begin, packetSize, 0,
+    ssize_t sentBytes = sendto (server->serverSock, begin, packetSize, 0,
 		       (struct sockaddr *) &address, sizeof (struct sockaddr_storage));
 
-	if (sentBytes < 0 || (unsigned) sentBytes != packetSize)
+	if (sentBytes <= 0 || (unsigned) sentBytes != packetSize)
         logMsg (stderr, ERROR, NO_TYPE, "Failed to send packet!") ;
 
 }
@@ -235,7 +221,7 @@ void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr
 // creates and sends an error packet to the player to hanlde it
 u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
-    // first create the packet with the necesarry info
+    // first create the packet with the necesary info
     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     
     void *packetBuffer = malloc (packetSize);
@@ -244,12 +230,25 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
     PacketHeader *header = (PacketHeader *) end;
     end += sizeof (PacketHeader);
-    initPacketHeader (header, ERROR_PACKET);
+    initPacketHeader (header, ERROR_PACKET, packetSize);
 
     ErrorData *edata = (ErrorData *) end;
     end += sizeof (ErrorData);
     edata->type = type;
-    if (msg) strcpy (edata->msg, msg);
+    if (msg) {
+        if (strlen (msg) > sizeof (edata->msg)) {
+            // clamp the value to fit inside edata->msg
+            u16 i = 0;
+            while (i < sizeof (edata->msg) - 1) {
+                edata->msg[i] = msg[i];
+                i++;
+            }
+
+            edata->msg[i] = '\0';
+        }
+
+        else strcpy (edata->msg, msg);
+    }
 
     // send the packet to the client
     sendPacket (server, begin, packetSize, client->address);
@@ -321,13 +320,15 @@ void handlePacket (void *data) {
                 break;
 
             default: 
-                logMsg (stderr, WARNING, PACKET, "Got a pakcet of incompatible type."); 
+                logMsg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
                 pool_push (packet->server->packetPool, packet);
                 break;
         }
     }
 
 }
+
+
 
 #pragma endregion
 
@@ -518,10 +519,8 @@ void compressHoldClients (Server *server) {
 // FIXME: 01/11/2018 -- 18:06 -- do we want to have a separte poll in another thread to handle
 // the on hold clients so that they can authentcate themselves?
 
-// TODO: add the option to ask for client authentication or not in the server config
-// FIXME: take into account the correct poll and on hold structures (avl tree)
-// poll to listen to on hold clients so that they can authenticate themselves
-// before sending them to the main poll
+// FIXME: how to correctly handle their packages?
+// handles packets from the on hold clients until they authenticate
 u8 handleOnHoldClients (Server *server) {
 
     if (!server) {
@@ -529,8 +528,9 @@ u8 handleOnHoldClients (Server *server) {
         return 1;
     }
 
-    size_t rc;                                  // retval from recv -> size of buffer
-    char packetBuffer[MAX_UDP_PACKET_SIZE];     // buffer for data recieved from fd
+    ssize_t rc;                                  // retval from recv -> size of buffer
+    char packetBuffer[MAX_UDP_PACKET_SIZE];      // buffer for data recieved from fd
+    PacketInfo *info = NULL;
 
     #ifdef CERVER_DEBUG
     logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
@@ -546,7 +546,7 @@ u8 handleOnHoldClients (Server *server) {
 
         // poll failed
         if (poll_retval < 0) {
-            logMsg (stderr, ERROR, SERVER, "Poll failed!");
+            logMsg (stderr, ERROR, SERVER, "On hold poll failed!");
             perror ("Error");
             server->isRunning = false;
             break;
@@ -555,7 +555,7 @@ u8 handleOnHoldClients (Server *server) {
         // if poll has timed out, just continue to the next loop... 
         if (poll_retval == 0) {
             #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
+            logMsg (stdout, DEBUG_MSG, SERVER, "On hold poll timeout.");
             #endif
             continue;
         }
@@ -573,34 +573,25 @@ u8 handleOnHoldClients (Server *server) {
             }
 
             // recive all incoming data from this socket
-            // FIXME: add support for multiple reads to the socket
-            // FIXME: 02/11/2018 -- 16:02 -- maybe add the expexted size in the header of the file
-            // we need to correctly handle a large buffer when creating a new packet info!!!
             do {
                 rc = recv (server->hold_fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                 
                 // recv error
                 if (rc < 0) {
                     if (errno != EWOULDBLOCK) {
-                        logMsg (stderr, ERROR, SERVER, "Recv failed!");
+                        logMsg (stderr, ERROR, SERVER, "On hold recv failed!");
                         perror ("Error:");
                     }
 
                     break;  // there is no more data to handle
                 }
 
-                // TODO: what to do next?
-                // check if the connection has been closed by the client
-                if (rc == 0) {
-                    #ifdef DEBUG
-                    logMsg (stdout, DEBUG_MSG, SERVER, "Client closed the connection.");
-                    #endif
-                }
+                if (rc == 0) break;
 
-                // FIXME: packet buffer type in packet info and packet size
-                PacketInfo *info = newPacketInfo (server, 
-                    getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, sizeof (packetBuffer));
+                info = newPacketInfo (server, 
+                    getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, rc);
 
+                // if we handle the same way we might have a bypass of the authentication!!!
                 // FIXME: do we want to handle this the same way?
                 // thpool_add_work (thpool, (void *) handlePacket, info);
             } while (true);
@@ -611,10 +602,9 @@ u8 handleOnHoldClients (Server *server) {
 
 }
 
-// 20/10/2018 -- we are managing only one server... so each one has his on hold clients
-// hold the client until he authenticates 
-// 01/11/2018 - TODO: we are just thinking on how a file and game server should work
-// we need to investigate what happens when we are accessing a web server
+// TODO: 03/11/2018 -- what happens when we have a load balancer?
+// if the server requires authentication, we send the newly connected clients to an on hold
+// structure until they authenticate, if not, they are just dropped by the server
 void onHoldClient (Server *server, Client *client) {
 
     // add the client to the on hold structres -> avl and poll
@@ -762,17 +752,8 @@ void initServerDS (Server *server, ServerType type) {
 
 }
 
-// TODO: 19/10/2018 -- do we need to have the expected size of each server type
-// inside the server structure?
 // depending on the type of server, we need to init some const values
 void initServerValues (Server *server, ServerType type) {
-    
-    // this are used in all the types
-    // FIXME:
-    // packetHeaderSize = sizeof (PacketHeader);
-    // requestPacketSize = sizeof (RequestData);
-
-    server->nfds = 0;
 
     switch (type) {
         case FILE_SERVER: break;
@@ -1025,7 +1006,7 @@ Server *cerver_createServer (Server *server, ServerType type, void (*destroyServ
         Server *s = newServer (server);
         if (!initServer (s, NULL, type)) {
             s->destroyServerData = destroyServerData;
-            logMsg (stdout, SUCCESS, SERVER, "\nCreated a new server!\n");
+            logMsg (stdout, SUCCESS, SERVER, "Created a new server!");
             return s;
         }
 
@@ -1048,7 +1029,7 @@ Server *cerver_createServer (Server *server, ServerType type, void (*destroyServ
             Server *s = newServer (NULL);
             if (!initServer (s, serverConfig, type)) {
                 s->destroyServerData = destroyServerData;
-                logMsg (stdout, SUCCESS, SERVER, "Created a new server!\n");
+                logMsg (stdout, SUCCESS, SERVER, "Created a new server!");
                 // we don't need the server config anymore
                 clearConfig (serverConfig);
                 return s;
@@ -1142,16 +1123,17 @@ u8 serverPoll (Server *server) {
 	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
     socklen_t sockLen = sizeof (struct sockaddr_storage);
 
-    size_t rc;                                  // retval from recv -> size of buffer
-    char packetBuffer[MAX_UDP_PACKET_SIZE];     // buffer for data recieved from fd
-
-    logMsg (stdout, SUCCESS, SERVER, "Server has started!");
-    logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+    ssize_t rc;                                   // retval from recv -> size of buffer
+    char packetBuffer[MAX_UDP_PACKET_SIZE];       // buffer for data recieved from fd
+    PacketInfo *info = NULL;
 
     int poll_retval;    // ret val from poll function
     int currfds;        // copy of n active server poll fds
 
     int newfd;          // fd of new connection
+
+    logMsg (stdout, SUCCESS, SERVER, "Server has started!");
+    logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
     while (server->isRunning) {
         poll_retval = poll (server->fds, server->nfds, server->pollTimeout);
 
@@ -1205,13 +1187,12 @@ u8 serverPoll (Server *server) {
             // not the server socket, so a connection fd must be readable
             else {
                 // recive all incoming data from this socket
-                // FIXME: add support for multiple reads to the socket
-                // FIXME: 02/11/2018 -- 16:02 -- maybe add the expexted size in the header of the file
-                // we need to correctly handle a large buffer when creating a new packet info!!!
+                // TODO: 03/11/2018 - add support for multiple reads to the socket
+                // what happens if my buffer isn't enough, for example a larger file?
                 do {
                     rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                     
-                    // recv error
+                    // recv error - no more data to read
                     if (rc < 0) {
                         if (errno != EWOULDBLOCK) {
                             logMsg (stderr, ERROR, SERVER, "Recv failed!");
@@ -1221,37 +1202,23 @@ u8 serverPoll (Server *server) {
                         break;  // there is no more data to handle
                     }
 
-                    // check if the connection has been closed by the client
                     if (rc == 0) {
-                        #ifdef DEBUG
-                        logMsg (stdout, DEBUG_MSG, SERVER, "Client closed the connection.");
-                        #endif
-                        // TODO: what to do next?
+                        // man recv -> steam socket perfomed an orderly shutdown
+                        // but in dgram it might mean something?
+                        // 03/11/2018 -- we just ignore the packet or whatever
+                        break;
                     }
 
-                    // FIXME: packet buffer type in packet info and packet size
-                    PacketInfo *info = newPacketInfo (server, 
-                        getClientBySock (server->clients, server->fds[i].fd), packetBuffer, sizeof (packetBuffer));
+                    info = newPacketInfo (server, 
+                        getClientBySock (server->clients, server->fds[i].fd), packetBuffer, rc);
 
                     thpool_add_work (thpool, (void *) handlePacket, info);
                 } while (true);
-
-                // FIXME: set the end connection flag in the recv loop
-                // end the connection if we were indicated
-                /* if (close_conn) {
-                    close(fds[i].fd);
-                    fds[i].fd = -1;
-                    compress_array = TRUE;
-                } */
             }
 
         }
 
         if (server->compress_clients) compressClients (server);
-
-        // FIXME: when we close a connection, we need to delete it from the fd array
-            // this happens when a client disconnects or we teardown the server...
-
     }
 
 }
@@ -1285,6 +1252,8 @@ u8 cerver_startServer (Server *server) {
                     // TODO: handle server poll return value
                     // we are now ready to start the poll loop -> traverse the fds array
                     serverPoll (server);
+                    // FIXME: start separate on hold poll loop
+                    // if (server->authRequired) 
 
                     retval = 0;
                 }
