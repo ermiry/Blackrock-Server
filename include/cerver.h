@@ -29,10 +29,12 @@ typedef int64_t i64;
 
 typedef unsigned char asciiChar;
 
+#define DEFAULT_USE_IPV6                0
 #define DEFAULT_PROTOCOL                IPPROTO_TCP
 #define DEFAULT_PORT                    7001
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
+#define DEFAULT_REQUIRE_AUTH            0   // by default, a server does not requires authentication
 
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515
@@ -103,6 +105,7 @@ typedef struct Server {
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
     u16 nfds;                           // n of active fds in the pollfd array
+    bool compress_clients;              // compress the fds array?
     u32 pollTimeout;           
 
     ServerType type;
@@ -111,10 +114,10 @@ typedef struct Server {
 
     // 01/11/2018 - lets try this
     // do web servers need this?
-    // List *clients;               // connected clients
-    AVLTree *clients;               // 02/11/2018 -- connected clients with avl tree
+    // List *clients;                   // connected clients
+    AVLTree *clients;                   // 02/11/2018 -- connected clients with avl tree
     Pool *clientsPool;
-    // List *onHoldClients;            // hold on the clients until they authenticate
+    // List *onHoldClients;             // hold on the clients until they authenticate
 
     // 02/11/2018 - packet info
     Pool *packetPool;
@@ -123,6 +126,7 @@ typedef struct Server {
     AVLTree *onHoldClients;
     struct pollfd hold_fds[50];
     u16 hold_nfds;
+    bool compress_hold_clients;              // compress the hold fds array?
 
 } Server;
 
@@ -217,6 +221,7 @@ typedef struct PacketHeader {
 	ProtocolId protocolID;
 	Version protocolVersion;
 	PacketType packetType;
+    u32 packetSize;             // expected packet size
 
 } PacketHeader;
 

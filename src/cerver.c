@@ -429,10 +429,8 @@ void registerClient (Server *server, Client *client) {
 
         server->hold_fds[c->clientSock].fd = -1;
 
-        // TODO:
-        // 02/11/2018 -- maybe set a flag in the server so that the poll function can compress
-        // the array in the next loop -> this may be a better way to avoid race conditions
-        //  server->hold_nfds--;
+        // compress the hold fds array in the next poll loop
+        server->compress_hold_clients = true;
     }
 
     else c = client;
@@ -459,16 +457,14 @@ void registerClient (Server *server, Client *client) {
 
 // FIXME: don't forget to call this function in the server teardown to clean up our structures?
 // FIXME: where do we want to disconnect the client?
-// TODO: removes a client from the server 
+// removes a client from the server 
 void unregisterClient (Server *server, Client *client) {
 
     // take out the client from the active clients structres, avl and poll in the server
     server->fds[client->clientSock].fd = -1;
 
-    // TODO:
-    // 02/11/2018 -- maybe set a flag in the server so that the poll function can compress
-    // the array in the next loop -> this may be a better way to avoid race conditions
-    //  server->hold_nfds--;
+    // compress the fds array in the next poll loop
+    server->compress_clients = true;
 
     avl_removeNode (server->clients, client);
     
@@ -489,6 +485,26 @@ void checkClientTimeout (Server *server) {
 /*** AUTHENTICATE THE CLIENT CONNECTION ***/
 
 #pragma region CLIENT AUTHENTICATION
+
+// TODO: where do we want to put this?
+// we remove any fd that was set to -1 for what ever reason
+void compressHoldClients (Server *server) {
+
+    if (server) {
+        server->compress_hold_clients = false;
+        
+        for (u16 i = 0; i < server->hold_nfds; i++) {
+            if (server->hold_fds[i].fd == -1) {
+                for (u16 j = i; j < server->hold_nfds; j++) 
+                    server->hold_fds[j].fd = server->hold_fds[j + 1].fd;
+
+                i--;
+                server->hold_nfds--;
+            }
+        }
+    }
+
+}
 
 // 01/11/2018 -- we can use this later to have a better authentication checking some 
 // accounts and asking the client to provide us with some credentials
@@ -590,6 +606,7 @@ u8 handleOnHoldClients (Server *server) {
             } while (true);
         }
 
+        if (server->compress_hold_clients) compressHoldClients (server);
     } 
 
 }
@@ -706,18 +723,27 @@ void authenticateClient (void *data) {
 
 const char welcome[64] = "Welcome to cerver!";
 
-// init server type independent data structs
+// init server's data structures
 void initServerDS (Server *server, ServerType type) {
 
-    // server->clients = initList (destroyClient);
     server->clients = avl_init (clientComparator, destroyClient);
-    // server->onHoldClients = initList (destroyClient);
     server->onHoldClients = avl_init (clientComparator, destroyClient);
     server->clientsPool = pool_init (destroyClient);
 
     server->packetPool = pool_init (destroyPacketInfo);
     // by default init the packet pool with some members
     for (u8 i = 0; i < 3; i++) pool_push (server->packetPool, malloc (sizeof (PacketInfo)));
+
+    // initialize pollfd structures
+    memset (server->fds, 0, sizeof (server->fds));
+    server->nfds = 0;
+    server->compress_clients = false;
+
+    if (server->authRequired) {
+        memset (server->hold_fds, 0, sizeof (server->fds));
+        server->hold_nfds = 0;
+        server->compress_hold_clients = false;
+    }
 
     switch (type) {
         case FILE_SERVER: break;
@@ -779,7 +805,7 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         if (server->useIpv6 != 0 || server->useIpv6 != 1) server->useIpv6 = 0;
     } 
     // if we do not have a value, use the default
-    else server->useIpv6 = 0;
+    else server->useIpv6 = DEFAULT_USE_IPV6;
 
     #ifdef CERVER_DEBUG
     logMsg (stdout, DEBUG_MSG, SERVER, createString ("Use IPv6: %i", server->useIpv6));
@@ -799,8 +825,8 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
     }
     // set to default (tcp) if we don't found a value
     else {
-        logMsg (stdout, WARNING, SERVER, "No protocol found. Using default: tcp protocol");
         server->protocol = IPPROTO_TCP;
+        logMsg (stdout, WARNING, SERVER, "No protocol found. Using default: tcp protocol");
     }
 
     char *port = getEntityValue (cfgEntity, "port");
@@ -819,9 +845,9 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
     }
     // set to default port
     else {
+        server->port = DEFAULT_PORT;
         logMsg (stdout, WARNING, SERVER, 
             createString ("No port found. Setting port to default value: %i", DEFAULT_PORT));
-        server->port = DEFAULT_PORT;
     } 
 
     char *queue = getEntityValue (cfgEntity, "queue");
@@ -832,9 +858,9 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         #endif
     } 
     else {
+        server->connectionQueue = DEFAULT_CONNECTION_QUEUE;
         logMsg (stdout, WARNING, SERVER, 
             createString ("Connection queue no specified. Setting it to default: %i", DEFAULT_CONNECTION_QUEUE));
-        server->connectionQueue = DEFAULT_CONNECTION_QUEUE;
     }
 
     char *timeout = getEntityValue (cfgEntity, "timeout");
@@ -845,9 +871,22 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         #endif
     }
     else {
+        server->pollTimeout = DEFAULT_POLL_TIMEOUT;
         logMsg (stdout, WARNING, SERVER, 
             createString ("Poll timeout no specified. Setting it to default: %i", DEFAULT_POLL_TIMEOUT));
-        server->pollTimeout = DEFAULT_POLL_TIMEOUT;
+    }
+
+    char *auth = getEntityValue (cfgEntity, "authentication");
+    if (auth) {
+        server->authRequired = atoi (auth);
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired = 1 ? 
+            "Server requires client authentication" : "Server does not requires client authentication");
+        #endif
+    }
+    else {
+        server->authRequired = DEFAULT_REQUIRE_AUTH;
+        logMsg (stdout, WARNING, SERVER, "No auth option found. No authentication required by default.");
     }
 
     return 0;
@@ -912,6 +951,8 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
         return 1;
     }
 
+    // TODO: how to check that the socket is actually non blocking?
+
     else {
         #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "Server socket set to non blocking mode.");
@@ -964,12 +1005,14 @@ Server *newServer (Server *server) {
         new->port = server->port;
         new->connectionQueue = server->connectionQueue;
         new->pollTimeout = server->pollTimeout;
+        new->authRequired = server->authRequired;
+        new->type = server->type;
     }
 
     new->isRunning = false;
 
-    // by default the socket is assumed to be non blocking
-    new->blocking = false;
+    // by default the socket is assumed to be a blocking socket
+    new->blocking = true;
     
     return new;
 
@@ -1032,7 +1075,8 @@ Server *cerver_restartServer (Server *server) {
 
         Server temp = { 
             .useIpv6 = server->useIpv6, .protocol = server->protocol, .port = server->port,
-            .connectionQueue = server->connectionQueue, .type = server->type, .pollTimeout = server->pollTimeout};
+            .connectionQueue = server->connectionQueue, .type = server->type,
+            .pollTimeout = server->pollTimeout, .authRequired = server->authRequired };
 
         if (!cerver_teardown (server)) logMsg (stdout, SUCCESS, SERVER, "Done with server teardown");
         else logMsg (stderr, ERROR, SERVER, "Failed to teardown the server!");
@@ -1053,6 +1097,26 @@ Server *cerver_restartServer (Server *server) {
         logMsg (stdout, WARNING, SERVER, "Can't restart a NULL server!");
         return NULL;
     }
+
+}
+
+// TODO: where do we want to put this?
+// we remove any fd that was set to -1 for what ever reason
+void compressClients (Server *server) {
+
+    if (server) {
+        server->compress_clients = false;
+
+        for (u16 i = 0; i < server->nfds; i++) {
+            if (server->fds[i].fd == -1) {
+                for (u16 j = i; j < server->nfds; j++) 
+                    server->fds[j].fd = server->fds[j + 1].fd;
+
+                i--;
+                server->nfds--;
+            }
+        }
+    }  
 
 }
 
@@ -1133,7 +1197,8 @@ u8 serverPoll (Server *server) {
                     client = newClient (server, newfd, clientAddress);
 
                     // hold the client until he authenticates
-                    onHoldClient (server, client);
+                    if (server->authRequired) onHoldClient (server, client);
+                    else registerClient (server, client);
                 } while (newfd != -1);
             }
 
@@ -1182,20 +1247,7 @@ u8 serverPoll (Server *server) {
 
         }
 
-        // FIXME: where do we want to put this to avoid race conditions?
-        // TODO: when we remove the client from the server, we also need to remove it from
-        // the avl and the poll structures
-        // we set to -1 the fd we want to remove and we compress the array
-        /* if (compress_array) {
-            compress_array = FALSE;
-            for (i = 0; i < nfds; i++) {
-                if (fds[i].fd == -1) {
-                for (j = i; j < nfds; j++) fds[j].fd = fds[j+1].fd;
-                i--;
-                nfds--;
-                }
-            }
-        } */
+        if (server->compress_clients) compressClients (server);
 
         // FIXME: when we close a connection, we need to delete it from the fd array
             // this happens when a client disconnects or we teardown the server...
@@ -1221,29 +1273,34 @@ u8 cerver_startServer (Server *server) {
         case IPPROTO_TCP: {
             // 28/10/2018 -- taking into account ibm poll example
             // we expect the socket to be already in non blocking mode
-            if (!listen (server->serverSock, server->connectionQueue)) {
-                // initialize pollfd structure
-                memset (server->fds, 0, sizeof (server->fds));
+            if (server->blocking == false) {
+                if (!listen (server->serverSock, server->connectionQueue)) {
+                    // set up the initial listening socket     
+                    server->fds[server->nfds].fd = server->serverSock;
+                    server->fds[server->nfds].events = POLLIN;
+                    server->nfds++;
 
-                // set up the initial listening socket     
-                server->fds[0].fd = server->serverSock;
-                server->fds[0].events = POLLIN;
-                server->nfds++;
+                    server->isRunning = true;
 
-                server->isRunning = true;
+                    // TODO: handle server poll return value
+                    // we are now ready to start the poll loop -> traverse the fds array
+                    serverPoll (server);
 
-                // the timeout is set when we create the socket
-                // we are now ready to start the poll loop -> traverse the fds array
-                serverPoll (server);
+                    retval = 0;
+                }
 
-                retval = 0;
+                else {
+                    logMsg (stderr, ERROR, SERVER, "Failed to listen in server socket!");
+                    close (server->serverSock);
+                    retval = 1;
+                }
             }
 
             else {
-                logMsg (stderr, ERROR, SERVER, "Failed to listen in server socket!");
-                close (server->serverSock);
+                logMsg (stderr, ERROR, SERVER, "Server socket is not set to non blocking!");
                 retval = 1;
             }
+            
         } break;
         case IPPROTO_UDP: break;
 

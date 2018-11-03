@@ -8,13 +8,14 @@
 
 // enable/disable blocking on a socket
 // true on success, false if there was an eroror
-bool sock_setBlocking (int32_t fd, bool blocking) {
+bool sock_setBlocking (int32_t fd, bool isBlocking) {
 
     if (fd < 0) return false;
 
-    int flags = fcntl(fd, F_GETFL, 0);
+    int flags = fcntl (fd, F_GETFL, 0);
     if (flags == -1) return false;
-    flags = blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
+    // flags = isBlocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);   // original
+    flags = isBlocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
     return (fcntl (fd, F_SETFL, flags) == 0) ? true : false;
 
 }
