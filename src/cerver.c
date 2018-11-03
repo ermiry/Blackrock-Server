@@ -190,17 +190,17 @@ void initPacketHeader (void *header, PacketType type, u32 packetSize) {
 }
 
 // generates a generic packet with the specified packet type
-void *generatePacket (PacketType packetType) {
+void *generatePacket (PacketType packetType, size_t packetSize) {
 
-    size_t packetSize = sizeof (PacketHeader);
+    size_t packet_size;
+    if (packetSize > 0) packet_size = packetSize;
+    else packet_size = sizeof (PacketHeader);
 
-    void *packetBuffer = malloc (packetSize);
+    void *packetBuffer = malloc (packet_size);
     void *begin = packetBuffer;
-    char *end = begin; 
 
-    PacketHeader *header = (PacketHeader *) end;
-    end += sizeof (PacketHeader);
-    initPacketHeader (header, packetType, sizeof (PacketHeader)); 
+    PacketHeader *header = (PacketHeader *) begin;
+    initPacketHeader (header, packetType, packet_size); 
 
     return begin;
 
@@ -218,6 +218,7 @@ void sendPacket (Server *server, const void *begin, size_t packetSize, struct so
 
 }
 
+// TODO: check the create auth packet
 // creates and sends an error packet to the player to hanlde it
 u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
@@ -286,6 +287,21 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
 
 }
 
+void *createClientAuthReqPacket (void) {
+
+    size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+    void *begin = generatePacket (AUTHENTICATION, packetSize);
+    char *end = begin;
+
+    end += sizeof (PacketHeader);
+
+    RequestData *request = (RequestData *) end;
+    request->type = REQ_AUTH_CLIENT;
+
+    return begin;
+
+}
+
 // 01/11/2018 -- called with the th pool to handle a new packet
 void handlePacket (void *data) {
 
@@ -327,8 +343,6 @@ void handlePacket (void *data) {
     }
 
 }
-
-
 
 #pragma endregion
 
@@ -482,12 +496,84 @@ void checkClientTimeout (Server *server) {
 
 #pragma endregion
 
-// FIXME:
-/*** AUTHENTICATE THE CLIENT CONNECTION ***/
+/*** CLIENT AUTHENTICATION ***/
 
 #pragma region CLIENT AUTHENTICATION
 
-// TODO: where do we want to put this?
+// 01/11/2018 -- we can use this later to have a better authentication checking some 
+// accounts and asking the client to provide us with some credentials
+
+// TODO: 03/11/2018 - better client authentication
+// handles the authentication data that the client sent
+void authenticateClient (void *data) {
+
+    if (data) {
+        PacketInfo *packet =  (PacketInfo *) data;
+
+        if (!checkPacket (packet->packetSize, packet->packetData)) {
+            // calculate the offset to the auth data in the packet
+            AuthData *authData = (AuthData *) packet->packetData + sizeof (PacketHeader) + sizeof (RequestType);
+            
+            // TODO: how many chances does the client has to authenticate himself?
+            // authenticate the client
+            if (authData->code == 1) {
+                registerClient (packet->server, packet->client);
+                // TODO: send feedback to the client that he is conncted to the server
+                #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "Client authenticated correctly.");
+                #endif 
+            }
+
+            else {
+                // send feedback to the client
+                sendErrorPacket (packet->server, packet->client, ERR_FAILED_AUTH, "Wrong credentials!");
+
+                // drop the client from the on hold structure
+                packet->server->hold_fds[packet->client->clientSock].fd = -1;
+                packet->server->compress_hold_clients = true;
+                // the client socket is closed when we call destroyClient () here
+                avl_removeNode (packet->server->onHoldClients, packet->client);
+
+                #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "Client removed from on hold structure. Failed to authenticate");
+                #endif
+            }
+        }
+
+        // dispose the packet -> send to packet pool
+        pool_push (packet->server->packetPool, packet);
+    }
+
+}
+
+// TODO: 03/11/2018 -- what happens when we have a load balancer?
+// if the server requires authentication, we send the newly connected clients to an on hold
+// structure until they authenticate, if not, they are just dropped by the server
+void onHoldClient (Server *server, Client *client) {
+
+    // add the client to the on hold structres -> avl and poll
+    if (server && client) {
+        if (server->onHoldClients) {
+            server->hold_fds[server->hold_nfds].fd = client->clientSock;
+            server->hold_fds[server->hold_nfds].events = POLLIN;
+            server->hold_nfds++;
+
+            avl_insertNode (server->onHoldClients, client);
+
+            #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, "Added a new client to the on hold structures.");
+            #endif
+
+            // send the authentication request
+            if (server->reqAuthPacket) 
+                sendPacket (server, server->reqAuthPacket, server->reqAuthPacket,
+                client->address);
+            else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet.");
+        }
+    }
+
+}
+
 // we remove any fd that was set to -1 for what ever reason
 void compressHoldClients (Server *server) {
 
@@ -507,19 +593,6 @@ void compressHoldClients (Server *server) {
 
 }
 
-// 01/11/2018 -- we can use this later to have a better authentication checking some 
-// accounts and asking the client to provide us with some credentials
-
-// TODO: 02/11/2018 -- 16:09 -- create the function that actually hanldes the authentication request
-
-// TODO: if the client failed to authenticate, drop the client and free the fd 
-// else, register the client to the correct server --> maybe later this logic can be handle 
-// by the load balancer and then it can decides to which server to register the client
-
-// FIXME: 01/11/2018 -- 18:06 -- do we want to have a separte poll in another thread to handle
-// the on hold clients so that they can authentcate themselves?
-
-// FIXME: how to correctly handle their packages?
 // handles packets from the on hold clients until they authenticate
 u8 handleOnHoldClients (Server *server) {
 
@@ -591,112 +664,13 @@ u8 handleOnHoldClients (Server *server) {
                 info = newPacketInfo (server, 
                     getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, rc);
 
-                // if we handle the same way we might have a bypass of the authentication!!!
-                // FIXME: do we want to handle this the same way?
-                // thpool_add_work (thpool, (void *) handlePacket, info);
+                // we have a dedicated function to authenticate the clients
+                thpool_add_work (thpool, (void *) authenticateClient, info);
             } while (true);
         }
 
         if (server->compress_hold_clients) compressHoldClients (server);
     } 
-
-}
-
-// TODO: 03/11/2018 -- what happens when we have a load balancer?
-// if the server requires authentication, we send the newly connected clients to an on hold
-// structure until they authenticate, if not, they are just dropped by the server
-void onHoldClient (Server *server, Client *client) {
-
-    // add the client to the on hold structres -> avl and poll
-    if (server && client) {
-        if (server->onHoldClients) {
-            server->hold_fds[server->hold_nfds].fd = client->clientSock;
-            server->hold_fds[server->hold_nfds].events = POLLIN;
-            server->hold_nfds++;
-
-            avl_insertNode (server->onHoldClients, client);
-
-            #ifdef CERVER_DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "Added a new client to the on hold structures.");
-            #endif
-
-            // FIXME: send authentication request
-        }
-    }
-
-        // we will have a separte poll function to listen for on hold clients
-    // then send an authentication request
-    // get the authentication packet from the client and verify it
-        // if it is a legit client, send it to the main poll structre to handle requests
-
-}
-
-// FIXME: move this form here if we are going to need it...
-typedef struct {
-
-    Server *server;
-    Client *client;
-
-} ServerClient;
-
-// 22/10/2018 -- used to auth a new client in the game server
-void *generateClientAuthPacket (void) {
-
-    size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
-
-    // buffer for packets
-    void *packetBuffer = malloc (packetSize);
-
-    void *begin = packetBuffer;
-    char *end = begin; 
-
-    // packet header
-    PacketHeader *header = (PacketHeader *) end;
-    end += sizeof (PacketHeader);
-    initPacketHeader (header, AUTHENTICATION);
-
-    // request data
-    RequestData *data = (RequestData *) end;
-    end += sizeof (RequestData);
-    data->type = REQ_AUTH_CLIENT;
-
-    return begin;
-
-}
-
-// FIXME:
-// check that we have got a valid client connected, if not, drop him
-void authenticateClient (void *data) {
-
-    if (!data) logMsg (stderr, ERROR, NO_TYPE, "Can't autenticate a NULL client!");
-    else {
-        ServerClient *sc = (ServerClient *) data;
-
-        // send a req to the client to authenticate itself
-        sendPacket (sc->server, authPacket, authPacketSize, sc->client->address);
-
-        // we expect a response from the client...
-        #ifdef DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for the client to authenticate...");
-        #endif
-
-        // if we have got a valid client...
-        // register the client to the server
-
-        // add the client to the poll fd array
-        /* server->fds[server->nfds].fd = newfd;
-        server->fds[server->nfds].events = POLLIN;
-        server->nfds++;
-
-        // TODO: send feedback to the client that he is conncted to the server
-
-        #ifdef DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, "Accepted a new connection.");
-        #endif */
-
-        // if not, drop the client structure and send feedback to player that
-        // he has been denied
-    }
 
 }
 
@@ -755,6 +729,16 @@ void initServerDS (Server *server, ServerType type) {
 // depending on the type of server, we need to init some const values
 void initServerValues (Server *server, ServerType type) {
 
+    if (server->authRequired) {
+        server->reqAuthPacket = generateClientAuthPacket ();
+        server->authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
+    }
+
+    else {
+        server->reqAuthPacket = NULL;
+        server->authPacketSize = 0;
+    }
+
     switch (type) {
         case FILE_SERVER: break;
         case WEB_SERVER: break;
@@ -767,10 +751,6 @@ void initServerValues (Server *server, ServerType type) {
                 logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
                 return NULL;
             } 
-
-            data->lobbyPacketSize = sizeof (lobbyPacketSize);
-            data->updatedGamePacketSize = sizeof (UpdatedGamePacket);
-            data->playerInputPacketSize = sizeof (PlayerInputPacket);
         } break;
         default: break;
     }

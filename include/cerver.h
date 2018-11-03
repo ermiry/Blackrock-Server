@@ -94,7 +94,11 @@ typedef struct Server {
 
     bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
     bool blocking;          // 29/10/2018 - sokcet fd is blocking?
+
     bool authRequired;      // 02/11/2018 - authentication required by the server
+    // TODO: we can create a more complex authentication with void *authInfo
+    void *reqAuthPacket;
+    size_t authPacketSize;
 
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
@@ -225,7 +229,7 @@ typedef struct PacketHeader {
 // for example if we have a game packet type, with this we can send a create lobby packet or join lobby
 // if we have an authenticate packet, here goes the data of a success authentication or a failed one
 
-// the type of request we want to make to the server
+// the type of request we want to make to the server/client
 typedef enum RequestType {
 
     REQ_GET_FILE = 1,
@@ -254,6 +258,8 @@ typedef enum ErrorType {
 
     ERR_CREATE_LOBBY = 1,
     ERR_JOIN_LOBBY,
+
+    ERR_FAILED_AUTH,
 
 } ErrorType;
 
@@ -299,6 +305,12 @@ typedef struct SLobby {
 
 } SLobby;
 
+// 03/11/2018 -> client auth data
+typedef struct AuthData {
+
+    u32 code;
+
+} AuthData;
 
 /*** TESTING ***/
 
