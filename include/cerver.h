@@ -98,11 +98,12 @@ typedef struct Server {
 
     bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
     bool blocking;          // 29/10/2018 - sokcet fd is blocking?
+    bool authRequired;      // 02/11/2018 - authentication required by the server
 
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
     u16 nfds;                           // n of active fds in the pollfd array
-    u32 pollTimeout;                    
+    u32 pollTimeout;           
 
     ServerType type;
     void *serverData;
@@ -113,10 +114,15 @@ typedef struct Server {
     // List *clients;               // connected clients
     AVLTree *clients;               // 02/11/2018 -- connected clients with avl tree
     Pool *clientsPool;
-    List *onHoldClients;            // hold on the clients until they authenticate
+    // List *onHoldClients;            // hold on the clients until they authenticate
 
     // 02/11/2018 - packet info
     Pool *packetPool;
+
+    // 02/11/2018 -- 21:51 -- on hold clients         
+    AVLTree *onHoldClients;
+    struct pollfd hold_fds[50];
+    u16 hold_nfds;
 
 } Server;
 

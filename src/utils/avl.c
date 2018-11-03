@@ -310,18 +310,17 @@ void avl_insertNodeR (AVLNode **parent, CompPointer comparator, void *id, char *
 }
 
 // recursive function to remove a node from the tree
-void avl_removeNodeR (AVLNode **parent, CompPointer comparator, void *id, char *flag) {
+void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag) {
 
     //Wrong way
-    if (*parent != NULL){
-
+    if (*parent != NULL) {
         switch (comparator ((*parent)->id, id)) {
             case 1:
-                avl_removeNodeR (&(*parent)->left, comparator, id, flag);
+                avl_removeNodeR (tree, &(*parent)->left, comparator, id, flag);
                 if (*flag == 1) avl_treatLeftReduction (&(*parent), flag);
                 break;
             case -1:
-                avl_removeNodeR (&(*parent)->right, comparator, id, flag);
+                avl_removeNodeR (tree, &(*parent)->right, comparator, id, flag);
                 if (*flag == 1) avl_treatRightReduction (&(*parent), flag);
                 break;
             case 0:
@@ -333,25 +332,26 @@ void avl_removeNodeR (AVLNode **parent, CompPointer comparator, void *id, char *
                     (*parent)->id = ptr->id;
                     ptr->id = copy.id;
 
-                    avl_removeNodeR (&(*parent)->right, comparator, id, flag);
+                    avl_removeNodeR (tree, &(*parent)->right, comparator, id, flag);
                 }
                 
                 else {
-                    if ((*parent)->left != NULL){
+                    if ((*parent)->left != NULL) {
                         AVLNode *p = (*parent)->left;
                         *(*parent) = *(*parent)->left;
-                        free(p);
+                        free (p);
 
                     } 
                     
                     else if ((*parent)->right != NULL) {
                         AVLNode* p = (*parent)->right;
                         *(*parent) = *(*parent)->right;
-                        free(p);
+                        free (p);
                     } 
                     
                     else {
-                        free ((*parent)->id);
+                        if (tree->destroy) tree->destroy ((*parent)->id);
+                        else free ((*parent)->id);
                         free (*parent);
                         *parent = NULL;
                     }

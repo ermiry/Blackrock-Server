@@ -78,11 +78,6 @@ ssize_t lobbyPacketSize;
 ssize_t updatedGamePacketSize;
 ssize_t playerInputPacketSize;
 
-    Server *server;
-    Client *client;
-    char *packetData;
-    size_t packetSize;
-
 // FIXME: packet data
 PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize) {
 
@@ -401,11 +396,11 @@ int clientComparator (void *a, void *b) {
 }
 
 // search a client in the server's client by the sock's fd
-Client *getClientBySock (Server *server, i32 fd) {
+Client *getClientBySock (AVLTree *clients, i32 fd) {
 
-    if (server) {
+    if (clients) {
         Client temp = { .clientSock = fd };
-        void *data = avl_getNodeData (server->clients, &temp);
+        void *data = avl_getNodeData (clients, &temp);
         if (data) return (Client *) data;
         else {
             logMsg (stderr, ERROR, SERVER, 
@@ -422,7 +417,36 @@ Client *getClientBySock (Server *server, i32 fd) {
 // maybe this can be handled before this call by the load balancer
 void registerClient (Server *server, Client *client) {
 
-    vector_push (&server->clients, client);
+    Client *c = NULL;
+
+    // at this point we assume the client was al ready authenticated
+    if (server->authRequired) {
+        // 02/11/2018 -- create a new client structure with the same values
+        c = newClient (server, client->clientSock, client->address);
+
+        // this destroys the client structure stored in the tree
+        avl_removeNode (server->onHoldClients, client);
+
+        server->hold_fds[c->clientSock].fd = -1;
+
+        // TODO:
+        // 02/11/2018 -- maybe set a flag in the server so that the poll function can compress
+        // the array in the next loop -> this may be a better way to avoid race conditions
+        //  server->hold_nfds--;
+    }
+
+    else c = client;
+
+    // send the client to the server's active clients structures
+    server->fds[server->nfds].fd = c->clientSock;
+    server->fds[server->nfds].events = POLLIN;
+    server->nfds++;
+
+    avl_insertNode (server->clients, c);
+
+    #ifdef CERVER_DEBUG
+    logMsg (stdout, DEBUG_MSG, SERVER, "Registered a client to the server");
+    #endif
 
 }
 
@@ -433,9 +457,24 @@ void registerClient (Server *server, Client *client) {
 // if there is an async disconnection from the client, we need to have a time out
 // that automatically clean up the clients if we do not get any request or input from them
 
+// FIXME: don't forget to call this function in the server teardown to clean up our structures?
 // FIXME: where do we want to disconnect the client?
 // TODO: removes a client from the server 
 void unregisterClient (Server *server, Client *client) {
+
+    // take out the client from the active clients structres, avl and poll in the server
+    server->fds[client->clientSock].fd = -1;
+
+    // TODO:
+    // 02/11/2018 -- maybe set a flag in the server so that the poll function can compress
+    // the array in the next loop -> this may be a better way to avoid race conditions
+    //  server->hold_nfds--;
+
+    avl_removeNode (server->clients, client);
+    
+    #ifdef CERVER_DEBUG
+    logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
+    #endif
 
 }
 
@@ -486,9 +525,8 @@ u8 handleOnHoldClients (Server *server) {
 
     int newfd;          // fd of new connection
 
-    // FIXME:
-    /* while (server->isRunning) {
-        poll_retval = poll (server->fds, server->nfds, server->pollTimeout);
+    while (server->isRunning) {
+        poll_retval = poll (server->hold_fds, server->hold_nfds, server->pollTimeout);
 
         // poll failed
         if (poll_retval < 0) {
@@ -507,12 +545,12 @@ u8 handleOnHoldClients (Server *server) {
         }
 
         // one or more fd(s) are readable, need to determine which ones they are
-        currfds = server->nfds;
+        currfds = server->hold_nfds;
         for (u8 i = 0; i < currfds; i++) {
-            if (server->fds[i].revents == 0) continue;
+            if (server->hold_fds[i].revents == 0) continue;
 
             // FIXME: how to hanlde an unexpected result??
-            if (server->fds[i].revents != POLLIN) {
+            if (server->hold_fds[i].revents != POLLIN) {
                 // TODO: log more detailed info about the fd, or client, etc
                 // printf("  Error! revents = %d\n", fds[i].revents);
                 logMsg (stderr, ERROR, SERVER, "Unexpected poll result!");
@@ -523,7 +561,7 @@ u8 handleOnHoldClients (Server *server) {
             // FIXME: 02/11/2018 -- 16:02 -- maybe add the expexted size in the header of the file
             // we need to correctly handle a large buffer when creating a new packet info!!!
             do {
-                rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
+                rc = recv (server->hold_fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                 
                 // recv error
                 if (rc < 0) {
@@ -535,23 +573,24 @@ u8 handleOnHoldClients (Server *server) {
                     break;  // there is no more data to handle
                 }
 
+                // TODO: what to do next?
                 // check if the connection has been closed by the client
                 if (rc == 0) {
                     #ifdef DEBUG
                     logMsg (stdout, DEBUG_MSG, SERVER, "Client closed the connection.");
                     #endif
-                    // TODO: what to do next?
                 }
 
                 // FIXME: packet buffer type in packet info and packet size
                 PacketInfo *info = newPacketInfo (server, 
-                    getClientBySock (server, server->fds[i].fd), packetBuffer, sizeof (packetBuffer));
+                    getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, sizeof (packetBuffer));
 
-                thpool_add_work (thpool, (void *) handlePacket, info);
+                // FIXME: do we want to handle this the same way?
+                // thpool_add_work (thpool, (void *) handlePacket, info);
             } while (true);
         }
 
-    } */
+    } 
 
 }
 
@@ -561,16 +600,27 @@ u8 handleOnHoldClients (Server *server) {
 // we need to investigate what happens when we are accessing a web server
 void onHoldClient (Server *server, Client *client) {
 
-    // TODO:
-    // add the client to the on hold structre --> an avl structue
+    // add the client to the on hold structres -> avl and poll
+    if (server && client) {
+        if (server->onHoldClients) {
+            server->hold_fds[server->hold_nfds].fd = client->clientSock;
+            server->hold_fds[server->hold_nfds].events = POLLIN;
+            server->hold_nfds++;
+
+            avl_insertNode (server->onHoldClients, client);
+
+            #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, "Added a new client to the on hold structures.");
+            #endif
+
+            // FIXME: send authentication request
+        }
+    }
+
         // we will have a separte poll function to listen for on hold clients
     // then send an authentication request
     // get the authentication packet from the client and verify it
         // if it is a legit client, send it to the main poll structre to handle requests
-
-    // adds a client to the on hold structure
-    if (server->onHoldClients)
-        insertAfter (server->onHoldClients, LIST_END (server->onHoldClients), client);
 
 }
 
@@ -661,7 +711,8 @@ void initServerDS (Server *server, ServerType type) {
 
     // server->clients = initList (destroyClient);
     server->clients = avl_init (clientComparator, destroyClient);
-    server->onHoldClients = initList (destroyClient);
+    // server->onHoldClients = initList (destroyClient);
+    server->onHoldClients = avl_init (clientComparator, destroyClient);
     server->clientsPool = pool_init (destroyClient);
 
     server->packetPool = pool_init (destroyPacketInfo);
@@ -1115,7 +1166,7 @@ u8 serverPoll (Server *server) {
 
                     // FIXME: packet buffer type in packet info and packet size
                     PacketInfo *info = newPacketInfo (server, 
-                        getClientBySock (server, server->fds[i].fd), packetBuffer, sizeof (packetBuffer));
+                        getClientBySock (server->clients, server->fds[i].fd), packetBuffer, sizeof (packetBuffer));
 
                     thpool_add_work (thpool, (void *) handlePacket, info);
                 } while (true);
