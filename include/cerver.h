@@ -29,12 +29,22 @@ typedef int64_t i64;
 
 typedef unsigned char asciiChar;
 
+// takes no argument and returns a value (int)
+typedef u8 (*Func)(void);
+// takes an argument and does not return a value
+typedef void (*Action)(void *);
+// takes an argument and returns a value (int)
+typedef u8 (*delegate)(void *);
+
 #define DEFAULT_USE_IPV6                0
 #define DEFAULT_PROTOCOL                IPPROTO_TCP
 #define DEFAULT_PORT                    7001
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
+
 #define DEFAULT_REQUIRE_AUTH            0   // by default, a server does not requires authentication
+#define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
+#define DEFAULT_AUTH_CODE               7
 
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515
@@ -51,6 +61,9 @@ typedef struct Client {
     u32 clientID;
     i32 clientSock;
     struct sockaddr_storage address;
+
+    u8 authTries;           // remaining attemps to authenticate
+    bool dropClient;        // client failed to authenticate
 
 } Client;
 
@@ -83,6 +96,17 @@ typedef struct GameServerData {
 
 } GameServerData;
 
+// info for the server to perfom a correct client authentication
+typedef struct Auth {
+
+    void *reqAuthPacket;
+    size_t authPacketSize;
+    // TODO: load this from a config file!!
+    u8 maxAuthTries;                // client's chances of auth before being dropped
+    delegate authenticate;          // authentication function
+
+} Auth;
+
 // this is the generic server struct, used to create different server types
 typedef struct Server {
 
@@ -96,9 +120,7 @@ typedef struct Server {
     bool blocking;          // 29/10/2018 - sokcet fd is blocking?
 
     bool authRequired;      // 02/11/2018 - authentication required by the server
-    // TODO: we can create a more complex authentication with void *authInfo
-    void *reqAuthPacket;
-    size_t authPacketSize;
+    Auth auth;              // server auth info
 
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
@@ -305,12 +327,12 @@ typedef struct SLobby {
 
 } SLobby;
 
-// 03/11/2018 -> client auth data
-typedef struct AuthData {
+// 03/11/2018 -> default auth data to use by default auth function
+typedef struct DefAuthData {
 
     u32 code;
 
-} AuthData;
+} DefAuthData;
 
 /*** TESTING ***/
 

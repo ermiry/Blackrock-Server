@@ -10,7 +10,6 @@
 #include <poll.h>
 #include <errno.h>
 
-#include "cerver.h"
 #include "network.h"
 
 #include "game.h"
@@ -100,7 +99,7 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
 void destroyPacketInfo (void *data) {}
 
 // check for packets with bad size, protocol, version, etc
-u8 checkPacket (size_t packetSize, char *packetData) {
+u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
 
     if (packetSize < sizeof (PacketHeader)) {
         #ifdef CERVER_DEBUG
@@ -131,6 +130,14 @@ u8 checkPacket (size_t packetSize, char *packetData) {
     if (packetSize != header->packetSize) {
         #ifdef CERVER_DEBUG
         logMsg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
+        #endif
+        return 1;
+    }
+
+    // check if the packet is of the expected type
+    if (header->packetType != expectedType) {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, WARNING, PACKET, "Packet doesn't match expected type.");
         #endif
         return 1;
     }
@@ -183,7 +190,7 @@ void initPacketHeader (void *header, PacketType type, u32 packetSize) {
     h.protocolID = PROTOCOL_ID;
     h.protocolVersion = PROTOCOL_VERSION;
     h.packetType = type;
-    h.packetSize = pakcetSize;
+    h.packetSize = packetSize;
 
     memcpy (header, &h, sizeof (PacketHeader));
 
@@ -218,13 +225,11 @@ void sendPacket (Server *server, const void *begin, size_t packetSize, struct so
 
 }
 
-// creates and sends an error packet to the player to hanlde it
+// creates and sends an error packet
 u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
-    // first create the packet with the necesary info
     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     
-    void *packetBuffer = malloc (packetSize);
     void *begin = generatePacket (ERROR_PACKET, packetSize);
     char *end = begin + sizeof (PacketHeader); 
 
@@ -249,6 +254,8 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
     // send the packet to the client
     sendPacket (server, begin, packetSize, client->address);
 
+    free (begin);
+
     return 0;
 
 }
@@ -257,13 +264,13 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 // creates a lobby packet with the passed lobby info
 void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize) {
 
-    void *packetBuffer = malloc (packetSize);
+    /* void *packetBuffer = malloc (packetSize);
     void *begin = packetBuffer;
     char *end = begin; 
 
     PacketHeader *header = (PacketHeader *) end;
     end += sizeof (PacketHeader);
-    initPacketHeader (header, packetType); 
+    initPacketHeader (header, packetType, packetSize); 
 
     // serialized lobby data
     SLobby *slobby = (SLobby *) end;
@@ -278,7 +285,7 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
     // update the players inside the lobby
     // FIXME: get owner info and the vector ot players
 
-    return begin;
+    return begin; */
 
 }
 
@@ -323,8 +330,12 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     
     new->clientID = nextClientID;
     new->clientSock = clientSock;
-
     new->address = address;
+
+    if (server->authRequired) {
+        new->authTries = server->auth.maxAuthTries;
+        new->dropClient = false;
+    }
 
     return new;
 
@@ -451,44 +462,82 @@ void checkClientTimeout (Server *server) {
 
 #pragma region CLIENT AUTHENTICATION
 
-// 01/11/2018 -- we can use this later to have a better authentication checking some 
-// accounts and asking the client to provide us with some credentials
+// drops a client from the on hold structure because he was unable to authenticate
+void dropClient (Server *server, Client *client) {
 
-// TODO: 03/11/2018 - better client authentication
+    if (server && client) {
+        // drop the client from the on hold structure
+        server->hold_fds[client->clientSock].fd = -1;
+        server->compress_hold_clients = true;
+        // the client socket is closed when we call destroyClient () here
+        avl_removeNode (server->onHoldClients, client);
+
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, "Client removed from on hold structure. Failed to authenticate");
+        #endif
+    }   
+
+}
+
+// cerver default client authentication method
+u8 defaultAuthMethod (void *data) {
+
+    if (data) {
+        PacketInfo *packet = (PacketInfo *) data;
+
+        if (packet->client->authTries > 0) {
+            DefAuthData *authData = 
+                (DefAuthData *) packet->packetData + sizeof (PacketHeader) + sizeof (RequestData);
+        
+            // success authentication
+            if (authData->code == DEFAULT_AUTH_CODE) return 0;
+            else {
+                packet->client->authTries--;
+                if (packet->client->authTries <= 0) packet->client->dropClient = true;
+                return 1;
+            }
+        }
+
+        else {
+            packet->client->dropClient = true;
+            return 1;
+        }       
+    }
+
+}
+
+// 03/11/2018 - the admin is able to set a ptr to a custom authentication method
 // handles the authentication data that the client sent
 void authenticateClient (void *data) {
 
     if (data) {
         PacketInfo *packet =  (PacketInfo *) data;
 
-        if (!checkPacket (packet->packetSize, packet->packetData)) {
-            // calculate the offset to the auth data in the packet
-            AuthData *authData = (AuthData *) packet->packetData + sizeof (PacketHeader) + sizeof (RequestType);
-            
-            // TODO: how many chances does the client has to authenticate himself?
-            // authenticate the client
-            if (authData->code == 1) {
-                registerClient (packet->server, packet->client);
-                // TODO: send feedback to the client that he is conncted to the server
-                #ifdef CERVER_DEBUG
-                logMsg (stdout, DEBUG_MSG, SERVER, "Client authenticated correctly.");
-                #endif 
+        if (!checkPacket (packet->packetSize, packet->packetData, AUTHENTICATION)) {            
+            if (packet->server->authenticate) {
+                // successful authentication
+                if (!packet->server->auth.authenticate (packet)) {
+                    registerClient (packet->server, packet->client);
+                    // TODO: send feedback to the client that he is conncted to the server
+                    #ifdef CERVER_DEBUG
+                    logMsg (stdout, DEBUG_MSG, SERVER, "Client authenticated correctly.");
+                    #endif 
+                }
+
+                else {
+                    // send feedback to the client
+                    sendErrorPacket (packet->server, packet->client, ERR_FAILED_AUTH, "Wrong credentials!");
+                    if (packet->client->dropClient) dropClient (packet->server, packet->client);
+                }
             }
 
+            // no authentication method -- clients are not able to interact to the server!
             else {
-                // send feedback to the client
-                sendErrorPacket (packet->server, packet->client, ERR_FAILED_AUTH, "Wrong credentials!");
-
-                // drop the client from the on hold structure
-                packet->server->hold_fds[packet->client->clientSock].fd = -1;
-                packet->server->compress_hold_clients = true;
-                // the client socket is closed when we call destroyClient () here
-                avl_removeNode (packet->server->onHoldClients, packet->client);
-
-                #ifdef CERVER_DEBUG
-                logMsg (stdout, DEBUG_MSG, SERVER, "Client removed from on hold structure. Failed to authenticate");
-                #endif
-            }
+                logMsg (stderr, ERROR, SERVER, "Server doesn't have an authenticate method!");
+                logMsg (stderr, ERROR, SERVER, "Clients are not able to interact with the server!");
+                // just drop the client, the server admin must fix this!
+                dropClient (packet->server, packet->client);
+            } 
         }
 
         // dispose the packet -> send to packet pool
