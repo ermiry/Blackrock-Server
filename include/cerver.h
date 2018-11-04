@@ -119,8 +119,14 @@ typedef struct Server {
     bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
     bool blocking;          // 29/10/2018 - sokcet fd is blocking?
 
-    bool authRequired;      // 02/11/2018 - authentication required by the server
-    Auth auth;              // server auth info
+    ServerType type;
+    void *serverData;
+    Action destroyServerData;
+
+    // 01/11/2018 - lets try this
+    // do web servers need this?
+    AVLTree *clients;                   // 02/11/2018 -- connected clients with avl tree
+    Pool *clientsPool;       
 
     // 28/10/2018 -- poll test
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
@@ -128,25 +134,16 @@ typedef struct Server {
     bool compress_clients;              // compress the fds array?
     u32 pollTimeout;           
 
-    ServerType type;
-    void *serverData;
-    void (*destroyServerData) (void *data);
-
-    // 01/11/2018 - lets try this
-    // do web servers need this?
-    // List *clients;                   // connected clients
-    AVLTree *clients;                   // 02/11/2018 -- connected clients with avl tree
-    Pool *clientsPool;
-    // List *onHoldClients;             // hold on the clients until they authenticate
-
-    // 02/11/2018 - packet info
-    Pool *packetPool;
+    bool authRequired;      // 02/11/2018 - authentication required by the server
+    Auth auth;              // server auth info
 
     // 02/11/2018 -- 21:51 -- on hold clients         
-    AVLTree *onHoldClients;
+    AVLTree *onHoldClients;                 // hold on the clients until they authenticate
     struct pollfd hold_fds[50];
     u16 hold_nfds;
     bool compress_hold_clients;              // compress the hold fds array?
+
+    Pool *packetPool;       // 02/11/2018 - packet info
 
 } Server;
 
@@ -233,6 +230,7 @@ typedef enum PacketType {
     SERVER_TEARDOWN,    // FIXME: create a better packet type for server functions
 
     TEST_PACKET = 100,
+    DONT_CHECK_TYPE,
 
 } PacketType;
 
@@ -292,7 +290,7 @@ typedef struct ErrorData {
 
 } ErrorData;
 
-extern void sendPacket (Server *server, void *begin, size_t packetSize, struct sockaddr_storage address);
+extern void sendPacket (Server *server, const void *begin, size_t packetSize, struct sockaddr_storage address);
 extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
 
 extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 

@@ -134,12 +134,14 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
         return 1;
     }
 
-    // check if the packet is of the expected type
-    if (header->packetType != expectedType) {
-        #ifdef CERVER_DEBUG
-        logMsg (stdout, WARNING, PACKET, "Packet doesn't match expected type.");
-        #endif
-        return 1;
+    if (expectedType != DONT_CHECK_TYPE) {
+        // check if the packet is of the expected type
+        if (header->packetType != expectedType) {
+            #ifdef CERVER_DEBUG
+            logMsg (stdout, WARNING, PACKET, "Packet doesn't match expected type.");
+            #endif
+            return 1;
+        }
     }
 
     return 0;   // packet is fine
@@ -203,13 +205,10 @@ void *generatePacket (PacketType packetType, size_t packetSize) {
     if (packetSize > 0) packet_size = packetSize;
     else packet_size = sizeof (PacketHeader);
 
-    void *packetBuffer = malloc (packet_size);
-    void *begin = packetBuffer;
-
-    PacketHeader *header = (PacketHeader *) begin;
+    PacketHeader *header = (PacketHeader *) malloc (packet_size);
     initPacketHeader (header, packetType, packet_size); 
 
-    return begin;
+    return header;
 
 }
 
@@ -299,6 +298,23 @@ void *createClientAuthReqPacket (void) {
     request->type = REQ_AUTH_CLIENT;
 
     return begin;
+
+}
+
+// broadcast a packet/msg to all clients inside a client's tree
+void broadcastToAll (AVLNode *node, Server *server, void *packet, size_t packetSize) {
+
+    if (node) {
+        broadcastToAll (node->right, server, packet, packetSize);
+
+        // send packet to current node
+        if (node->id) {
+            Client *client = (Client *) node->id;
+            sendPacket (server, packet, packetSize, client->address);
+        }
+
+        broadcastToAll (node->left, server, packet, packetSize);
+    }
 
 }
 
@@ -514,7 +530,7 @@ void authenticateClient (void *data) {
         PacketInfo *packet =  (PacketInfo *) data;
 
         if (!checkPacket (packet->packetSize, packet->packetData, AUTHENTICATION)) {            
-            if (packet->server->authenticate) {
+            if (packet->server->auth.authenticate) {
                 // successful authentication
                 if (!packet->server->auth.authenticate (packet)) {
                     registerClient (packet->server, packet->client);
@@ -565,8 +581,8 @@ void onHoldClient (Server *server, Client *client) {
             #endif
 
             // send the authentication request
-            if (server->reqAuthPacket) 
-                sendPacket (server, server->reqAuthPacket, server->reqAuthPacket,
+            if (server->auth.reqAuthPacket) 
+                sendPacket (server, server->auth.reqAuthPacket, server->auth.authPacketSize,
                 client->address);
             else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet.");
         }
@@ -692,7 +708,7 @@ void handlePacket (void *data) {
 
     PacketInfo *packet = (PacketInfo *) data;
 
-    if (!checkPacket (packet->packetSize, packet->packetData))  {
+    if (!checkPacket (packet->packetSize, packet->packetData, DONT_CHECK_TYPE))  {
         PacketHeader *header = (PacketHeader *) packet->packetData;
 
         switch (header->packetType) {
@@ -719,6 +735,25 @@ void handlePacket (void *data) {
                 break;
         }
     }
+
+}
+
+// we remove any fd that was set to -1 for what ever reason
+void compressClients (Server *server) {
+
+    if (server) {
+        server->compress_clients = false;
+
+        for (u16 i = 0; i < server->nfds; i++) {
+            if (server->fds[i].fd == -1) {
+                for (u16 j = i; j < server->nfds; j++) 
+                    server->fds[j].fd = server->fds[j + 1].fd;
+
+                i--;
+                server->nfds--;
+            }
+        }
+    }  
 
 }
 
@@ -900,13 +935,13 @@ void initServerDS (Server *server, ServerType type) {
 void initServerValues (Server *server, ServerType type) {
 
     if (server->authRequired) {
-        server->reqAuthPacket = generateClientAuthPacket ();
-        server->authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
+        server->auth.reqAuthPacket = generateClientAuthPacket ();
+        server->auth.authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
     }
 
     else {
-        server->reqAuthPacket = NULL;
-        server->authPacketSize = 0;
+        server->auth.reqAuthPacket = NULL;
+        server->auth.authPacketSize = 0;
     }
 
     switch (type) {
@@ -1020,6 +1055,20 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         logMsg (stdout, WARNING, SERVER, "No auth option found. No authentication required by default.");
     }
 
+    if (server->authRequired) {
+        char *tries = getEntityValue (cfgEntity, "authTries");
+        if (tries) {
+            server->auth.maxAuthTries = atoi (tries);
+            #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, createString ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+            #endif
+        }
+        else {
+            server->auth.maxAuthTries = DEFAULT_AUTH_TRIES;
+            logMsg (stdout, WARNING, SERVER, createString ("Max auth tries set to default: %i.", DEFAULT_AUTH_TRIES));
+        }
+    }
+
     return 0;
 
 }
@@ -1050,6 +1099,21 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
 
         if (!getServerCfgValues (server, cfgEntity)) 
             logMsg (stdout, SUCCESS, SERVER, "Done getting cfg server values");
+    }
+
+    // log server values
+    else {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, createString ("Use IPv6: %i", server->useIpv6));
+        logMsg (stdout, DEBUG_MSG, SERVER, createString ("Listening on port: %i", server->port));
+        logMsg (stdout, DEBUG_MSG, SERVER, createString ("Connection queue: %i", server->connectionQueue));
+        logMsg (stdout, DEBUG_MSG, SERVER, createString ("Server poll timeout: %i", server->pollTimeout));
+        logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired = 1 ? 
+            "Server requires client authentication" : "Server does not requires client authentication");
+
+        if (server->authRequired) 
+            logMsg (stdout, DEBUG_MSG, SERVER, createString ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+        #endif
     }
 
     // init the server with the selected protocol
@@ -1140,11 +1204,11 @@ Server *newServer (Server *server) {
         new->type = server->type;
     }
 
-    new->isRunning = false;
-
     // by default the socket is assumed to be a blocking socket
     new->blocking = true;
     
+    new->isRunning = false;
+
     return new;
 
 }
@@ -1179,7 +1243,7 @@ Server *cerver_createServer (Server *server, ServerType type, void (*destroyServ
             Server *s = newServer (NULL);
             if (!initServer (s, serverConfig, type)) {
                 s->destroyServerData = destroyServerData;
-                logMsg (stdout, SUCCESS, SERVER, "Created a new server!");
+                log_newServer (server);
                 // we don't need the server config anymore
                 clearConfig (serverConfig);
                 return s;
@@ -1196,7 +1260,6 @@ Server *cerver_createServer (Server *server, ServerType type, void (*destroyServ
 
 }
 
-// FIXME: add debuging info about the data of the new server
 // FIXME: make sure to destroy our previos poll structure and create a new one -> reset respective values
 // teardowns the server and creates a fresh new one with the same parameters
 Server *cerver_restartServer (Server *server) {
@@ -1231,26 +1294,7 @@ Server *cerver_restartServer (Server *server) {
 
 }
 
-// TODO: where do we want to put this?
-// we remove any fd that was set to -1 for what ever reason
-void compressClients (Server *server) {
-
-    if (server) {
-        server->compress_clients = false;
-
-        for (u16 i = 0; i < server->nfds; i++) {
-            if (server->fds[i].fd == -1) {
-                for (u16 j = i; j < server->nfds; j++) 
-                    server->fds[j].fd = server->fds[j + 1].fd;
-
-                i--;
-                server->nfds--;
-            }
-        }
-    }  
-
-}
-
+// FIXME: poll functions in tcp
 // TODO: handle logic when we have a load balancer --> that will be the one in charge to listen for
 // connections and accept them -> then it will send them to the correct server
 // TODO: 13/10/2018 -- we can only handle a tcp server
@@ -1354,7 +1398,7 @@ void destroyGameServer (void *data) {
                 // 27/10/2018 -- we are just sending a generic packet to the player and 
                 // he must handle his own logic
                 size_t packetSize = sizeof (PacketHeader);
-                void *packet = generatePacket (SERVER_TEARDOWN);
+                void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
                 if (packet) {
                     for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
                         tempPlayer = vector_get (&lobby->players, i_player);
@@ -1397,7 +1441,7 @@ void destroyGameServer (void *data) {
         Player *tempPlayer = NULL;
 
         size_t packetSize = sizeof (PacketHeader);
-        void *packet = generatePacket (SERVER_TEARDOWN);
+        void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
         if (!packet) logMsg (stderr, ERROR, PACKET, "Failed to generate server teardown packet!");
 
         for (ListElement *e = NULL; e != NULL; e = e->next) {
@@ -1422,33 +1466,39 @@ void destroyGameServer (void *data) {
     
 }
 
-// FIXME: 02/11/2018 -- client structs have changed!!
-// TODO: clean the on hold client structures
-// cleans up the client's structure in the current server
-// if ther are clients connected, it sends a req to disconnect
+// TODO: what happens with the client descriptors and poll array?
+// TODO: 03/11/2018 -- clean up client trees and pool
+// cleans up the client's structures in the current server
+// if ther are clients connected, we send a server teardown packet
 void cleanUpClients (Server *server) {
 
-    /* if (server->clients.elements > 0) {
-        Client *client = NULL;
-        
-        for (size_t i_client = 0; i_client < server->clients.elements; i_client++) {
-            // TODO: correctly disconnect every client
-        }
+    // create server teardown packet
+    size_t packetSize = sizeof (PacketHeader);
+    void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
 
-        // TODO: delete the client structs
-        while (server->clients.elements > 0) {
-            
-        }
-    } */
+    // send a packet to any active client
+    broadcastToAll (server->clients->root, server, packet, packetSize);
+    // destroy the active clients tree
+    avl_clearTree (&server->clients->root, server->clients->destroy);
 
-    // TODO: make sure destroy the client vector
+    // also send a packet to on hold clients
+    broadcastToAll (server->onHoldClients->root, server, packet, packetSize);
+    // destroy the tree
+    avl_clearTree (&server->onHoldClients->root, server->onHoldClients->destroy);
+
+    // the pool has only "empty" clients
+    pool_clear (server->clientsPool);
+
+    free (packet);
 
 }
 
-// FIXME: 02/11/2018 -- be sure to clean up all the new server data structures!!!
+// 03/11/2018 -- TODO: we need to signal the poll loops to stop inmediatly
+// TODO: stop the start server function 
+
 // FIXME: correctly clean up the poll structures!!!
 // FIXME: we need to join the ongoing threads... 
-// teardown a server
+// teardown a server -> stop the server and clean all of its data
 u8 cerver_teardown (Server *server) {
 
     server->isRunning = false;  // don't accept connections anymore
@@ -1462,8 +1512,6 @@ u8 cerver_teardown (Server *server) {
 
     // disable socket I/O in both ways
     cerver_shutdownServer (server);
-
-    // TODO: join the on going threads?? -> just the listen ones?? or also the ones handling the lobby?
 
     // clean independent server type structs
     if (server->destroyServerData) server->destroyServerData (server);
@@ -1481,6 +1529,9 @@ u8 cerver_teardown (Server *server) {
     #ifdef CERVER_DEBUG
     logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
     #endif
+
+    // destroy any other server data structures
+    pool_clear (server->packetPool);
 
     free (server);
 

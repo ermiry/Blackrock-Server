@@ -65,3 +65,18 @@ void logMsg (FILE *__restrict __stream, LogMsgType firstType, LogMsgType secondT
     if (!second) free (second);
 
 }
+
+#include "cerver.h"
+
+void log_newServer (Server *server) {
+
+    if (server) {
+        switch (server->type) {
+            case FILE_SERVER: logMsg (stdout, SUCCESS, SERVER, "Created a new file server!"); break;
+            case WEB_SERVER: logMsg (stdout, SUCCESS, SERVER, "Created a web server!"); break;
+            case GAME_SERVER: logMsg (stdout, SUCCESS, SERVER, "Created a game server!"); break;
+            default: break;
+        }
+    }
+
+}

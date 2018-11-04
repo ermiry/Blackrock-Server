@@ -69,7 +69,7 @@ void avl_removeNode (AVLTree *tree, void *data) {
 
     char flag = 0;
 
-    avl_removeNodeR (&tree->root, tree->comparator, data, &flag);
+    avl_removeNodeR (tree, &tree->root, tree->comparator, data, &flag);
 
 }
 
