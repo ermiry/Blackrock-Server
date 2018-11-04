@@ -11,6 +11,7 @@
 #include "utils/objectPool.h"
 #include "utils/vector.h"
 
+#include <poll.h>
 #include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
 
 #define EXIT_FAILURE    1
@@ -214,12 +215,7 @@ typedef struct Version {
 extern ProtocolId PROTOCOL_ID;
 extern Version PROTOCOL_VERSION;
 
-// TODO: I think we can use this for manu more applications?
-// maybe something like our request type?
-
 // 01/11/2018 -- this indicates what type of packet we are sending/recieving
-// for exmaple if it is an error packet, a game packet, an auth packet or any other
-// type of request
 typedef enum PacketType {
 
     ERROR_PACKET = 1,
@@ -243,13 +239,7 @@ typedef struct PacketHeader {
 
 } PacketHeader;
 
-// TODO: Change the name
-// 01/11/2018
-// this indicates the data and more info about the packet type
-// for example if we have a game packet type, with this we can send a create lobby packet or join lobby
-// if we have an authenticate packet, here goes the data of a success authentication or a failed one
-
-// the type of request we want to make to the server/client
+// 01/11/2018 -- this indicates the data and more info about the packet type
 typedef enum RequestType {
 
     REQ_GET_FILE = 1,
@@ -300,8 +290,6 @@ extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t pack
 /*** GAME SERVER ***/
 
 extern u16 nextPlayerId;
-
-extern void recievePackets (void);  // FIXME: is this a game server specific?
 
 extern void checkTimeouts (void);
 extern void sendGamePackets (Server *server, int to) ;

@@ -1,5 +1,5 @@
 /*** The logic that makes a game server work properly 
- * This file is part of the framework. I provides an interface to create lobby and players 
+ * This file is part of the framework. It provides an interface to create lobby and players 
  * ***/
 
 #include <stdio.h>
@@ -16,6 +16,9 @@
 #include "utils/objectPool.h"
 #include "utils/config.h"
 #include "utils/log.h"
+
+#include <poll.h>
+#include "utils/avl.h"
 
 /*** PLAYER ***/
 
@@ -35,7 +38,7 @@ Player *newPlayer (Pool *pool, Player *player) {
 
     else new = (Player *) malloc (sizeof (Player));
 
-    // if we have initialize parameters...
+    // if we have initialization parameters...
     if (player) {
         new->client = player->client;
         new->alive = player->alive;
@@ -49,6 +52,7 @@ Player *newPlayer (Pool *pool, Player *player) {
 
 }
 
+// TODO: what happens with the client data??
 // FIXME: clean up the player structure
 // deletes a player struct for ever
 void deletePlayer (void *data) {
@@ -97,6 +101,64 @@ void game_initPlayers (GameServerData *gameData, u8 n_players) {
     #endif
 
 }
+
+// comparator for players's avl tree
+int playerComparator (const void *a, const void *b) {
+
+    if (a && b) {
+        Player *player_a = (Player *) a;
+        Player *player_b = (Player *) b;
+
+        if (player_a->client->clientSock > player_b->client->clientSock) return 1;
+        else if (player_a->client->clientSock == player_b->client->clientSock) return 0;
+        else return -1;
+    }
+
+}
+
+// search a player in the lobbys players avl by his sock's fd
+Player *getPlayerBySock (AVLTree *players, i32 fd) {
+
+    if (players) {
+        Player *temp = (Player *) malloc (sizeof (Player));
+        temp->client = (Client *) malloc (sizeof (Client));
+        temp->client->clientSock = fd;
+
+        void *data = avl_getNodeData (players, temp);
+
+        free (temp->client);
+        free (temp);
+
+        if (data) return (Player *) data;
+        else {
+            logMsg (stderr, ERROR, SERVER, 
+                createString ("Couldn't find a player associated with the passed fd: %i.", fd));
+            return NULL;
+        } 
+    }
+
+    return NULL;
+
+}
+
+// broadcast a packet/msg to all clients inside a lobby
+void broadcastToPlayersInLobby (AVLNode *node, Server *server, void *packet, size_t packetSize) {
+
+    if (node && server && packet && (packetSize > 0)) {
+        broadcastToPlayersInLobby (node->right, server, packet, packetSize);
+
+        // send packet to curent player
+        if (node->id) {
+            Player *player = (Player *) node->id;
+            if (player) sendPacket (server, packet, packetSize, player->client->address);
+        }
+
+        broadcastToPlayersInLobby (node->left, server, packet, packetSize);
+    }
+
+}
+
+// TODO: broadcast to all players inside the game server
 
 #pragma endregion
 
@@ -155,7 +217,6 @@ void game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
     else gameData->lobbyPool = pool_init (deleteLobby);
 
     for (u8 i = 0; i < n_lobbys; i++) pool_push (gameData->lobbyPool, malloc (sizeof (Lobby)));
-
 
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "Lobbys have been init in the game server.");
@@ -227,6 +288,7 @@ GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
 
 }
 
+// FIXME: we need to take out the owner from the clients poll
 // handles the creation of a new game lobby, requested by a current registered client -> player
 Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
 
@@ -286,7 +348,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
         logMsg (stderr, ERROR, GAME, "Failed to get the settings for the new lobby!");
         newLobby->owner = NULL;
         // send the lobby back to the object pool
-        push (data->lobbyPool, newLobby);
+        pool_push (data->lobbyPool, newLobby);
 
         // send feedback to the player
         sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, "Game server failed to create new lobby!");
@@ -294,15 +356,24 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
         return NULL;
     } 
 
+    // FIXME: we need to take out the owner from the clients poll
     // init the clients/players structures inside the lobby
-    vector_init (&newLobby->players, sizeof (Player));
-    vector_push (&newLobby->players, owner);
+    // vector_init (&newLobby->players, sizeof (Player));
+    // vector_push (&newLobby->players, owner);
+    newLobby->players = avl_init (playerComparator, deletePlayer);
+    avl_insertNode (newLobby->players, owner);
+    newLobby->players_fds[0].fd = owner->client->clientSock;
+    newLobby->players_nfds = 1;
+    newLobby->compress_players = false;
+    newLobby->pollTimeout = server->pollTimeout;    // inherit the poll timeout from server
 
     newLobby->inGame = false;
     newLobby->owner->inLobby = true;
 
     // add the lobby the server active ones
     insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), newLobby);
+
+    // TODO: 04/22/2018 -- 15:33 do we create a new thread to sever this socket with its own poll loop?
 
     return newLobby;
 
@@ -404,9 +475,10 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
+    // FIXME:
     // check if for whatever reason a player al ready inside the lobby wants to join...
     Player *tempPlayer = NULL;
-    for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
+    /* for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
         tempPlayer = vector_get (&lobby->players, i_player);
         if (player->id == tempPlayer->id) {
             #ifdef DEBUG
@@ -415,7 +487,7 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
             sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "You can't join the same lobby you are in!");
             return 1;
         }
-    }
+    } */
 
     // check that the player can join the actual game...
     if (lobby->inGame) {
@@ -426,13 +498,14 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
-    if (lobby->players.elements >= lobby->settings->maxPlayers) {
+    // FIXME:
+    /* if (lobby->players.elements >= lobby->settings->maxPlayers) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join an already full lobby.");
         #endif
         sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "The lobby is already full!");
         return 1;
-    }
+    } */
 
     // the player is clear to join the lobby...
     // move the player from the server's players to the in lobby players
@@ -443,29 +516,29 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
-    vector_push (&lobby->players, tempPlayer);      // add the player to the lobby
+    // FIXME:
+    /* vector_push (&lobby->players, tempPlayer);      // add the player to the lobby
     player->inLobby = true;     // mark the player as in a lobby
+    */ 
 
     // sync the in lobby player(s) and the new player
     // we need to send again the lobby packages and mark it as an update
     // TODO: maybe is a good idea to add a time stamp?
     
     // generate the new lobby package
+    // FIXME: lobby serialized packets
     size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
-    void *packetBegin = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
-    if (!packetBegin) {
-        logMsg (stderr, ERROR, PACKET, "Failed to create lobby update packet!");
-        return 1;
+    void *packet = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
+    if (packet) {
+        // send the packet to each player inside the lobby...
+        broadcastToPlayersInLobby (lobby->players->root, server, packet, packetSize);
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, GAME, "Broadcasted to players inside the lobby.");
+        #endif
+        free (packet);    // free the lobby packet
     }
 
-    // send the packet to each player inside the lobby...
-    for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
-        tempPlayer = vector_get (&lobby->players, i_player);
-        if (tempPlayer) sendPacket (server, packetBegin, packetSize, tempPlayer->client->address);
-        else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
-    }
-
-    if (packetBegin) free (packetBegin);    // free the lobby packet
+    else logMsg (stderr, ERROR, PACKET, "Failed to create lobby update packet!");
 
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "A new player has joined the lobby");

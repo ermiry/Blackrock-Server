@@ -6,6 +6,9 @@
 // #include "utils/myTime.h"
 #include "utils/vector.h"
 
+#include <poll.h>
+#include "utils/avl.h"
+
 #define DEFAULT_PLAYER_TIMEOUT      30
 #define DEFAULT_FPS                 20
 #define DEFAULT_MIN_PLAYERS         2
@@ -120,8 +123,16 @@ typedef struct Lobby {
 	GameSettings *settings;
 	bool inGame;
 
-	Player *owner;			// the client that created the lobby -> he has higher privileges
-	Vector players;			// the clients connected to the lobby
+	Player *owner;				// the client that created the lobby -> he has higher privileges
+	// Vector players;			// the clients connected to the lobby
+
+	// 04/11/2018 -- lets try this and see how it goes - intended to also work for a bigger 
+	// lobby with more players in it
+	AVLTree *players;							// players inside the lobby
+    struct pollfd players_fds[4];     			// 04/11/2018 - 4 max players in lobby
+    u16 players_nfds;                           // n of active fds in the pollfd array
+    bool compress_players;              		// compress the fds array?
+    u32 pollTimeout;    
 
 	World *world;			// in game data structres
 

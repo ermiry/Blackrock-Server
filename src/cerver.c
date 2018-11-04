@@ -304,13 +304,13 @@ void *createClientAuthReqPacket (void) {
 // broadcast a packet/msg to all clients inside a client's tree
 void broadcastToAll (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
-    if (node) {
+    if (node && server && packet && (packetSize > 0)) {
         broadcastToAll (node->right, server, packet, packetSize);
 
         // send packet to current node
         if (node->id) {
             Client *client = (Client *) node->id;
-            sendPacket (server, packet, packetSize, client->address);
+            if (client) sendPacket (server, packet, packetSize, client->address);
         }
 
         broadcastToAll (node->left, server, packet, packetSize);
@@ -388,7 +388,7 @@ int clientComparator (void *a, void *b) {
 
 }
 
-// search a client in the server's client by the sock's fd
+// search a client in the server's clients avl by his sock's fd
 Client *getClientBySock (AVLTree *clients, i32 fd) {
 
     if (clients) {
@@ -401,6 +401,8 @@ Client *getClientBySock (AVLTree *clients, i32 fd) {
             return NULL;
         } 
     }
+
+    return NULL;
 
 }
 
@@ -763,7 +765,6 @@ void compressClients (Server *server) {
 // a bit the logic when using a load balancer
 // TODO: 02/11/2018 -- also THIS poll function only works with a tcp connection because we are
 // accepting each new connection, but for udp might be the same
-// FIXME: packet info!!!
 // FIXME: we need to signal this process to end when we teardown the server!!!
 // server poll loop to handle events in the registered socket's fds
 u8 serverPoll (Server *server) {
@@ -1492,6 +1493,8 @@ void cleanUpClients (Server *server) {
     free (packet);
 
 }
+
+// FIXME: be sure to free the server data
 
 // 03/11/2018 -- TODO: we need to signal the poll loops to stop inmediatly
 // TODO: stop the start server function 
