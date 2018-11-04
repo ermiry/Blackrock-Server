@@ -302,10 +302,10 @@ void *createClientAuthReqPacket (void) {
 }
 
 // broadcast a packet/msg to all clients inside a client's tree
-void broadcastToAll (AVLNode *node, Server *server, void *packet, size_t packetSize) {
+void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
     if (node && server && packet && (packetSize > 0)) {
-        broadcastToAll (node->right, server, packet, packetSize);
+        broadcastToAllClients (node->right, server, packet, packetSize);
 
         // send packet to current node
         if (node->id) {
@@ -313,7 +313,7 @@ void broadcastToAll (AVLNode *node, Server *server, void *packet, size_t packetS
             if (client) sendPacket (server, packet, packetSize, client->address);
         }
 
-        broadcastToAll (node->left, server, packet, packetSize);
+        broadcastToAllClients (node->left, server, packet, packetSize);
     }
 
 }
@@ -629,9 +629,6 @@ u8 handleOnHoldClients (Server *server) {
 
     int poll_retval;    // ret val from poll function
     int currfds;        // copy of n active server poll fds
-
-    int newfd;          // fd of new connection
-
     while (server->isRunning) {
         poll_retval = poll (server->hold_fds, server->hold_nfds, server->pollTimeout);
 
@@ -758,6 +755,13 @@ void compressClients (Server *server) {
     }  
 
 }
+
+/******************
+/******************
+/******************
+// TODO: do we have to call poll every time we add a new client?????
+*******************
+********************/
 
 // TODO: 02/11/2018 -- this is only intended for file and game servers only,
 // maybe a web server works different when accesing from the browser

@@ -126,6 +126,8 @@ typedef struct Lobby {
 	Player *owner;				// the client that created the lobby -> he has higher privileges
 	// Vector players;			// the clients connected to the lobby
 
+	bool isRunning;				// lobby is listening for player packets
+
 	// 04/11/2018 -- lets try this and see how it goes - intended to also work for a bigger 
 	// lobby with more players in it
 	AVLTree *players;							// players inside the lobby
