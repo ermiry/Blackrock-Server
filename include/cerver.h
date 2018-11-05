@@ -280,6 +280,8 @@ typedef struct ErrorData {
 
 } ErrorData;
 
+extern void *generatePacket (PacketType packetType, size_t packetSize);
+
 extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
 
 extern void sendPacket (Server *server, const void *begin, size_t packetSize, struct sockaddr_storage address);

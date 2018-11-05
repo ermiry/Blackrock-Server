@@ -88,15 +88,15 @@ void game_initPlayers (GameServerData *gameData, u8 n_players) {
 
 }
 
-// FIXME: dont forget pollin!!!
 // TODO: log a time stamp?
 // add a player to the lobby structures
-u8 player_registerToLobby (Lobby *lobby, Player *player) {
+u8 player_addToLobby (Lobby *lobby, Player *player) {
 
     if (lobby && player) {
         // register a player to the lobby
         avl_insertNode (lobby->players, player);
         lobby->players_fds[lobby->players_nfds].fd = player->client->clientSock;
+        lobby->players_fds[lobby->players_nfds].events = POLLIN;
         lobby->players_nfds++;
 
         player->inLobby = true;
@@ -109,21 +109,35 @@ u8 player_registerToLobby (Lobby *lobby, Player *player) {
 }
 
 // FIXME:
-// removes a player from the lobby's players vector and sends it to the game server's players list
-u8 removePlayerFromLobby (GameServerData *gameData, Vector players, size_t i_player, Player *player) {
+// removes a player from the lobby's players structures and sends it to the game server's players
+u8 player_removeFromLobby (GameServerData *gameData, Lobby *lobby, Player *player) {
 
-    // create a new player and add it to the server's players list
-    Player *p = newPlayer (gameData->playersPool, player);
-    insertAfter (gameData->players, LIST_END (gameData->players), p);
-    p->inLobby = false;
+    if (lobby && player) {
+        // create a new player and add it to the server's players
+        Player *p = newPlayer (gameData->playersPool, player);
+        // FIXME: what type of struct do we have for players??
+        //  insertAfter (gameData->players, LIST_END (gameData->players), p);
+        p->inLobby = false;
 
-    // delete the player from the lobby
-    vector_delete (&players, i_player);
+        // remove from the poll fds
+        for (u8 i = 0; i < lobby->players_nfds; i++) {
+            if (lobby->players_fds[i].fd == player->client->clientSock) {
+                lobby->players_fds[i].fd = -1;
+                lobby->players_nfds--;
+                lobby->compress_players = true;
+                break;
+            }
+        }
 
-    return 0;
+        // delete the player from the lobby
+        avl_removeNode (lobby->players, player);
+
+        return 0;
+    }
+
+    return 1;
 
 }
-
 
 // comparator for players's avl tree
 int playerComparator (const void *a, const void *b) {
@@ -185,13 +199,28 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
 
 /*** LOBBY ***/
 
-/* All the logic that can handle the creation and management of the games goes here! */
-
 #pragma region LOBBY
 
-// FIXME: how do we want to handle game packets from the players???
+// we remove any fd that was set to -1 for what ever reason
+void compressPlayers (Lobby *lobby) {
 
-// FIXME: do we want to compress the poll array?
+    if (lobby) {
+        lobby->compress_players = false;
+        
+        for (u16 i = 0; i < lobby->players_nfds; i++) {
+            if (lobby->players_fds[i].fd == -1) {
+                for (u16 j = i; j < lobby->players_nfds; j++)
+                    lobby->players_fds[i].fd = lobby->players_fds[j + 1].fd;
+
+                i--;
+                lobby->players_nfds--;
+            }
+        }
+    }
+
+}
+
+// FIXME: how do we want to handle game packets from the players???
 // handles packets from the players inside a lobby
 void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
@@ -271,8 +300,7 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
             } while (true);
         }
 
-        // FIXME:
-        // if (server->compress_hold_clients) compressHoldClients (server);
+        if (lobby->compress_players) compressPlayers (lobby);
     }
 
 }
@@ -472,7 +500,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
     newLobby->compress_players = false;
     newLobby->pollTimeout = server->pollTimeout;    // inherit the poll timeout from server
 
-    if (!player_registerToLobby (newLobby, owner)) {
+    if (!player_addToLobby (newLobby, owner)) {
         newLobby->inGame = false;
 
         // TODO: add a timestamp of the creation of the lobby
@@ -499,7 +527,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
 }
 
 // only the owner of the lobby can destroy the lobby
-// a lobby should only be destroyed when the owner quits or if we teardown the server
+// a lobby should only be destroyed when there are no players left or if we teardown the server
 u8 destroyLobby (Server *server, Lobby *lobby) {
 
     if (!server) {
@@ -522,28 +550,30 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
     }
 
     GameServerData *gameData = (GameServerData *) server->serverData;
+    if (!gameData) {
+        logMsg (stderr, ERROR, SERVER, "No game data found in the server!");
+        return 1;
+    } 
 
-    if (lobby->players.elements > 0) {
+    if (lobby->players_nfds > 0) {
         // send the players the correct package so they can handle their logic
-        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
-        void *lobbyPacket = createLobbyPacket (LOBBY_DESTROY, lobby, packetSize);
-        if (!lobbyPacket) {
-            logMsg (stderr, ERROR, PACKET, "Failed to create lobby destroy packet!");
-            return 1;   // TODO: how to better handle this error?
+        // expected player behaivor -> leave the lobby 
+        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+        void *lobbyPacket = generatePacket (GAME_PACKET, packetSize);
+        char *end = lobbyPacket + sizeof (PacketHeader); 
+
+        RequestData *rdata = (RequestData *) end;
+        if (!lobbyPacket) logMsg (stderr, ERROR, PACKET, "Failed to create lobby destroy packet!");
+        else {
+            broadcastToAllPlayers (lobby->players->root, server, lobbyPacket, packetSize);
+            free (lobbyPacket);
         }
 
+        // remove the players from this structure and send them to the server's players
         Player *tempPlayer = NULL;
-        // send the lobby destriy packet to the players
-        for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
-            tempPlayer = vector_get (&lobby->players, i_player);
-            if (tempPlayer) sendPacket (server, lobbyPacket, packetSize, tempPlayer->client->address);
-            else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
-        }
-
-        // remove the players from this structure and send them to the server's players list
-        while (lobby->players.elements > 0) {
-            tempPlayer = vector_get (&lobby->players, 0);
-            removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
+        while (lobby->players_nfds > 0) {
+            tempPlayer = lobby->players->root;
+            if (tempPlayer) player_removeFromLobby (gameData, lobby, tempPlayer);
         }
     }
 
@@ -551,31 +581,21 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
     if (lobby->settings) free (lobby->settings);
 
     // we are safe to clear the lobby structure
-    if (gameData) {
-        // first remove the lobby from the active ones, then send it to the inactive ones
-        ListElement *le = getListElement (gameData->currentLobbys, lobby);
-        if (le) {
-            Lobby *temp = (Lobby *) removeElement (gameData->currentLobbys, le);
-            if (temp) push (gameData->lobbyPool, temp);
-        }
-
-        else {
-            logMsg (stdout, WARNING, GAME, "A lobby wasn't found in the current lobby list.");
-            free (lobby);   // destroy the lobby forever
-        } 
+    // first remove the lobby from the active ones, then send it to the inactive ones
+    ListElement *le = getListElement (gameData->currentLobbys, lobby);
+    if (le) {
+        void *temp = removeElement (gameData->currentLobbys, le);
+        if (temp) pool_push (gameData->lobbyPool, temp);
     }
+
+    else {
+        logMsg (stdout, WARNING, GAME, "A lobby wasn't found in the current lobby list.");
+        free (lobby);   // destroy the lobby forever
+    } 
     
     return 0;   // success
 
 }
-
-// 24/20/2018
-// TODO: is sending packets to the players any different if each one has a thread?
-    // do we want to send the packets in a separte thread?? think if each client has its own thread
-
-// TODO: add a time stamp when the player joins the lobby
-
-// 24/10/2018 the client is responsible of displaying the correct message depending on the packet we send him
 
 // FIXME:
 // called by a registered player that wants to join a lobby on progress
@@ -595,27 +615,25 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
-    // TODO: send feedback to the player
     if (player->inLobby) {
         #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, PLAYER, "A player is in a lobby and tries to join another one.");
         #endif
+        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "You can't join the same lobby you are in!");
         return 1;
     }
 
-    // FIXME:
     // check if for whatever reason a player al ready inside the lobby wants to join...
     Player *tempPlayer = NULL;
-    /* for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
-        tempPlayer = vector_get (&lobby->players, i_player);
-        if (player->id == tempPlayer->id) {
+    for (u8 i = 0; i < lobby->players_nfds; i++) {
+        if (lobby->players_fds[i].fd == player->client->clientSock) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player tries to join the same lobby he is in.");
             #endif
             sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "You can't join the same lobby you are in!");
             return 1;
         }
-    } */
+    }
 
     // check that the player can join the actual game...
     if (lobby->inGame) {
@@ -646,11 +664,10 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
     }
 
     // FIXME: be sure to send the correct player ptr
-    if (!player_registerToLobby (lobby, tempPlayer)) {
+    if (!player_addToLobby (lobby, tempPlayer)) {
         // sync the in lobby player(s) and the new player
-        // generate the new lobby package
         // FIXME: lobby serialized packets
-        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
+        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players_nfds * sizeof (SPlayer);
         void *packet = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
         if (packet) {
             // send the packet to each player inside the lobby...
@@ -677,10 +694,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
-// TODO: same problem as in the join lobby structure --> do we need to change the logic of how we 
-// broadcast all the players inside the lobby about the same action? --> how do we keep them in sync?
-
-// FIXME: what happens if the player that left was the owner of the lobby?
+// TODO: send feedback to the knew owner
+// FIXME: 04/11/2018 -- 20:10 - in game lobby logic!!
 // TODO: add a timestamp when the player leaves
 // called when a player requests to leave the lobby
 u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
@@ -699,20 +714,19 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
-    // remove the player from the lobby structure -> this stops the lobby from sending & recieving packets
-    // to the player
-    Player *tempPlayer = NULL;
+    // make sure that the player is inside the lobby
     bool found = false;
-    for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
-        tempPlayer = vector_get (&lobby->players, i_player);
-        if (player->id == tempPlayer->id) {
+    bool wasOwner = false;
+    for (u8 i = 0; i < lobby->players_nfds; i++) {
+        if (lobby->players_fds[i].fd == player->client->clientSock) {
+            if (lobby->owner->client->clientSock == player->client->clientSock) 
+                wasOwner = true;
+
             GameServerData *gameData = (GameServerData *) server->serverData;
-
-            removePlayerFromLobby (gameData, lobby->players, i_player, tempPlayer);
-
+            player_removeFromLobby (gameData, lobby, player);
             found = true;
             break;
-        } 
+        }
     }
 
     if (!found) {
@@ -722,25 +736,59 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
-    // FIXME: what happens if the player that left was the owner of the lobby?
+    // there are still players in the lobby
+    if (lobby->players_nfds > 0) {
+        if (lobby->inGame) {
+            // broadcast the other players that the player left
+            // we need to send an update lobby packet and the players handle the logic
+            size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players_nfds * sizeof (SPlayer);
+            void *lobbyPacket = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
+            if (lobbyPacket) {
+                broadcastToAllPlayers (lobby->players->root, server, lobbyPacket, packetSize);
+                free (lobbyPacket);
+            }
 
-    // broadcast the other players that the player left
-    // we need to send an update lobby packet and the clients handle the logic
-    size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players.elements * sizeof (SPlayer);
-    void *lobbyPacket = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
-    if (!lobbyPacket) {
-        logMsg (stderr, ERROR, PACKET, "Failed to create lobby update packet!");
-        return 1;
+            else logMsg (stderr, ERROR, PACKET, "Failed to create lobby update packet!");
+
+            // if he was the owner -> set a new owner of the lobby -> first one in the array
+            if (wasOwner) {
+                Player *temp = NULL;
+                u8 i = 0;
+                do {
+                    temp = getPlayerBySock (lobby->players, lobby->players_fds[i].fd);
+                    if (temp) {
+                        lobby->owner = temp;
+                        // TODO: send feedback to player
+                    }
+
+                    // we got a NULL player in the structures -> we don't expect this to happen!
+                    else {
+                        logMsg (stdout, WARNING, GAME, "Got a NULL player when searching for new owner!");
+                        lobby->players_fds[i].fd = -1;
+                        lobby->compress_players = true; 
+                        i++;
+                    }
+                } while (!temp);
+            }
+        }
+
+        // players are in the lobby screen -> owner destroyed the server
+        else destroyLobby (server, lobby);
     }
 
-    for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
-        tempPlayer = vector_get (&lobby->players, i_player);
-        if (tempPlayer) sendPacket (server, lobbyPacket, packetSize, tempPlayer->client->address);
-        else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
+    // player that left was the last one 
+    else {
+        // if he was in a game 
+        if (lobby->inGame) {
+            // FIXME: end the game 
+            // dispose the lobby
+            destroyLobby (server, lobby);
+        }
+
+        // if he was in the lobby screen
+        else destroyLobby (server, lobby);
     }
-
-    if (lobbyPacket) free (lobbyPacket);
-
+    
     return 0;   // the player left the lobby successfully
 
 }

@@ -233,7 +233,6 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
     char *end = begin + sizeof (PacketHeader); 
 
     ErrorData *edata = (ErrorData *) end;
-    end += sizeof (ErrorData);
     edata->type = type;
     if (msg) {
         if (strlen (msg) > sizeof (edata->msg)) {
@@ -449,6 +448,11 @@ void registerClient (Server *server, Client *client) {
 
 // if there is an async disconnection from the client, we need to have a time out
 // that automatically clean up the clients if we do not get any request or input from them
+
+// FIXME: check server fds structure!!!!!!
+
+// TODO: 04/11/2018 -- 19:27 -- maybe use the client index with its position in the poll array??
+// and whit that we won't have to compress the array each time a client disconnects!!!
 
 // FIXME: don't forget to call this function in the server teardown to clean up our structures?
 // FIXME: where do we want to disconnect the client?
