@@ -147,6 +147,20 @@ extern void gameServer_handlePacket (PacketInfo *packet);
 extern void game_initLobbys (GameServerData *gameData, u8 n_lobbys);
 extern void game_initPlayers (GameServerData *gameData, u8 n_players);
 
+/*** GAME PACKETS ***/
+
+// 04/11/2018 -- 21:29 - to handle requests from players inside the lobby
+// primarilly game updates and messages
+typedef struct GamePacketInfo {
+
+    Server *server;
+    Lobby *lobby;
+    Player *player;
+    char packetData[MAX_UDP_PACKET_SIZE];
+    size_t packetSize;
+
+} GamePacketInfo;
+
 /*** SERIALIZATION ***/
 
 // game serialized data

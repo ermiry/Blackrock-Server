@@ -220,8 +220,9 @@ void compressPlayers (Lobby *lobby) {
 
 }
 
-// FIXME: how do we want to handle game packets from the players???
-// handles packets from the players inside a lobby
+void handleGamePacket (void *);
+
+// recieves packages from players inside the lobby
 void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
     if (!lobby) {
@@ -231,7 +232,7 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
     ssize_t rc;                                  // retval from recv -> size of buffer
     char packetBuffer[MAX_UDP_PACKET_SIZE];      // buffer for data recieved from fd
-    PacketInfo *info = NULL;
+    GamePacketInfo *info = NULL;
 
     #ifdef CERVER_DEBUG
     logMsg (stdout, SUCCESS, SERVER, "New lobby has started!");
@@ -272,11 +273,9 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
                 logMsg (stderr, ERROR, GAME, "Unexpected poll result!");
             }
 
-            // recive all incoming data from this socket
             do {
                 rc = recv (lobby->players_fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                 
-                // recv error
                 if (rc < 0) {
                     if (errno != EWOULDBLOCK) {
                         logMsg (stderr, ERROR, SERVER, "On hold recv failed!");
@@ -288,15 +287,11 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
                 if (rc == 0) break;
 
-                // info = newPacketInfo (server, 
-                //     getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, rc);
+                info = newGamePacketInfo (server, lobby, 
+                    getPlayerBySock (lobby->players, lobby->players_fds[i].fd), packetBuffer, rc);
 
-                // FIXME: new game packet info? we need a player structure!!!
-                // info = newPacketInfo (server, getpla)
-
-                // FIXME: handle lobby packets
-                // we have a dedicated function to authenticate the clients
-                // thpool_add_work (thpool, (void *) authenticateClient, info);
+                // FIXME: where is the thpool?
+                thpool_add_work (thpool, (void *) handleGamePacket, info);
             } while (true);
         }
 
@@ -305,6 +300,7 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
 }
 
+// FIXME: !!!!!
 // FIXME: clear the world
 // deletes a lobby for ever -- called when we teardown the server
 // we do not need to give any feedback to the players if there is any inside
@@ -318,7 +314,7 @@ void deleteLobby (void *data) {
     lobby->owner = NULL;
 
     // check that the lobby is empty
-    if (lobby->players.elements > 0) {
+    /* if (lobby->players.elements > 0) {
         // send the players to the server player list
         Player *tempPlayer = NULL;
         while (lobby->players.elements > 0) {
@@ -334,7 +330,7 @@ void deleteLobby (void *data) {
     // FIXME: is this a cerver function or a blackrock one??
     // if (lobby->world) deleteWorld (world);   
 
-    free (lobby);
+    free (lobby); */
 
 }
 
@@ -884,6 +880,21 @@ void endGame (void) {
 
 #pragma endregion
 
+// FIXME: where do we want to put this?
+/*** REQUESTS FROM INSIDE THE LOBBY ***/
+
+// a player wants to send a message in the lobby chat
+void msgtoLobbyPlayers () {
+
+}
+
+/*** GAME UPDATES ***/
+
+// handle a player input, like movement -> TODO: we need to check for collisions between enemies
+void handlePlayerInput () {
+
+}
+
 #pragma region GAME PACKETS
 
 void gameServer_handlePacket (PacketInfo *packet) {
@@ -893,6 +904,59 @@ void gameServer_handlePacket (PacketInfo *packet) {
         case LOBBY_CREATE: break;
         case LOBBY_JOIN: break;
         case LOBBY_DESTROY: break;
+    }
+
+}
+
+// TODO: where do we want to have a pool of these?
+GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
+    char *packetData, size_t packetSize) {
+
+    if (server && lobby && player && packetData && (packetSize > 0)) {
+        GamePacketInfo *info = (GamePacketInfo *) malloc (sizeof (GamePacketInfo));
+        if (info) {
+            info->server = server;
+            info->lobby = lobby;
+            info->player = player;
+            strcpy (info->packetData, packetData);
+            info->packetSize = packetSize;
+
+            return info;
+        }
+
+        return NULL;
+    }
+
+    return NULL;
+
+}
+
+// TODO:
+void destroyGamePacketInfo (void *data) {}
+
+// FIXME:
+// 04/11/2018 -- handles all valid requests a player can make from inside a lobby
+void handleGamePacket (void *data) {
+
+    if (data) {
+        GamePacketInfo *packet = (GamePacketInfo *) data;
+        if (!checkPacket (packet->packetSize, packet->packetData, GAME_PACKET)) {
+            RequestData *rdata = (RequestData *) packet->packetData + sizeof (PacketHeader);
+
+            switch (rdata->type) {
+                case LOBBY_LEAVE: break;
+                case LOBBY_DESTROY: break;
+
+                case GAME_INPUT_UPDATE:  break;
+                case GAME_SEND_MSG: break;
+
+                // TODO: dispose the packet -> send it to the pool
+                default: break;
+            }
+        }
+
+        // TODO: invalid packet -> dispose -> send it to the pool
+        // else 
     }
 
 }

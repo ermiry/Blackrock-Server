@@ -1381,7 +1381,7 @@ void cerver_shutdownServer (Server *server) {
 
 }
 
-// FIXME: 
+// FIXME: !!!!!!
 // TODO: do we want this here? or in the game src file?
 // cleans up all the game structs like lobbys and in game structures like maps
 // if there are players connected, it sends a req to disconnect 
@@ -1394,7 +1394,7 @@ void destroyGameServer (void *data) {
 
     // FIXME: clean on going games
     // clean any on going game...
-    if (LIST_SIZE (gameData->currentLobbys) > 0) {
+    /* if (LIST_SIZE (gameData->currentLobbys) > 0) {
         Lobby *lobby = NULL;
         Player *tempPlayer = NULL;
 
@@ -1471,7 +1471,7 @@ void destroyGameServer (void *data) {
     clearConfig (gameData->gameSettingsConfig);     // clean game modes info
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "Done clearing game settings config.");
-    #endif
+    #endif */
     
 }
 

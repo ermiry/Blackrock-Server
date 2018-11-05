@@ -249,8 +249,12 @@ typedef enum RequestType {
 
     LOBBY_CREATE,
     LOBBY_JOIN,
+    LOBBY_LEAVE,
     LOBBY_UPDATE,
     LOBBY_DESTROY,
+
+    GAME_INPUT_UPDATE,
+    GAME_SEND_MSG,
 
 } RequestType;
 
@@ -281,6 +285,7 @@ typedef struct ErrorData {
 } ErrorData;
 
 extern void *generatePacket (PacketType packetType, size_t packetSize);
+extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType);
 
 extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
 
