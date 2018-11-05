@@ -1,17 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <string.h>
 
 #include <signal.h>
 
 #include "cerver.h"
 
-#include "utils/myUtils.h"
-#include "utils/thpool.h"
 #include "utils/log.h"
-
-/*** THREAD ***/
 
 // TODO: maybe handle this in a separate list by a name?
 Server *gameServer = NULL;
@@ -26,15 +21,7 @@ void closeProgram (int dummy) {
     logMsg (stdout, DEBUG_MSG, NO_TYPE, "Clearing thread pool...");
     #endif
 
-    thpool_destroy (thpool);
-
 }
-
-// TODO: where do we want to put this?
-void *authPacket;
-size_t authPacketSize;
-
-threadpool thpool;
 
 // TODO: recieve signals to init, retsart or teardown a server -> like a control panel
 int main (void) {
@@ -51,15 +38,6 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
-    thpool = thpool_init (4);
-
-    // 22/10/2018 -- TODO: where do we want to put this?
-    authPacket = generateClientAuthPacket ();
-    authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, NO_TYPE, createString ("Auth packet size: %i.", authPacketSize));
-    #endif
-
     gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
     if (gameServer) {
         if (!cerver_startServer (gameServer)) 
@@ -67,6 +45,8 @@ int main (void) {
 
         else logMsg (stderr, ERROR, SERVER, "Failed to start server!");
     } 
+
+    else logMsg (stderr, ERROR, NO_TYPE, "Failed to create Blackrock Server!");
 
     // if we reach this point, be sure to correctly clean all of our data...
     closeProgram (0);

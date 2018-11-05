@@ -14,6 +14,9 @@
 #include <poll.h>
 #include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
 
+// 04/11/2018 -- 23:04 -- including a th pool inside each server
+#include "utils/thpool.h"
+
 #define EXIT_FAILURE    1
 
 #define THREAD_OK       0
@@ -47,6 +50,8 @@ typedef u8 (*delegate)(void *);
 #define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
 #define DEFAULT_AUTH_CODE               7
 
+#define DEFAULT_TH_POOL_INIT            4
+
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515
 
@@ -59,7 +64,7 @@ typedef u8 (*delegate)(void *);
 // anyone that connects to the server
 typedef struct Client {
 
-    u32 clientID;
+    i32 clientID;
     i32 clientSock;
     struct sockaddr_storage address;
 
@@ -93,7 +98,8 @@ typedef struct GameServerData {
     List *currentLobbys;    // a list of the current lobbys
 
     Pool *playersPool;      // 22/10/2018 -- each server has its own player's pool
-    List *players;          // players connected to the server, but outside a lobby -> 24/10/2018
+    // List *players;          // players connected to the server, but outside a lobby -> 24/10/2018
+    //  AVLTree *players;
 
 } GameServerData;
 
@@ -102,7 +108,6 @@ typedef struct Auth {
 
     void *reqAuthPacket;
     size_t authPacketSize;
-    // TODO: load this from a config file!!
     u8 maxAuthTries;                // client's chances of auth before being dropped
     delegate authenticate;          // authentication function
 
@@ -146,9 +151,12 @@ typedef struct Server {
 
     Pool *packetPool;       // 02/11/2018 - packet info
 
+    // 04/11/2018 -- 23:04 -- including a th pool inside each server
+    threadpool thpool;
+
 } Server;
 
-extern Server *cerver_createServer (Server *, ServerType, void (*destroyServerdata) (void *data));
+extern Server *cerver_createServer (Server *, ServerType, Action);
 
 extern u8 cerver_startServer (Server *);
 

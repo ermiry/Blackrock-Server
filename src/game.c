@@ -314,15 +314,17 @@ void deleteLobby (void *data) {
     lobby->owner = NULL;
 
     // check that the lobby is empty
-    /* if (lobby->players.elements > 0) {
-        // send the players to the server player list
-        Player *tempPlayer = NULL;
-        while (lobby->players.elements > 0) {
-            tempPlayer = vector_get (&lobby->players, 0);
-            // removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
-            // 26/10/2018 -- just delete the player, it may be a left behind
-            deletePlayer (tempPlayer);
-        }
+    if (lobby->players_nfds > 0) {
+        // FIXME: send the players to the server player list
+
+        // OLD
+        // Player *tempPlayer = NULL;
+        // while (lobby->players.elements > 0) {
+        //     tempPlayer = vector_get (&lobby->players, 0);
+        //     // removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
+        //     // 26/10/2018 -- just delete the player, it may be a left behind
+        //     deletePlayer (tempPlayer);
+        // }
     }
 
     // clear lobby data
@@ -330,7 +332,7 @@ void deleteLobby (void *data) {
     // FIXME: is this a cerver function or a blackrock one??
     // if (lobby->world) deleteWorld (world);   
 
-    free (lobby); */
+    free (lobby); 
 
 }
 
@@ -690,7 +692,7 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
-// TODO: send feedback to the knew owner
+// TODO: send feedback to the new owner
 // FIXME: 04/11/2018 -- 20:10 - in game lobby logic!!
 // TODO: add a timestamp when the player leaves
 // called when a player requests to leave the lobby

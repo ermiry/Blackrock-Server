@@ -156,7 +156,7 @@ typedef struct GamePacketInfo {
     Server *server;
     Lobby *lobby;
     Player *player;
-    char packetData[MAX_UDP_PACKET_SIZE];
+    char packetData[65515];		// max udp packet size
     size_t packetSize;
 
 } GamePacketInfo;

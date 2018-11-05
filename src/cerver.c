@@ -326,10 +326,26 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
 
 #pragma region CLIENTS
 
-// TODO: 02/11/2018 -- maybe the socket fd is the client id??
-// FIXME: we can't have infinite ids!!
-u32 nextClientID = 0;
+// FIXME:
+// get a client id based on the poll fd structure
+i32 getNewClientId (Server *server) {
 
+    i32 retval = -1;
+
+    // search for a marked index in the array
+    for (u16 i = 0; i < poll_n_fds; i++) {
+        if (server->fds[i].fd == -1) {
+            // this id n. is available
+            retval = i;
+            break;
+        }
+    }
+
+    return retval;
+
+}
+
+// FIXME: check new client id
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address) {
 
     Client *new = NULL;
@@ -343,7 +359,9 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
     else new = (Client *) malloc (sizeof (Client));
     
-    new->clientID = nextClientID;
+    new->clientID = getNewClientId (server);
+    // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
+
     new->clientSock = clientSock;
     new->address = address;
 
@@ -421,18 +439,22 @@ void registerClient (Server *server, Client *client) {
         // this destroys the client structure stored in the tree
         avl_removeNode (server->onHoldClients, client);
 
-        server->hold_fds[c->clientSock].fd = -1;
+        // FIXME: get the correct values
+        // server->hold_fds[c->clientSock].fd = -1;
 
+        // TODO: do we want to do something similar?
+        // 04/11/2018 -- 23:45 - we use the index in the poll array for new client ids
         // compress the hold fds array in the next poll loop
-        server->compress_hold_clients = true;
+        // server->compress_hold_clients = true;
     }
 
     else c = client;
 
+    // 04/11/2018 -- 23:45 - FIXME: this doesn't work anymore
     // send the client to the server's active clients structures
-    server->fds[server->nfds].fd = c->clientSock;
+    /* server->fds[server->nfds].fd = c->clientSock;
     server->fds[server->nfds].events = POLLIN;
-    server->nfds++;
+    server->nfds++; */
 
     avl_insertNode (server->clients, c);
 
@@ -449,21 +471,17 @@ void registerClient (Server *server, Client *client) {
 // if there is an async disconnection from the client, we need to have a time out
 // that automatically clean up the clients if we do not get any request or input from them
 
-// FIXME: check server fds structure!!!!!!
-
-// TODO: 04/11/2018 -- 19:27 -- maybe use the client index with its position in the poll array??
-// and whit that we won't have to compress the array each time a client disconnects!!!
-
 // FIXME: don't forget to call this function in the server teardown to clean up our structures?
 // FIXME: where do we want to disconnect the client?
 // removes a client from the server 
 void unregisterClient (Server *server, Client *client) {
 
     // take out the client from the active clients structres, avl and poll in the server
-    server->fds[client->clientSock].fd = -1;
+    server->fds[client->clientID].fd = -1;
 
+    // 04/11/2018 -- 23:45 - we use the index in the poll array for new client ids
     // compress the fds array in the next poll loop
-    server->compress_clients = true;
+    // server->compress_clients = true;
 
     avl_removeNode (server->clients, client);
     
@@ -528,12 +546,13 @@ u8 defaultAuthMethod (void *data) {
 
 }
 
+// TODO: send feedback to the client that he is conncted to the server
 // 03/11/2018 - the admin is able to set a ptr to a custom authentication method
 // handles the authentication data that the client sent
 void authenticateClient (void *data) {
 
     if (data) {
-        PacketInfo *packet =  (PacketInfo *) data;
+        PacketInfo *packet = (PacketInfo *) data;
 
         if (!checkPacket (packet->packetSize, packet->packetData, AUTHENTICATION)) {            
             if (packet->server->auth.authenticate) {
@@ -616,12 +635,14 @@ void compressHoldClients (Server *server) {
 }
 
 // handles packets from the on hold clients until they authenticate
-u8 handleOnHoldClients (Server *server) {
+u8 handleOnHoldClients (void *data) {
 
-    if (!server) {
+    if (!data) {
         logMsg (stderr, ERROR, SERVER, "Can't handle on hold clients on a NULL server!");
         return 1;
     }
+
+    Server *server = (Server *) data;
 
     ssize_t rc;                                  // retval from recv -> size of buffer
     char packetBuffer[MAX_UDP_PACKET_SIZE];      // buffer for data recieved from fd
@@ -668,7 +689,6 @@ u8 handleOnHoldClients (Server *server) {
             do {
                 rc = recv (server->hold_fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
                 
-                // recv error
                 if (rc < 0) {
                     if (errno != EWOULDBLOCK) {
                         logMsg (stderr, ERROR, SERVER, "On hold recv failed!");
@@ -684,7 +704,7 @@ u8 handleOnHoldClients (Server *server) {
                     getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, rc);
 
                 // we have a dedicated function to authenticate the clients
-                thpool_add_work (thpool, (void *) authenticateClient, info);
+                thpool_add_work (server->thpool, (void *) authenticateClient, info);
             } while (true);
         }
 
@@ -760,17 +780,9 @@ void compressClients (Server *server) {
 
 }
 
-/******************
-/******************
-/******************
-// TODO: do we have to call poll every time we add a new client?????
-*******************
-********************/
-
+// TODO: add support for handling large files transmissions
 // TODO: 02/11/2018 -- this is only intended for file and game servers only,
 // maybe a web server works different when accesing from the browser
-// TODO: 02/11/2018 -- also this only works with one server, we might need to change
-// a bit the logic when using a load balancer
 // TODO: 02/11/2018 -- also THIS poll function only works with a tcp connection because we are
 // accepting each new connection, but for udp might be the same
 // FIXME: we need to signal this process to end when we teardown the server!!!
@@ -877,7 +889,7 @@ u8 serverPoll (Server *server) {
                     info = newPacketInfo (server, 
                         getClientBySock (server->clients, server->fds[i].fd), packetBuffer, rc);
 
-                    thpool_add_work (thpool, (void *) handlePacket, info);
+                    thpool_add_work (server->thpool, (void *) handlePacket, info);
                 } while (true);
             }
 
@@ -917,11 +929,18 @@ void initServerDS (Server *server, ServerType type) {
     server->nfds = 0;
     server->compress_clients = false;
 
+    // set all fds as available spaces
+    for (u16 i = 0; i < poll_n_fds; i++) server->fds[i].fd = -1;
+
     if (server->authRequired) {
         memset (server->hold_fds, 0, sizeof (server->fds));
         server->hold_nfds = 0;
         server->compress_hold_clients = false;
     }
+
+    // initialize server's own thread pool
+    server->thpool = thpool_init (DEFAULT_TH_POOL_INIT);
+    if (!server->thpool) logMsg (stderr, ERROR, SERVER, "Failed to init server's thread pool!");
 
     switch (type) {
         case FILE_SERVER: break;
@@ -1158,6 +1177,7 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
     // TODO: how to check that the socket is actually non blocking?
 
     else {
+        server->blocking = false;
         #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "Server socket set to non blocking mode.");
         #endif
@@ -1222,9 +1242,9 @@ Server *newServer (Server *server) {
 
 }
 
-Server *cerver_createServer (Server *server, ServerType type, void (*destroyServerData) (void *data)) {
+Server *cerver_createServer (Server *server, ServerType type, Action destroyServerData) {
 
-    // create a server with the request parameters
+    // create a server with the requested parameters
     if (server) {
         Server *s = newServer (server);
         if (!initServer (s, NULL, type)) {
@@ -1303,7 +1323,6 @@ Server *cerver_restartServer (Server *server) {
 
 }
 
-// FIXME: poll functions in tcp
 // TODO: handle logic when we have a load balancer --> that will be the one in charge to listen for
 // connections and accept them -> then it will send them to the correct server
 // TODO: 13/10/2018 -- we can only handle a tcp server
@@ -1311,12 +1330,11 @@ Server *cerver_restartServer (Server *server) {
 u8 cerver_startServer (Server *server) {
 
     if (server->isRunning) {
-        logMsg (stdout, WARNING, SERVER, "The server is already running.");
+        logMsg (stdout, WARNING, SERVER, "The server is already running!");
         return 1;
     }
 
     u8 retval = 1;
-
     switch (server->protocol) {
         case IPPROTO_TCP: {
             // 28/10/2018 -- taking into account ibm poll example
@@ -1330,11 +1348,14 @@ u8 cerver_startServer (Server *server) {
 
                     server->isRunning = true;
 
-                    // TODO: handle server poll return value
-                    // we are now ready to start the poll loop -> traverse the fds array
+                    // 04//11/2018 - start separate on hold poll loop from the server th pool
+                    if (server->authRequired) 
+                        thpool_add_work (server->thpool, (void *) handleOnHoldClients, server);
+
+                    // 04/11/2018 -- keep in mind this is intended for one server at a time,
+                    // with a load balancer or diffrent physical servers, it must be different...
+                    // main thread handles main poll function
                     serverPoll (server);
-                    // FIXME: start separate on hold poll loop
-                    // if (server->authRequired) 
 
                     retval = 0;
                 }
@@ -1352,9 +1373,13 @@ u8 cerver_startServer (Server *server) {
             }
             
         } break;
-        case IPPROTO_UDP: break;
 
-        default: break;
+        case IPPROTO_UDP: /* TODO: */ break;
+
+        default: 
+            logMsg (stderr, ERROR, SERVER, "Cant't start server! Unknown protocol!");
+            retval = 1;
+            break;
     }
 
     return retval;
