@@ -145,7 +145,7 @@ typedef struct Server {
 
     // 02/11/2018 -- 21:51 -- on hold clients         
     AVLTree *onHoldClients;                 // hold on the clients until they authenticate
-    struct pollfd hold_fds[50];
+    struct pollfd hold_fds[poll_n_fds];
     u16 hold_nfds;
     bool compress_hold_clients;              // compress the hold fds array?
 
@@ -297,7 +297,9 @@ extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedT
 
 extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
 
-extern void sendPacket (Server *server, const void *begin, size_t packetSize, struct sockaddr_storage address);
+extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
+extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 
+    const struct sockaddr_storage address);
 extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
 
 extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 

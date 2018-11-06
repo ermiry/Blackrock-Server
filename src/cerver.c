@@ -212,15 +212,36 @@ void *generatePacket (PacketType packetType, size_t packetSize) {
 
 }
 
-// TODO: 03/11/2018 - does this works better for udp, what about a fd -> fd send function for tcp?
-// sends a packet from a socket to the specified address
-void sendPacket (Server *server, const void *begin, size_t packetSize, struct sockaddr_storage address) {
+// TODO: 06/11/2018 -- test this!
+i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 
+    const struct sockaddr_storage address) {
 
-    ssize_t sentBytes = sendto (server->serverSock, begin, packetSize, 0,
-		       (struct sockaddr *) &address, sizeof (struct sockaddr_storage));
+    ssize_t sent;
+    const void *p = begin;
+    while (packetSize > 0) {
+        sent = sendto (server->serverSock, begin, packetSize, 0, 
+            (const struct sockaddr *) &address, sizeof (struct sockaddr_storage));
+        if (sent <= 0) return -1;
+        p += sent;
+        packetSize -= sent;
+    }
 
-	if (sentBytes <= 0 || (unsigned) sentBytes != packetSize)
-        logMsg (stderr, ERROR, NO_TYPE, "Failed to send packet!") ;
+    return 0;
+
+}
+
+i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags) {
+
+    ssize_t sent;
+    const void *p = begin;
+    while (packetSize > 0) {
+        sent = send (socket, p, packetSize, flags);
+        if (sent <= 0) return -1;
+        p += sent;
+        packetSize -= sent;
+    }
+
+    return 0;
 
 }
 
@@ -250,7 +271,7 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
     }
 
     // send the packet to the client
-    sendPacket (server, begin, packetSize, client->address);
+    tcp_sendPacket (client->clientSock, begin, packetSize, 0);
 
     free (begin);
 
@@ -309,7 +330,10 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
         // send packet to current node
         if (node->id) {
             Client *client = (Client *) node->id;
-            if (client) sendPacket (server, packet, packetSize, client->address);
+            if (client) 
+                server->protocol == IPPROTO_TCP ? 
+                    tcp_sendPacket (client->clientSock, packet, packetSize, 0) : 
+                    udp_sendPacket (server, packet, packetSize, client->address);
         }
 
         broadcastToAllClients (node->left, server, packet, packetSize);
@@ -321,12 +345,8 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
 
 /*** CLIENTS ***/
 
-// TODO: create a pool of clients inside each server?
-// or maybe if we have a load balancer, that logic can change a little bit?
-
 #pragma region CLIENTS
 
-// FIXME:
 // get a client id based on the poll fd structure
 i32 getNewClientId (Server *server) {
 
@@ -345,8 +365,24 @@ i32 getNewClientId (Server *server) {
 
 }
 
-// FIXME: check new client id
-Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address) {
+i32 getHoldClientId (Server *server) {
+
+    i32 retval = -1;
+
+    // search for a marked index in the array
+    for (u16 i = 0; i < poll_n_fds; i++) {
+        if (server->hold_fds[i].fd == -1) {
+            // this id n. is available
+            retval = i;
+            break;
+        }
+    }
+
+    return retval;
+
+}
+
+Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold) {
 
     Client *new = NULL;
 
@@ -359,11 +395,20 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
     else new = (Client *) malloc (sizeof (Client));
     
-    new->clientID = getNewClientId (server);
-    // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
-
     new->clientSock = clientSock;
     new->address = address;
+ 
+    // if the client is on hold, we don't need to assign him a client id
+    // until he authenticates and is sent to the main server poll
+    if (onHold) {
+        new->clientID = getHoldClientId (server);
+        // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
+    } 
+
+    else {
+        new->clientID = getNewClientId (server);
+        // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
+    }
 
     if (server->authRequired) {
         new->authTries = server->auth.maxAuthTries;
@@ -434,7 +479,7 @@ void registerClient (Server *server, Client *client) {
     // at this point we assume the client was al ready authenticated
     if (server->authRequired) {
         // 02/11/2018 -- create a new client structure with the same values
-        c = newClient (server, client->clientSock, client->address);
+        c = newClient (server, client->clientSock, client->address, false);
 
         // this destroys the client structure stored in the tree
         avl_removeNode (server->onHoldClients, client);
@@ -852,12 +897,16 @@ u8 serverPoll (Server *server) {
                     if (newfd < 0)
                         if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
 
-                    // we have a new connection from a new client
-                    client = newClient (server, newfd, clientAddress);
-
                     // hold the client until he authenticates
-                    if (server->authRequired) onHoldClient (server, client);
-                    else registerClient (server, client);
+                    if (server->authRequired) {
+                        client = newClient (server, newfd, clientAddress, true);
+                        onHoldClient (server, client);
+                    } 
+
+                    else {
+                        client = newClient (server, newfd, clientAddress, false);
+                        registerClient (server, client);  
+                    } 
                 } while (newfd != -1);
             }
 
