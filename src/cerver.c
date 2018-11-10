@@ -382,6 +382,7 @@ i32 getHoldClientId (Server *server) {
 
 }
 
+// FIXME: client ids -> is the server full?
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold) {
 
     Client *new = NULL;
@@ -495,11 +496,11 @@ void registerClient (Server *server, Client *client) {
 
     else c = client;
 
-    // 04/11/2018 -- 23:45 - FIXME: this doesn't work anymore
+    // 10/11/2018 -- we use a free idx in the poll array as an unique client id
     // send the client to the server's active clients structures
-    /* server->fds[server->nfds].fd = c->clientSock;
-    server->fds[server->nfds].events = POLLIN;
-    server->nfds++; */
+    server->fds[client->clientID].fd = c->clientSock;
+    server->fds[client->clientID].events = POLLIN;
+    // server->nfds++;
 
     avl_insertNode (server->clients, c);
 
@@ -791,7 +792,7 @@ void handlePacket (void *data) {
             case REQUEST: break;
 
             // handle a game packet sent from a client
-            case GAME_PACKET: gameServer_handlePacket (packet); break;
+            case GAME_PACKET: gs_handlePacket (packet); break;
 
             case TEST_PACKET: 
                 logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
@@ -877,8 +878,8 @@ u8 serverPoll (Server *server) {
         }
 
         // one or more fd(s) are readable, need to determine which ones they are
-        currfds = server->nfds;
-        for (u8 i = 0; i < currfds; i++) {
+        // currfds = server->nfds;
+        for (u8 i = 0; i < poll_n_fds; i++) {
             if (server->fds[i].revents == 0) continue;
 
             // FIXME: how to hanlde an unexpected result??

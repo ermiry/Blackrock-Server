@@ -28,7 +28,7 @@ GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player,
 #pragma region PLAYER
 
 // constructor for a new player, option for an object pool
-Player *newPlayer (Pool *pool, Player *player) {
+Player *newPlayer (Pool *pool, Client *client, Player *player) {
 
     Player *new = NULL;
 
@@ -42,11 +42,16 @@ Player *newPlayer (Pool *pool, Player *player) {
     else new = (Player *) malloc (sizeof (Player));
 
     // if we have initialization parameters...
+    if (client) new->client = client;
+    else new->client = NULL;
+
     if (player) {
         new->client = player->client;
         new->alive = player->alive;
         new->inLobby = player->inLobby;
     }
+
+    else new->client = NULL;
 
     new->id = nextPlayerId;
     nextPlayerId++;
@@ -171,8 +176,10 @@ Player *getPlayerBySock (AVLTree *players, i32 fd) {
 
         if (data) return (Player *) data;
         else {
-            logMsg (stderr, ERROR, SERVER, 
-                createString ("Couldn't find a player associated with the passed fd: %i.", fd));
+            #ifdef DEBUG
+                logMsg (stderr, ERROR, SERVER, 
+                    createString ("Couldn't find a player associated with the passed fd: %i.", fd));
+            #endif
             return NULL;
         } 
     }
@@ -946,74 +953,21 @@ void handlePlayerInput () {
 
 #pragma region GAME PACKETS
 
-// FIXME:
-// request from a from a tcp connected client to create a new lobby 
-// in the server he is actually connected to
-void createLobby (Server *server, Client *client, GameType gameType) {
+/*** Prototypes of public game server functions ***/
 
-    // TODO: how do we check if the current client isn't associated with a player?
+void gs_createLobby (Server *server, Client *client, GameType gameType);
+void gs_joinLobby (Server *server, Client *client);
+void gs_leaveLobby (Server *server, Client *client);
 
-    // we need to treat the client as a player now
-    // TODO: 22/10/2018 -- maybe this logic can change if we have a load balancer?
-    /* Player *owner = NULL;
+// this is called from the main poll in a new thread
+void gs_handlePacket (PacketInfo *packetInfo) {
 
-    GameServerData *gameData = (GameServerData *) server->serverData;
-    if (gameData->playersPool) {
-        if (POOL_SIZE (gameData->playersPool) > 0) {
-            owner = (Player *) pool_pop (gameData->playersPool);
-            if (!owner) owner = (Player *) malloc (sizeof (Player));
-        }
-    }
-
-    else {
-        logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a players pool!");
-        owner = (Player *) malloc (sizeof (Player));
-    }
-
-    owner->id = nextPlayerId;
-    nextPlayerId++;
-
-    owner->client = client;     // reference to the client network data
-
-    Lobby *lobby = newLobby (server, owner, gameType);
-    if (lobby) {
-        #ifdef DEBUG
-        logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
-        #endif  
-
-        // send the lobby info to the owner -- we only have one player in the lobby vector
-        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + sizeof (SPlayer);
-        void *lobbyPacket = createLobbyPacket (LOBBY_CREATE, lobby, packetSize);
-        if (lobbyPacket) {
-            sendPacket (server, lobbyPacket, packetSize, owner->client->address);
-            free (lobbyPacket);
-        }
-
-        else logMsg (stderr, ERROR, PACKET, "Failed to create lobby packet!");
-
-        // TODO: do we want to do this using a request?
-        // FIXME: we need to wait for an ack of the ownwer and then we can do this...
-        // the ack is when the player is ready in its lobby screen, and only then we can
-        // handle requests from other players to join
-
-        // if the owner send us an ack packet of the lobby, is because the client is the lobby screen
-        // and the lobby is ready to recieve more players... but that is handled from other client reqs
-    }
-
-    else {
-        logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
-
-        // 24/10/2018 -- newLobby () sends an error message to the player...
-    }  */
-
-}
-
-void gameServer_handlePacket (PacketInfo *packet) {
-
-    RequestData *reqData = (RequestData *) (packet->packetData + sizeof (PacketHeader));
+    RequestData *reqData = (RequestData *) (packetInfo->packetData + sizeof (PacketHeader));
     switch (reqData->type) {
-        case LOBBY_CREATE: break;
-        case LOBBY_JOIN: break;
+        // TODO: get the correct game type from the packet
+        case LOBBY_CREATE: gs_createLobby (packetInfo->server, packetInfo->client, 0); break;
+        case LOBBY_JOIN: gs_joinLobby (packetInfo->server, packetInfo->client); break;
+        case LOBBY_LEAVE: gs_leaveLobby (packetInfo->server, packetInfo->client); break;
         case LOBBY_DESTROY: break;
     }
 
@@ -1148,6 +1102,120 @@ void sendGamePackets (Server *server, int to) {
 
     // after the pakcet has been prepare, send it to the dest player...
     // sendPacket (server, begin, packetSize, destPlayer->address);
+
+}
+
+#pragma endregion
+
+/*** PUBLIC FUNCTIONS ***/
+
+// These functions are the ones that handle the request from the client/player
+// They provide an interface to interact with the server
+// Apart from this functions, all other logic must be PRIVATE to the client/player
+
+#pragma region PUBLIC FUNCTIONS
+
+// FIXME:
+// request from a from client to create a new lobby 
+void gs_createLobby (Server *server, Client *client, GameType gameType) {
+
+    if (server && client) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+
+        // check if the client is associated with a player
+        Player *owner = getPlayerBySock (gameData->players, client->clientSock);
+
+        // create new player data for the client
+        if (!owner) owner = newPlayer (gameData->playersPool, client, NULL);
+
+        // TODO: send the correct error message to the player
+        Lobby *lobby = newLobby (server, owner, gameType);
+        if (lobby) {
+            #ifdef DEBUG
+                logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
+            #endif  
+
+            // send the lobby info to the owner -- we only have one player in the lobby vector
+            size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + sizeof (SPlayer);
+            void *lobbyPacket = createLobbyPacket (LOBBY_CREATE, lobby, packetSize);
+            if (lobbyPacket) {
+                sendPacket (server, lobbyPacket, packetSize, owner->client->address);
+                free (lobbyPacket);
+            }
+
+            else logMsg (stderr, ERROR, PACKET, "Failed to create lobby packet!");
+
+            // TODO: do we want to do this using a request?
+            // FIXME: we need to wait for an ack of the ownwer and then we can do this...
+            // the ack is when the player is ready in its lobby screen, and only then we can
+            // handle requests from other players to join
+
+            // if the owner send us an ack packet of the lobby, is because the client is the lobby screen
+            // and the lobby is ready to recieve more players... but that is handled from other client reqs
+        }
+
+        // there was an error creating the lobby
+        else {
+            logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
+
+            // 24/10/2018 -- newLobby () sends an error message to the player...
+        }
+    }
+
+}
+
+// FIXME:
+// TODO: in a larger game, a player migth wanna join a lobby with his friend
+// or we would have an algorithm to find a suitable lobby based on player stats
+// as of 10/11/2018 -- a player just joins the first lobby that we find that is not full
+void gs_joinLobby (Server *server, Client *client) {
+
+    if (server && client) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+
+        // check if the client is associated with a player
+        Player *player = getPlayerBySock (gameData->players, client->clientSock);
+
+        if (!player) player = newPlayer (gameData->playersPool, client, NULL);
+
+        // TODO: check that the player is not inside a lobby
+        // TODO: move some checks from the private functionto here
+
+        // TODO: find a lobby for the player
+        Lobby *lobby = NULL;
+
+        // add the player to the lobby
+        if (!joinLobby (server, lobby, player)) {
+            // the player joined successfully
+        }
+
+        // else TODO: it was a problem
+    }
+
+}
+
+// FIXME:
+void gs_leaveLobby (Server *server, Client *client) {
+
+    if (server && client) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+
+        // check if the client is associated with a player
+        Player *player = getPlayerBySock (gameData->players, client->clientSock);
+        if (player) {
+            if (player->inLobby) {
+
+            }
+
+            // TODO: else the player is not inside a lobby
+        }
+
+        // TODO:
+        // the client is not a player, send back an error message
+        else {
+
+        }
+    }
 
 }
 

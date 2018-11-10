@@ -102,7 +102,7 @@ struct _GameServerData {
 
     Pool *playersPool;      // 22/10/2018 -- each server has its own player's pool
     // List *players;          // players connected to the server, but outside a lobby -> 24/10/2018
-    //  AVLTree *players;
+    AVLTree *players;
 
 };
 

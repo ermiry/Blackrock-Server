@@ -165,10 +165,7 @@ typedef struct _Lobby Lobby;
 
 /*** GAME SERVER FUNCTIONS ***/
 
-extern void gameServer_handlePacket (struct _PacketInfo *packet);
-
-extern void game_initLobbys (struct _GameServerData *gameData, u8 n_lobbys);
-extern void game_initPlayers (struct _GameServerData *gameData, u8 n_players);
+extern void gs_handlePacket (struct _PacketInfo *packet);
 
 /*** GAME PACKETS ***/
 
