@@ -9,8 +9,6 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 
-#include <poll.h>
-
 #define IP_TO_STR_LEN       16
 #define IPV6_TO_STR_LEN     46
 

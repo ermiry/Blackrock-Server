@@ -5,11 +5,12 @@
 #include <stdint.h>
 
 #include "network.h"
+#include "game.h"       // game server
 
 #include "utils/list.h"
 #include "utils/config.h"
 #include "utils/objectPool.h"
-#include "utils/vector.h"
+// #include "utils/vector.h"
 
 #include <poll.h>
 #include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
@@ -62,7 +63,7 @@ typedef u8 (*delegate)(void *);
 #pragma region CLIENT
 
 // anyone that connects to the server
-typedef struct Client {
+struct _Client {
 
     i32 clientID;
     i32 clientSock;
@@ -71,7 +72,9 @@ typedef struct Client {
     u8 authTries;           // remaining attemps to authenticate
     bool dropClient;        // client failed to authenticate
 
-} Client;
+};
+
+typedef struct _Client Client;
 
 #pragma endregion
 
@@ -90,7 +93,7 @@ typedef enum ServerType {
 #define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
 #define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
 
-typedef struct GameServerData {
+struct _GameServerData {
 
     Config *gameSettingsConfig;     // stores game modes info
 
@@ -101,7 +104,9 @@ typedef struct GameServerData {
     // List *players;          // players connected to the server, but outside a lobby -> 24/10/2018
     //  AVLTree *players;
 
-} GameServerData;
+};
+
+typedef struct _GameServerData GameServerData;
 
 // info for the server to perfom a correct client authentication
 typedef struct Auth {
@@ -114,7 +119,7 @@ typedef struct Auth {
 } Auth;
 
 // this is the generic server struct, used to create different server types
-typedef struct Server {
+struct _Server {
 
     i32 serverSock;         // server socket
     u8 useIpv6;  
@@ -154,7 +159,9 @@ typedef struct Server {
     // 04/11/2018 -- 23:04 -- including a th pool inside each server
     threadpool thpool;
 
-} Server;
+};
+
+typedef struct _Server Server;
 
 extern Server *cerver_createServer (Server *, ServerType, Action);
 
@@ -202,14 +209,16 @@ typedef struct LoadBalancer {
 #pragma region PACKETS
 
 // 01/11/2018 - info from a recieved packet to be handle
-typedef struct PacketInfo {
+struct _PacketInfo {
 
     Server *server;
     Client *client;
     char packetData[MAX_UDP_PACKET_SIZE];
     size_t packetSize;
 
-} PacketInfo;
+};
+
+typedef struct _PacketInfo PacketInfo;
 
 typedef u32 ProtocolId;
 
@@ -302,11 +311,12 @@ extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize,
     const struct sockaddr_storage address);
 extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
 
-extern void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize); 
-
 #pragma endregion
 
 /*** GAME SERVER ***/
+
+struct _GameSettings;
+struct _Lobby;
 
 extern u16 nextPlayerId;
 
@@ -314,6 +324,8 @@ extern void checkTimeouts (void);
 extern void sendGamePackets (Server *server, int to) ;
 
 extern void destroyGameServer (void *data);
+
+extern void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize); 
 
 
 /*** SERIALIZATION ***/
@@ -323,7 +335,7 @@ extern void destroyGameServer (void *data);
 
 typedef struct SLobby {
 
-    GameSettings settings;      // 24/10/2018 -- we dont have any ptr in this struct
+    // struct _GameSettings settings;      // 24/10/2018 -- we dont have any ptr in this struct
     bool inGame;
 
     // FIXME: how do we want to send this info?
@@ -338,15 +350,5 @@ typedef struct DefAuthData {
     u32 code;
 
 } DefAuthData;
-
-/*** TESTING ***/
-
-#include "utils/thpool.h"
-
-extern threadpool thpool;
-
-extern void *authPacket;
-extern size_t authPacketSize;
-extern void *generateClientAuthPacket ();
 
 #endif

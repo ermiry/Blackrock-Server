@@ -51,8 +51,8 @@ ListElement *getListElement (List *, void *data);
 
 /*** CUSTOM ***/
 
-#include "game.h"
+// #include "game.h"
 
-extern Player *dllist_getPlayerById (List *list, uint16_t playerID);
+// extern Player *dllist_getPlayerById (List *list, uint16_t playerID);
 
 #endif

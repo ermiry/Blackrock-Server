@@ -8,11 +8,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <string.h>
 
-#include "blackrock.h"
-
-#include "game/room.h"
-#include "game/map.h"
+#include "blackrock/blackrock.h"
+#include "blackrock/room.h"
+#include "blackrock/map.h"
 
 #include "utils/list.h"
 
@@ -293,6 +293,8 @@ void carveSegments (List *hallways, bool **mapCells) {
 
 /*** DRAWING ***/
 
+unsigned int wallCount = 0;
+
 Wall walls[MAX_WALLS];
 // Wall walls[MAP_WIDTH][MAP_HEIGHT];
 
@@ -418,8 +420,6 @@ void generateMap (bool **mapCells) {
 }
 
 /*** THREAD ***/
-
-unsigned int wallCount = 0;
 
 // TODO: add the floor
 void initMap (bool **mapCells) {

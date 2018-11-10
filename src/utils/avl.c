@@ -55,6 +55,8 @@ void *avl_getNodeData (AVLTree *tree, void *id) {
 
 }
 
+void avl_insertNodeR (AVLNode **parent, CompPointer comparator, void *id, char *flag) ;
+
 // user function for insertion
 void avl_insertNode (AVLTree *tree, void *data) {
 
@@ -63,6 +65,8 @@ void avl_insertNode (AVLTree *tree, void *data) {
     avl_insertNodeR (&(tree->root), tree->comparator, data, &flag);
 
 }
+
+void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag);
 
 // user function to remove a node
 void avl_removeNode (AVLTree *tree, void *data) {
@@ -109,7 +113,7 @@ AVLNode *avl_newNode (void *data) {
 
 }
 
-void avl_rightTotation (AVLNode **parent) {
+void avl_rightRotation (AVLNode **parent) {
 
     AVLNode *aux = (*parent)->left;
 

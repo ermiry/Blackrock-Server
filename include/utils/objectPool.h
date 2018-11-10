@@ -1,6 +1,8 @@
 #ifndef POOL_H
 #define POOL_H
 
+#include <stdint.h>
+
 typedef struct PoolMember {
 
     void *data;

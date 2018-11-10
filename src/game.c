@@ -7,8 +7,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "cerver.h"
-#include "blackrock.h" 
+#include "blackrock/blackrock.h" 
 #include "game.h"
 
 #include "utils/myUtils.h"
@@ -20,6 +19,9 @@
 #include <poll.h>
 #include <errno.h>
 #include "utils/avl.h"
+
+GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
+    char *packetData, size_t packetSize);
 
 /*** PLAYER ***/
 
@@ -66,6 +68,7 @@ void deletePlayer (void *data) {
 
 }
 
+// FIXME: players
 // inits the players server's structures
 void game_initPlayers (GameServerData *gameData, u8 n_players) {
 
@@ -74,8 +77,8 @@ void game_initPlayers (GameServerData *gameData, u8 n_players) {
         return;
     }
 
-    if (gameData->players) logMsg (stdout, WARNING, SERVER, "The server has already a list of players.");
-    else gameData->players = initList (deletePlayer);
+    // if (gameData->players) logMsg (stdout, WARNING, SERVER, "The server has already a list of players.");
+    // else gameData->players = initList (deletePlayer);
 
     if (gameData->playersPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of players.");
     else gameData->playersPool = pool_init (deletePlayer);
@@ -187,7 +190,10 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
         // send packet to curent player
         if (node->id) {
             Player *player = (Player *) node->id;
-            if (player) sendPacket (server, packet, packetSize, player->client->address);
+            if (player) 
+                server->protocol == IPPROTO_TCP ?
+                tcp_sendPacket (player->client->clientSock, packet, packetSize, 0) :
+                udp_sendPacket (server, packet, packetSize, player->client->address);
         }
 
         broadcastToAllPlayers (node->left, server, packet, packetSize);
@@ -227,7 +233,7 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
     if (!lobby) {
         logMsg (stderr, ERROR, SERVER, "Can't handle packets of a NULL lobby!");
-        return 1;
+        return;
     }
 
     ssize_t rc;                                  // retval from recv -> size of buffer
@@ -291,7 +297,7 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
                     getPlayerBySock (lobby->players, lobby->players_fds[i].fd), packetBuffer, rc);
 
                 // FIXME: where is the thpool?
-                thpool_add_work (thpool, (void *) handleGamePacket, info);
+                thpool_add_work (server->thpool, (void *) handleGamePacket, info);
             } while (true);
         }
 
@@ -466,7 +472,7 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
     GameServerData *data = (GameServerData *) server->serverData;
     if (data->lobbyPool) {
         if (POOL_SIZE (data->lobbyPool) > 0) {
-            newLobby = (Lobby *) pop (data->lobbyPool);
+            newLobby = (Lobby *) pool_pop (data->lobbyPool);
             if (!newLobby) newLobby = (Lobby *) malloc (sizeof (Lobby));
         }
     }
@@ -570,7 +576,7 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
         // remove the players from this structure and send them to the server's players
         Player *tempPlayer = NULL;
         while (lobby->players_nfds > 0) {
-            tempPlayer = lobby->players->root;
+            tempPlayer = (Player *) lobby->players->root->id;
             if (tempPlayer) player_removeFromLobby (gameData, lobby, tempPlayer);
         }
     }
@@ -655,7 +661,7 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
     // the player is clear to join the lobby...
     // move the player from the server's players to the in lobby players
     GameServerData *gameData = (GameServerData *) server->serverData;
-    tempPlayer = dllist_getPlayerById (gameData->players, player->id);
+    // tempPlayer = dllist_getPlayerById (gameData->players, player->id);
     if (!tempPlayer) {
         logMsg (stderr, ERROR, GAME, "A player wan't found in the current player -- join lobby");
         return 1;
@@ -832,7 +838,7 @@ void startGame (Server *server, Lobby *lobby) {
     // init map
     // init enemies
     // place stairs and other map elements
-    initWorld (lobby->world);
+    // initWorld (lobby->world);
 
     // client side
     // init their player

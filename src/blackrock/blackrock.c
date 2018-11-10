@@ -16,8 +16,8 @@
 #include "utils/config.h"
 #include "utils/log.h"
 
-#include "game/blackrock.h"      // blackrock dependent types --> same as in the client
-#include "game/map.h"
+#include "blackrock/blackrock.h"      // blackrock dependent types --> same as in the client
+#include "blackrock/map.h"
 
 #pragma region BLACKROCK INIT
 

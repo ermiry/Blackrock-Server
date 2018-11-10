@@ -1,13 +1,32 @@
-#ifndef GAME_H
-#define GAME_H
+#ifndef GAME_SERVER_H
+#define GAME_SERVER_H
 
 #include "cerver.h"
 
 // #include "utils/myTime.h"
-#include "utils/vector.h"
+// #include "utils/vector.h"
 
 #include <poll.h>
 #include "utils/avl.h"
+
+/*** CERVER TYPES ***/
+
+// 11/11/2018 -- added this types defs here to prevent compiler erros
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
+
+struct _Server;
+struct _GameServerData;
+struct _Client;
+struct _PacketInfo;
 
 #define DEFAULT_PLAYER_TIMEOUT      30
 #define DEFAULT_FPS                 20
@@ -23,7 +42,7 @@ typedef enum GameType {
 } GameType;
 
 // TODO: what other settings do we need?? map? enemies? loot?
-typedef struct GameSettings {
+struct _GameSettings {
 
 	u8 playerTimeout; 	// in seconds.
 	u8 fps;
@@ -33,7 +52,9 @@ typedef struct GameSettings {
 
 	// duration?
 
-} GameSettings;
+};
+
+typedef struct _GameSettings GameSettings;
 
 // in the game we move square by square
 typedef struct Position {
@@ -87,7 +108,7 @@ typedef struct UpdatedGamePacket {
 // TODO: maybe add the game components here? as in the client?
 typedef struct Player {
 
-	Client *client;		// client network data associated to this player
+	struct _Client *client;		// client network data associated to this player
 
 	PlayerId id;
 	bool inLobby;
@@ -118,7 +139,7 @@ typedef struct World {
 
 } World;
 
-typedef struct Lobby {
+struct _Lobby {
 
 	GameSettings *settings;
 	bool inGame;
@@ -138,14 +159,16 @@ typedef struct Lobby {
 
 	World *world;			// in game data structres
 
-} Lobby;
+};
+
+typedef struct _Lobby Lobby;
 
 /*** GAME SERVER FUNCTIONS ***/
 
-extern void gameServer_handlePacket (PacketInfo *packet);
+extern void gameServer_handlePacket (struct _PacketInfo *packet);
 
-extern void game_initLobbys (GameServerData *gameData, u8 n_lobbys);
-extern void game_initPlayers (GameServerData *gameData, u8 n_players);
+extern void game_initLobbys (struct _GameServerData *gameData, u8 n_lobbys);
+extern void game_initPlayers (struct _GameServerData *gameData, u8 n_players);
 
 /*** GAME PACKETS ***/
 
@@ -153,7 +176,7 @@ extern void game_initPlayers (GameServerData *gameData, u8 n_players);
 // primarilly game updates and messages
 typedef struct GamePacketInfo {
 
-    Server *server;
+    struct _Server *server;
     Lobby *lobby;
     Player *player;
     char packetData[65515];		// max udp packet size

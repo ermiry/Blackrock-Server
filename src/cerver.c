@@ -235,7 +235,7 @@ i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flag
     ssize_t sent;
     const void *p = begin;
     while (packetSize > 0) {
-        sent = send (socket, p, packetSize, flags);
+        sent = send (socket_fd, p, packetSize, flags);
         if (sent <= 0) return -1;
         p += sent;
         packetSize -= sent;
@@ -281,7 +281,7 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
 // FIXME: handle the players inside the lobby
 // creates a lobby packet with the passed lobby info
-void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize) {
+void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize) {
 
     /* void *packetBuffer = malloc (packetSize);
     void *begin = packetBuffer;
@@ -433,7 +433,7 @@ void destroyClient (void *data) {
 }
 
 // comparator for client's avl tree
-int clientComparator (void *a, void *b) {
+int clientComparator (const void *a, const void *b) {
 
     if (a && b) {
         Client *client_a = (Client *) a;
@@ -652,8 +652,9 @@ void onHoldClient (Server *server, Client *client) {
 
             // send the authentication request
             if (server->auth.reqAuthPacket) 
-                sendPacket (server, server->auth.reqAuthPacket, server->auth.authPacketSize,
-                client->address);
+                server->protocol == IPPROTO_TCP ? 
+                tcp_sendPacket (client->clientSock, server->auth.reqAuthPacket, server->auth.authPacketSize, 0) :
+                udp_sendPacket (server, server->auth.reqAuthPacket, server->auth.authPacketSize, client->address);
             else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet.");
         }
     }
@@ -1012,7 +1013,7 @@ void initServerDS (Server *server, ServerType type) {
 void initServerValues (Server *server, ServerType type) {
 
     if (server->authRequired) {
-        server->auth.reqAuthPacket = generateClientAuthPacket ();
+        server->auth.reqAuthPacket = createClientAuthReqPacket ();
         server->auth.authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
     }
 
@@ -1029,10 +1030,8 @@ void initServerValues (Server *server, ServerType type) {
 
             // get game modes info from a config file
             data->gameSettingsConfig  = parseConfigFile ("./config/gameSettings.cfg");
-            if (!data->gameSettingsConfig) {
+            if (!data->gameSettingsConfig) 
                 logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
-                return NULL;
-            } 
         } break;
         default: break;
     }
@@ -1123,7 +1122,7 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
     if (auth) {
         server->authRequired = atoi (auth);
         #ifdef CERVER_DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired = 1 ? 
+        logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired == 1 ? 
             "Server requires client authentication" : "Server does not requires client authentication");
         #endif
     }
@@ -1185,7 +1184,7 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
         logMsg (stdout, DEBUG_MSG, SERVER, createString ("Listening on port: %i", server->port));
         logMsg (stdout, DEBUG_MSG, SERVER, createString ("Connection queue: %i", server->connectionQueue));
         logMsg (stdout, DEBUG_MSG, SERVER, createString ("Server poll timeout: %i", server->pollTimeout));
-        logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired = 1 ? 
+        logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired == 1 ? 
             "Server requires client authentication" : "Server does not requires client authentication");
 
         if (server->authRequired) 
@@ -1560,12 +1559,12 @@ void cleanUpClients (Server *server) {
     void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
 
     // send a packet to any active client
-    broadcastToAll (server->clients->root, server, packet, packetSize);
+    broadcastToAllClients (server->clients->root, server, packet, packetSize);
     // destroy the active clients tree
     avl_clearTree (&server->clients->root, server->clients->destroy);
 
     // also send a packet to on hold clients
-    broadcastToAll (server->onHoldClients->root, server, packet, packetSize);
+    broadcastToAllClients (server->onHoldClients->root, server, packet, packetSize);
     // destroy the tree
     avl_clearTree (&server->onHoldClients->root, server->onHoldClients->destroy);
 
@@ -1787,12 +1786,12 @@ void createLobby (Server *server, Client *client, GameType gameType) {
 
     // we need to treat the client as a player now
     // TODO: 22/10/2018 -- maybe this logic can change if we have a load balancer?
-    Player *owner = NULL;
+    /* Player *owner = NULL;
 
     GameServerData *gameData = (GameServerData *) server->serverData;
     if (gameData->playersPool) {
         if (POOL_SIZE (gameData->playersPool) > 0) {
-            owner = (Player *) pop (gameData->playersPool);
+            owner = (Player *) pool_pop (gameData->playersPool);
             if (!owner) owner = (Player *) malloc (sizeof (Player));
         }
     }
@@ -1836,7 +1835,7 @@ void createLobby (Server *server, Client *client, GameType gameType) {
         logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
 
         // 24/10/2018 -- newLobby () sends an error message to the player...
-    } 
+    }  */
 
 }
 
