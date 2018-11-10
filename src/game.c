@@ -201,6 +201,47 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
 
 }
 
+// TODO:
+// this is used to clean disconnected players inside a lobby
+// if we haven't recieved any kind of input from a player, disconnect it 
+void checkPlayerTimeouts (void) {
+}
+
+// TODO: 10/11/2018 -- do we need this?
+// when a client creates a lobby or joins one, it becomes a player in that lobby
+void tcpAddPlayer (Server *server) {
+}
+
+// TODO: 10/11/2018 -- do we need this?
+// TODO: as of 22/10/2018 -- we only have support for a tcp connection
+// when we recieve a packet from a player that is not in the lobby, we add it to the game session
+void udpAddPlayer () {
+}
+
+// TODO: 10/11/2018 -- do we need this?
+// TODO: this is used in space shooters to add a new player using a udp protocol
+// FIXME: handle a limit of players!!
+void addPlayer (struct sockaddr_storage address) {
+
+    // TODO: handle ipv6 ips
+    char addrStr[IP_TO_STR_LEN];
+    sock_ip_to_string ((struct sockaddr *) &address, addrStr, sizeof (addrStr));
+    logMsg (stdout, SERVER, PLAYER, createString ("New player connected from ip: %s @ port: %d.\n", 
+        addrStr, sock_ip_port ((struct sockaddr *) &address)));
+
+    // TODO: init other necessarry game values
+    // add the new player to the game
+    // Player newPlayer;
+    // newPlayer.id = nextPlayerId;
+    // newPlayer.address = address;
+
+    // vector_push (&players, &newPlayer);
+
+    // FIXME: this is temporary
+    // spawnPlayer (&newPlayer);
+
+}
+
 #pragma endregion
 
 /*** LOBBY ***/
@@ -905,6 +946,68 @@ void handlePlayerInput () {
 
 #pragma region GAME PACKETS
 
+// FIXME:
+// request from a from a tcp connected client to create a new lobby 
+// in the server he is actually connected to
+void createLobby (Server *server, Client *client, GameType gameType) {
+
+    // TODO: how do we check if the current client isn't associated with a player?
+
+    // we need to treat the client as a player now
+    // TODO: 22/10/2018 -- maybe this logic can change if we have a load balancer?
+    /* Player *owner = NULL;
+
+    GameServerData *gameData = (GameServerData *) server->serverData;
+    if (gameData->playersPool) {
+        if (POOL_SIZE (gameData->playersPool) > 0) {
+            owner = (Player *) pool_pop (gameData->playersPool);
+            if (!owner) owner = (Player *) malloc (sizeof (Player));
+        }
+    }
+
+    else {
+        logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a players pool!");
+        owner = (Player *) malloc (sizeof (Player));
+    }
+
+    owner->id = nextPlayerId;
+    nextPlayerId++;
+
+    owner->client = client;     // reference to the client network data
+
+    Lobby *lobby = newLobby (server, owner, gameType);
+    if (lobby) {
+        #ifdef DEBUG
+        logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
+        #endif  
+
+        // send the lobby info to the owner -- we only have one player in the lobby vector
+        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + sizeof (SPlayer);
+        void *lobbyPacket = createLobbyPacket (LOBBY_CREATE, lobby, packetSize);
+        if (lobbyPacket) {
+            sendPacket (server, lobbyPacket, packetSize, owner->client->address);
+            free (lobbyPacket);
+        }
+
+        else logMsg (stderr, ERROR, PACKET, "Failed to create lobby packet!");
+
+        // TODO: do we want to do this using a request?
+        // FIXME: we need to wait for an ack of the ownwer and then we can do this...
+        // the ack is when the player is ready in its lobby screen, and only then we can
+        // handle requests from other players to join
+
+        // if the owner send us an ack packet of the lobby, is because the client is the lobby screen
+        // and the lobby is ready to recieve more players... but that is handled from other client reqs
+    }
+
+    else {
+        logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
+
+        // 24/10/2018 -- newLobby () sends an error message to the player...
+    }  */
+
+}
+
 void gameServer_handlePacket (PacketInfo *packet) {
 
     RequestData *reqData = (RequestData *) (packet->packetData + sizeof (PacketHeader));
@@ -966,6 +1069,85 @@ void handleGamePacket (void *data) {
         // TODO: invalid packet -> dispose -> send it to the pool
         // else 
     }
+
+}
+
+// send game update packets to all players inside a lobby
+// we need to serialize the server data in order to send it...
+// FIXME:
+// TODO: maybe we can clean and refactor this?
+// creates and sends game packets
+void sendGamePackets (Server *server, int to) {
+
+    // Player *destPlayer = vector_get (&players, to);
+
+    // first we need to prepare the packet...
+
+    // TODO: clean this a little, but don't forget this can be dynamic!!
+	// size_t packetSize = packetHeaderSize + updatedGamePacketSize +
+	// 	players.elements * sizeof (Player);
+
+	// // buffer for packets, extend if necessary...
+	// static void *packetBuffer = NULL;
+	// static size_t packetBufferSize = 0;
+	// if (packetSize > packetBufferSize) {
+	// 	packetBufferSize = packetSize;
+	// 	free (packetBuffer);
+	// 	packetBuffer = malloc (packetBufferSize);
+	// }
+
+	// void *begin = packetBuffer;
+	// char *end = begin; 
+
+	// // packet header
+	// PacketHeader *header = (PacketHeader *) end;
+    // end += sizeof (PacketHeader);
+    // initPacketHeader (header, GAME_UPDATE_TYPE);
+
+    // // TODO: do we need to send the game settings each time?
+	// // game settings and other non-array data
+    // UpdatedGamePacket *gameUpdate = (UpdatedGamePacket *) end;
+    // end += updatedGamePacketSize;
+    // // gameUpdate->sequenceNum = currentTick;  // FIXME:
+	// // tick_packet->ack_input_sequence_num = dest_player->input_sequence_num;  // FIXME:
+    // gameUpdate->playerId = destPlayer->id;
+    // gameUpdate->gameSettings.playerTimeout = 30;    // FIXME:
+    // gameUpdate->gameSettings.fps = 20;  // FIXME:
+
+    // TODO: maybe add here some map elements, dropped items and enemies??
+    // such as the players or explosions?
+	// arrays headers --- 01/10/2018 -- we only have the players array
+    // void *playersArray = (char *) gameUpdate + offsetof (UpdatedGamePacket, players);
+    // FIXME:
+	// void *playersArray = (char *) gameUpdate + offsetof (gameUpdate, players);
+
+	// send player info ---> TODO: what player do we want to send?
+    /* s_array_init (playersArray, end, players.elements);
+
+    Player *player = NULL;
+    for (size_t p = 0; p < players.elements; p++) {
+        player = vector_get (&players, p);
+
+        // FIXME: do we really need to serialize the packets??
+        // FIXME: do we really need to have serializable data structs?
+
+		// SPlayer *s_player = (SPlayer *) packet_end;
+		// packet_end += sizeof(*s_player);
+		// s_player->id = player->id;
+		// s_player->alive = !!player->alive;
+		// s_player->position = player->position;
+		// s_player->heading = player->heading;
+		// s_player->score = player->score;
+		// s_player->color.red = player->color.red;
+		// s_player->color.green = player->color.green;
+		// s_player->color.blue = player->color.blue;
+    }
+
+    // FIXME: better eroror handling!!
+    // assert (end == (char *) begin + packetSize); */
+
+    // after the pakcet has been prepare, send it to the dest player...
+    // sendPacket (server, begin, packetSize, destPlayer->address);
 
 }
 
