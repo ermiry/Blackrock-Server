@@ -96,6 +96,25 @@ void game_initPlayers (GameServerData *gameData, u8 n_players) {
 
 }
 
+// adds a player to the server's players struct (avl)
+void player_registerToServer (Server *server, Player *player) {
+
+    if (server && player) {
+        if (server->type == GAME_SERVER) {
+            GameServerData *gameData = (GameServerData *) server->serverData;
+            if (gameData->players) avl_insertNode (gameData->players, player);
+        }
+
+        else {
+            #ifdef DEBUG
+                logMsg (stdout, WARNING, SERVER, 
+                    "Trying to add a player to a server of incompatible type!");
+            #endif
+        }
+    }
+
+}
+
 // TODO: log a time stamp?
 // add a player to the lobby structures
 u8 player_addToLobby (Lobby *lobby, Player *player) {
@@ -255,6 +274,14 @@ void addPlayer (struct sockaddr_storage address) {
 
 #pragma region LOBBY
 
+// 10/11/2018 - aux reference to a server and lobby for thread functions
+typedef struct ServerLobby {
+
+    Server *server;
+    Lobby *lobby;
+
+} ServerLobby;
+
 // we remove any fd that was set to -1 for what ever reason
 void compressPlayers (Lobby *lobby) {
 
@@ -277,12 +304,15 @@ void compressPlayers (Lobby *lobby) {
 void handleGamePacket (void *);
 
 // recieves packages from players inside the lobby
-void handlePlayersInLobby (Server *server, Lobby *lobby) {
+void handlePlayersInLobby (void *data) {
 
-    if (!lobby) {
+    if (!data) {
         logMsg (stderr, ERROR, SERVER, "Can't handle packets of a NULL lobby!");
         return;
     }
+
+    Server *server = ((ServerLobby *) data)->server;
+    Lobby *lobby = ((ServerLobby *) data)->lobby;
 
     ssize_t rc;                                  // retval from recv -> size of buffer
     char packetBuffer[MAX_UDP_PACKET_SIZE];      // buffer for data recieved from fd
@@ -351,6 +381,34 @@ void handlePlayersInLobby (Server *server, Lobby *lobby) {
 
         if (lobby->compress_players) compressPlayers (lobby);
     }
+
+}
+
+Lobby *newLobby (Server *server) {
+
+    if (server) {
+        if (server->type == GAME_SERVER) {
+            Lobby *lobby = NULL;
+            GameServerData *data = (GameServerData *) server->serverData;
+            if (data->lobbyPool) {
+                if (POOL_SIZE (data->lobbyPool) > 0) {
+                    lobby = (Lobby *) pool_pop (data->lobbyPool);
+                    if (!lobby) lobby = (Lobby *) malloc (sizeof (Lobby));
+                }
+            }
+
+            else {
+                logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a lobby pool!");
+                lobby = (Lobby *) malloc (sizeof (Lobby));
+            }
+
+            return lobby;
+        }
+
+        else return NULL;
+    }
+
+    else return NULL;
 
 }
 
@@ -477,9 +535,9 @@ GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
 
 }
 
-// FIXME: we need to take out the owner from the clients poll
-// handles the creation of a new game lobby, requested by a current registered client -> player
-Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
+// TODO: add a timestamp of the creation of the lobby
+// creates a new lobby and inits his values with an owner and a game type
+Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
 
     if (!server) {
         logMsg (stderr, ERROR, SERVER, "Don't know in which server to create the lobby!");
@@ -502,76 +560,47 @@ Lobby *newLobby (Server *server, Player *owner, GameType gameType) {
     logMsg (stdout, DEBUG_MSG, GAME, "Creatting a new lobby...");
     #endif
 
-    // check that the owner isn't already in a lobby or game
-    if (owner->inLobby) {
-        #ifdef DEBUG
-        logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
-        #endif
-        if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
-            #ifdef DEBUG
-            logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
-            #endif
-        }
-        return NULL;
-    }
-
-    Lobby *newLobby = NULL;
-
     GameServerData *data = (GameServerData *) server->serverData;
-    if (data->lobbyPool) {
-        if (POOL_SIZE (data->lobbyPool) > 0) {
-            newLobby = (Lobby *) pool_pop (data->lobbyPool);
-            if (!newLobby) newLobby = (Lobby *) malloc (sizeof (Lobby));
-        }
-    }
+    Lobby *lobby = newLobby (server);
 
-    else {
-        logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a lobby pool!");
-        newLobby = (Lobby *) malloc (sizeof (Lobby));
-    }
-
-    newLobby->owner = owner;
-    if (newLobby->settings) free (newLobby->settings);
-    newLobby->settings = getGameSettings (data->gameSettingsConfig, gameType);
-    if (!newLobby->settings) {
+    lobby->owner = owner;
+    if (lobby->settings) free (lobby->settings);
+    lobby->settings = getGameSettings (data->gameSettingsConfig, gameType);
+    if (!lobby->settings) {
         logMsg (stderr, ERROR, GAME, "Failed to get the settings for the new lobby!");
-        newLobby->owner = NULL;
+        lobby->owner = NULL;
         // send the lobby back to the object pool
-        pool_push (data->lobbyPool, newLobby);
-
-        // send feedback to the player
-        sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, "Game server failed to create new lobby!");
+        pool_push (data->lobbyPool, lobby);
 
         return NULL;
     } 
 
-    // FIXME: we need to take out the owner from the clients poll
     // init the clients/players structures inside the lobby
-    newLobby->players = avl_init (playerComparator, deletePlayer);
-    newLobby->players_nfds = 0;
-    newLobby->compress_players = false;
-    newLobby->pollTimeout = server->pollTimeout;    // inherit the poll timeout from server
+    lobby->players = avl_init (playerComparator, deletePlayer);
+    lobby->players_nfds = 0;
+    lobby->compress_players = false;
+    lobby->pollTimeout = server->pollTimeout;    // inherit the poll timeout from server
 
-    if (!player_addToLobby (newLobby, owner)) {
-        newLobby->inGame = false;
+    if (!player_addToLobby (lobby, owner)) {
+        lobby->inGame = false;
 
-        // TODO: add a timestamp of the creation of the lobby
         // add the lobby the server active ones
-        insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), newLobby);
+        insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), lobby);
 
-        newLobby->isRunning = true;
+        lobby->isRunning = true;
 
-        // FIXME: 04/22/2018 -- 15:33 do we create a new thread to sever this socket with its own poll loop?
+        // create a unique thread to handle this lobby
+        ServerLobby sl = { .server = server, .lobby = lobby };
+        thpool_add_work (server->thpool, (void *) handlePlayersInLobby, &sl);
 
-        return newLobby;
+        return lobby;
     }
 
-    // TODO: send feedback to the owner -> internal server error
     else {
         logMsg (stderr, ERROR, GAME, "Failed to register the owner of the lobby to the lobby!");
         logMsg (stderr, ERROR, GAME, "Failed to create new lobby!");
 
-        // FIXME: correctly dispose the lobby
+        pool_push (data->lobbyPool, lobby);      // dispose the lobby
 
         return NULL;
     }
@@ -1115,7 +1144,6 @@ void sendGamePackets (Server *server, int to) {
 
 #pragma region PUBLIC FUNCTIONS
 
-// FIXME:
 // request from a from client to create a new lobby 
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
 
@@ -1127,38 +1155,50 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
 
         // create new player data for the client
         if (!owner) owner = newPlayer (gameData->playersPool, client, NULL);
+        player_registerToServer (server, owner);
+        client_unregisterFromServer (server, client);
 
-        // TODO: send the correct error message to the player
-        Lobby *lobby = newLobby (server, owner, gameType);
+        // check that the owner isn't already in a lobby or game
+        if (owner->inLobby) {
+            #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
+            #endif
+            if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+                #ifdef DEBUG
+                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                #endif
+            }
+            return NULL;
+        }
+
+        Lobby *lobby = createLobby (server, owner, gameType);
         if (lobby) {
             #ifdef DEBUG
                 logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
             #endif  
 
-            // send the lobby info to the owner -- we only have one player in the lobby vector
+            // send the lobby info to the owner -- we only have one player inside the lobby
             size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + sizeof (SPlayer);
             void *lobbyPacket = createLobbyPacket (LOBBY_CREATE, lobby, packetSize);
             if (lobbyPacket) {
-                sendPacket (server, lobbyPacket, packetSize, owner->client->address);
+                server->protocol == IPPROTO_TCP ?
+                tcp_sendPacket (owner->client->clientSock, lobbyPacket, packetSize, 0) : 
+                udp_sendPacket (server, lobbyPacket, packetSize, owner->client->address);
                 free (lobbyPacket);
             }
 
             else logMsg (stderr, ERROR, PACKET, "Failed to create lobby packet!");
 
-            // TODO: do we want to do this using a request?
-            // FIXME: we need to wait for an ack of the ownwer and then we can do this...
-            // the ack is when the player is ready in its lobby screen, and only then we can
-            // handle requests from other players to join
-
-            // if the owner send us an ack packet of the lobby, is because the client is the lobby screen
-            // and the lobby is ready to recieve more players... but that is handled from other client reqs
+            // TODO: do we wait for an ack packet from the client?
         }
 
         // there was an error creating the lobby
         else {
             logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
 
-            // 24/10/2018 -- newLobby () sends an error message to the player...
+            // send feedback to the player
+            sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, 
+                "Game server failed to create new lobby!");
         }
     }
 
@@ -1177,6 +1217,7 @@ void gs_joinLobby (Server *server, Client *client) {
         Player *player = getPlayerBySock (gameData->players, client->clientSock);
 
         if (!player) player = newPlayer (gameData->playersPool, client, NULL);
+        // TODO: add the player to the server
 
         // TODO: check that the player is not inside a lobby
         // TODO: move some checks from the private functionto here

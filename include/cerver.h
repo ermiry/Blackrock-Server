@@ -58,6 +58,8 @@ typedef u8 (*delegate)(void *);
 
 #define poll_n_fds      100           // n of fds for the pollfd array
 
+struct _Server;
+
 /*** CLIENT ***/
 
 #pragma region CLIENT
@@ -75,6 +77,8 @@ struct _Client {
 };
 
 typedef struct _Client Client;
+
+extern void client_unregisterFromServer (struct _Server *server, Client *client);
 
 #pragma endregion
 

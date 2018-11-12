@@ -517,30 +517,27 @@ void registerClient (Server *server, Client *client) {
 // if there is an async disconnection from the client, we need to have a time out
 // that automatically clean up the clients if we do not get any request or input from them
 
-// FIXME: don't forget to call this function in the server teardown to clean up our structures?
-// FIXME: where do we want to disconnect the client?
-// removes a client from the server 
-void unregisterClient (Server *server, Client *client) {
+// 10/11/2018 - used to create a new player and add it to the game server data
+// take out a client from the server's clients
+void client_unregisterFromServer (Server *server, Client *client)  {
 
-    // take out the client from the active clients structres, avl and poll in the server
-    server->fds[client->clientID].fd = -1;
-
-    // 04/11/2018 -- 23:45 - we use the index in the poll array for new client ids
-    // compress the fds array in the next poll loop
-    // server->compress_clients = true;
-
-    avl_removeNode (server->clients, client);
+    if (server && client) {
+        server->fds[client->clientID].fd = -1;
+        avl_removeNode (server->clients, client);
     
-    #ifdef CERVER_DEBUG
-    logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
-    #endif
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
+        #endif
+    }
 
 }
+
+// FIXME: don't forget to call this function in the server teardown to clean up our structures?
+// take out a client from the server's clients and disconnect it from the server
+void client_disconnectFromServer (Server *server, Client *client) {}
 
 // TODO: used to check for client timeouts in any type of server
-void checkClientTimeout (Server *server) {
-
-}
+void checkClientTimeout (Server *server) {}
 
 #pragma endregion
 
