@@ -293,6 +293,7 @@ typedef enum ErrorType {
 
     ERR_CREATE_LOBBY = 1,
     ERR_JOIN_LOBBY,
+    ERR_LEAVE_LOBBY,
 
     ERR_FAILED_AUTH,
 

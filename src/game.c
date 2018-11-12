@@ -27,6 +27,7 @@ GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player,
 
 #pragma region PLAYER
 
+// FIXME: player ids, we cannot have infinite ids!!
 // constructor for a new player, option for an object pool
 Player *newPlayer (Pool *pool, Client *client, Player *player) {
 
@@ -51,7 +52,12 @@ Player *newPlayer (Pool *pool, Client *client, Player *player) {
         new->inLobby = player->inLobby;
     }
 
-    else new->client = NULL;
+    // default player values
+    else {
+        new->client = NULL;
+        new->alive = false;
+        new->inLobby = false;
+    } 
 
     new->id = nextPlayerId;
     nextPlayerId++;
@@ -679,6 +685,48 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
 }
 
 // FIXME:
+// TODO: pass the correct game type and maybe create a more advance algorithm
+// finds a suitable lobby for the player
+Lobby *findLobby (Server *server) {
+
+    // FIXME: how do we want to handle these errors?
+    // perform some check here...
+    if (!server) return NULL;
+    if (server->type != GAME_SERVER) {
+        logMsg (stderr, ERROR, SERVER, "Can't search for lobbys in non game server.");
+        return NULL;
+    }
+    
+    GameServerData *gameData = (GameServerData *) server->serverData;
+    if (!gameData) {
+        logMsg (stderr, ERROR, SERVER, "NULL reference to game data in game server!");
+        return NULL;
+    }
+
+    // 11/11/2018 -- we have a simple algorithm that only searches for the first available lobby
+    Lobby *lobby = NULL;
+    for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
+        lobby = (Lobby *) e->data;
+        if (lobby) {
+            if (!lobby->inGame) {
+                if (lobby->players_nfds < lobby->settings->maxPlayers) {
+                    // we have found a suitable lobby
+                    break;
+                }
+            }
+        }
+    }
+
+    // TODO: what do we do if we do not found a lobby? --> create a new one?
+    if (!lobby) {
+
+    }
+
+    return lobby;
+
+}
+
+// FIXME:
 // called by a registered player that wants to join a lobby on progress
 u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
@@ -693,14 +741,6 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stderr, ERROR, GAME, "A NULL player can't join a lobby!");
         #endif
-        return 1;
-    }
-
-    if (player->inLobby) {
-        #ifdef CERVER_DEBUG
-        logMsg (stdout, DEBUG_MSG, PLAYER, "A player is in a lobby and tries to join another one.");
-        #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "You can't join the same lobby you are in!");
         return 1;
     }
 
@@ -984,9 +1024,12 @@ void handlePlayerInput () {
 
 /*** Prototypes of public game server functions ***/
 
+/*** reqs outside a lobby ***/
 void gs_createLobby (Server *server, Client *client, GameType gameType);
 void gs_joinLobby (Server *server, Client *client);
-void gs_leaveLobby (Server *server, Client *client);
+
+/*** reqs from inside a lobby ***/
+void gs_leaveLobby (Server *server, Player *player, Lobby *lobby);
 
 // this is called from the main poll in a new thread
 void gs_handlePacket (PacketInfo *packetInfo) {
@@ -996,7 +1039,7 @@ void gs_handlePacket (PacketInfo *packetInfo) {
         // TODO: get the correct game type from the packet
         case LOBBY_CREATE: gs_createLobby (packetInfo->server, packetInfo->client, 0); break;
         case LOBBY_JOIN: gs_joinLobby (packetInfo->server, packetInfo->client); break;
-        case LOBBY_LEAVE: gs_leaveLobby (packetInfo->server, packetInfo->client); break;
+        // case LOBBY_LEAVE: gs_leaveLobby (packetInfo->server, packetInfo->client); break;
         case LOBBY_DESTROY: break;
     }
 
@@ -1144,6 +1187,7 @@ void sendGamePackets (Server *server, int to) {
 
 #pragma region PUBLIC FUNCTIONS
 
+// TODO: this logic is okay --> but fix lobby packet
 // request from a from client to create a new lobby 
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
 
@@ -1168,7 +1212,7 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
             }
-            return NULL;
+            return;
         }
 
         Lobby *lobby = createLobby (server, owner, gameType);
@@ -1216,45 +1260,74 @@ void gs_joinLobby (Server *server, Client *client) {
         // check if the client is associated with a player
         Player *player = getPlayerBySock (gameData->players, client->clientSock);
 
+        // create new player data for the client
         if (!player) player = newPlayer (gameData->playersPool, client, NULL);
-        // TODO: add the player to the server
+        player_registerToServer (server, player);
+        client_unregisterFromServer (server, client);
 
-        // TODO: check that the player is not inside a lobby
-        // TODO: move some checks from the private functionto here
-
-        // TODO: find a lobby for the player
-        Lobby *lobby = NULL;
-
-        // add the player to the lobby
-        if (!joinLobby (server, lobby, player)) {
-            // the player joined successfully
+        // check that the owner isn't already in a lobby or game
+        if (player->inLobby) {
+            #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to join a new lobby.");
+            #endif
+            if (sendErrorPacket (server, player->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+                #ifdef DEBUG
+                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                #endif
+            }
+            return;
         }
 
-        // else TODO: it was a problem
+        Lobby *lobby = findLobby (server);
+
+        if (lobby) {
+            // add the player to the lobby
+            if (!joinLobby (server, lobby, player)) {
+                // the player joined successfully
+            }
+
+            // else TODO: there was a problem
+        }
+
+        // else TODO: there was a problem
+        
     }
 
 }
 
-// FIXME:
-void gs_leaveLobby (Server *server, Client *client) {
+// TODO: send feedback to the player
+void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
 
-    if (server && client) {
+    if (server && player) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
-        // check if the client is associated with a player
-        Player *player = getPlayerBySock (gameData->players, client->clientSock);
-        if (player) {
-            if (player->inLobby) {
-
+        if (player->inLobby) {
+            if (!leaveLobby (server, lobby, player)) {
+                // success leaving the lobby
+                // TODO: send feedback to the player
             }
 
-            // TODO: else the player is not inside a lobby
+            else {
+                #ifdef DEBUG
+                logMsg (stdout, DEBUG_MSG, GAME, "There was a problem with a player leaving a lobby!");
+                #endif
+                if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Problem with player leaving the lobby!")) {
+                    #ifdef DEBUG
+                    logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                    #endif
+                }
+            }
         }
 
-        // TODO:
-        // the client is not a player, send back an error message
         else {
-
+            #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "A player tries to leave a lobby but he is not inside one!");
+            #endif
+            if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Player is not inside a lobby!")) {
+                #ifdef DEBUG
+                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                #endif
+            }
         }
     }
 
