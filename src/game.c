@@ -936,13 +936,9 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
 #pragma region GAME LOGIC
 
-// TODO: does this logic goes here on in blackrock???
-
 // TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
-// TODO: maybe later we can pass the socket of the server?
-// TODO: do we need to pass the lobby struct and settings??
 // this is called from by the owner of the lobby
-void startGame (Server *server, Lobby *lobby) {
+u8 startGame (Server *server, Lobby *lobby) {
 
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "Starting the game...");
@@ -1025,11 +1021,16 @@ void handlePlayerInput () {
 /*** Prototypes of public game server functions ***/
 
 /*** reqs outside a lobby ***/
-void gs_createLobby (Server *server, Client *client, GameType gameType);
-void gs_joinLobby (Server *server, Client *client);
+void gs_createLobby (Server *, Client *, GameType);
+void gs_joinLobby (Server *, Client *);
 
 /*** reqs from inside a lobby ***/
-void gs_leaveLobby (Server *server, Player *player, Lobby *lobby);
+void gs_leaveLobby (Server *, Player *, Lobby *);
+void gs_initGame (Server *, Player *, Lobby *);
+void gs_sendMsg (Server *, Player *, Lobby *, char *msg);
+
+// TODO: todo public game sever functions
+// player movement and updates
 
 // this is called from the main poll in a new thread
 void gs_handlePacket (PacketInfo *packetInfo) {
@@ -1187,6 +1188,8 @@ void sendGamePackets (Server *server, int to) {
 
 #pragma region PUBLIC FUNCTIONS
 
+/*** FROM OUTSIDE A LOBBY ***/
+
 // TODO: this logic is okay --> but fix lobby packet
 // request from a from client to create a new lobby 
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
@@ -1295,10 +1298,12 @@ void gs_joinLobby (Server *server, Client *client) {
 
 }
 
+/*** FROM INSIDE A LOBBY ***/
+
 // TODO: send feedback to the player
 void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
 
-    if (server && player) {
+    if (server && player && lobby) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         if (player->inLobby) {
@@ -1329,6 +1334,88 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
                 #endif
             }
         }
+    }
+
+}
+
+// TODO: we need to set a delegate in the game server to init each type of game
+void gs_initGame (Server *server, Player *player, Lobby *lobby) {
+
+    if (server && player && lobby) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+
+        if (player->inLobby) {
+            if (lobby->owner->id == player->id) {
+                if (lobby->players_nfds >= lobby->settings->minPlayers) {
+                    if (startGame (server, lobby)) {
+                        logMsg (stderr, ERROR, GAME, "Failed to start a new game!");
+                        // send feedback to the players
+                        size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
+                        void *errpacket = generateErrorPacket (ERR_GAME_INIT, 
+                            "Server error. Failed to init the game.");
+                        if (errpacket) {
+                            broadcastToAllPlayers (lobby->players->root, server, errpacket, packetSize);
+                            free (errpacket);
+                        }
+
+                        else {
+                            #ifdef DEBUG
+                            logMsg (stderr, ERROR, PACKET, 
+                                "Failed to create & send error packet to client!");
+                            #endif
+                        }
+                    }
+
+                    // upon success, we expect the start game func to send the packages
+                }
+
+                else {
+                    #ifdef DEBUG
+                    logMsg (stdout, WARNING, GAME, "Need more players to start the game.");
+                    #endif
+                    if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                        "We need more players to start the game!")) {
+                        #ifdef DEBUG
+                        logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                        #endif
+                    }
+                }
+            }
+
+            else {
+                #ifdef DEBUG
+                logMsg (stdout, WARNING, GAME, "Player is not the lobby owner.");
+                #endif
+                if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                    "Player is not the lobby owner!")) {
+                    #ifdef DEBUG
+                    logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                    #endif
+                }
+            }
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stdout, WARNING, GAME, "Player must be inside a lobby and be the owner to start a game.");
+            #endif
+            if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                "The player is not inside a lobby!")) {
+                #ifdef DEBUG
+                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                #endif
+            }
+        }
+    }
+
+}
+
+// FIXME:
+// a player wants to send a msg to the players inside the lobby
+void gs_sendMsg (Server *server, Player *player, Lobby *lobby, char *msg) {
+
+    if (server && player && lobby && msg) {
+
     }
 
 }

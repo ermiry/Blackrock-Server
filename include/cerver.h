@@ -295,6 +295,8 @@ typedef enum ErrorType {
     ERR_JOIN_LOBBY,
     ERR_LEAVE_LOBBY,
 
+    ERR_GAME_INIT,
+
     ERR_FAILED_AUTH,
 
 } ErrorType;
@@ -314,6 +316,8 @@ extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetDa
 extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
 extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 
     const struct sockaddr_storage address);
+
+extern void *generateErrorPacket (ErrorType type, char *msg);
 extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
 
 #pragma endregion

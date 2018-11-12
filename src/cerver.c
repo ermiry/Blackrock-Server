@@ -245,8 +245,8 @@ i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flag
 
 }
 
-// creates and sends an error packet
-u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
+// just creates an erro packet -> used directly when broadcasting to many players
+void *generateErrorPacket (ErrorType type, char *msg) {
 
     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     
@@ -270,10 +270,22 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
         else strcpy (edata->msg, msg);
     }
 
-    // send the packet to the client
-    tcp_sendPacket (client->clientSock, begin, packetSize, 0);
+    return begin;
 
-    free (begin);
+}
+
+// creates and sends an error packet
+u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
+
+    size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
+    void *errpacket = generateErrorPacket (type, msg);
+
+    // send the packet to the client
+    server->protocol == IPPROTO_TCP ? 
+    tcp_sendPacket (client->clientSock, errpacket, packetSize, 0) :
+    udp_sendPacket (server, errpacket, packetSize, client->address);
+
+    free (errpacket);
 
     return 0;
 
