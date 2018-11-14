@@ -94,6 +94,7 @@ typedef enum ServerType {
 
 } ServerType;
 
+// TODO: do we want to move this to game.h?
 #define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
 #define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
 
@@ -104,9 +105,15 @@ struct _GameServerData {
     Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
     List *currentLobbys;    // a list of the current lobbys
 
-    Pool *playersPool;      // 22/10/2018 -- each server has its own player's pool
-    // List *players;          // players connected to the server, but outside a lobby -> 24/10/2018
+    Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
+    // List *players;           // players connected to the server, but outside a lobby -> 24/10/2018
     AVLTree *players;
+
+    // 13//11/2018 -- depending on the game type, we can have different init game functions
+    u8 n_gameInits;
+    delegate *gameInitFuncs;
+
+    // TODO: 13/11/2018 - do we also need separte functions to handle the game stop?
 
 };
 

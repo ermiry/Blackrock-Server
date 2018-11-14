@@ -1042,6 +1042,9 @@ void initServerValues (Server *server, ServerType type) {
             data->gameSettingsConfig  = parseConfigFile ("./config/gameSettings.cfg");
             if (!data->gameSettingsConfig) 
                 logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
+
+            data->n_gameInits = 0;
+            data->gameInitFuncs = NULL;
         } break;
         default: break;
     }

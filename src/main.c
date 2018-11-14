@@ -40,6 +40,8 @@ int main (void) {
 
     gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
     if (gameServer) {
+        // FIXME: set blackrock arcade game init function
+
         if (!cerver_startServer (gameServer)) 
             logMsg (stdout, SUCCESS, SERVER, "Server started properly!");
 

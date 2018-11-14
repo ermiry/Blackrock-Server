@@ -44,6 +44,8 @@ typedef enum GameType {
 // TODO: what other settings do we need?? map? enemies? loot?
 struct _GameSettings {
 
+	GameType gameType;
+
 	u8 playerTimeout; 	// in seconds.
 	u8 fps;
 
@@ -164,6 +166,8 @@ struct _Lobby {
 typedef struct _Lobby Lobby;
 
 /*** GAME SERVER FUNCTIONS ***/
+
+extern void gs_add_gameInit (Server *server, GameType gameType, delegate *gameInit);
 
 extern void gs_handlePacket (struct _PacketInfo *packet);
 

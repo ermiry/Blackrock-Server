@@ -23,6 +23,49 @@
 GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize);
 
+/*** GAME SERVER ***/
+
+#pragma region GAME SERVER
+
+// TODO: 13/11/2018 - do we still need a hash table for a better implementation?
+// we need the game types enum to be 0 indexed and to be in order!
+// adds a game init function to use with a game type
+// TODO: 13/11/2018 -- we need to support the admin to add new game modes without
+// changing the original GameType enum
+void gs_add_gameInit (Server *server, GameType gameType, delegate gameInit) {
+
+    if (server) {
+        if (server->type != GAME_SERVER) {
+            logMsg (stderr, ERROR, SERVER, "Can't add a game init func. Server of incorrect type.");
+            return;
+        }
+
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (!gameData) {
+            logMsg (stderr, ERROR, SERVER, "NULL game data in the game server!");
+            return;
+        }
+
+        // the first time we add a function, we create the array
+        if (!gameData->gameInitFuncs) {
+            gameData->gameInitFuncs = (delegate *) calloc (1, sizeof (delegate));
+            gameData->gameInitFuncs[gameType] = gameInit;
+            gameData->n_gameInits++;
+        }
+
+        // realloc the array and add the new function at the end
+        else {
+            gameData->gameInitFuncs = 
+                (delegate *) realloc (gameData->gameInitFuncs, gameData->n_gameInits + 1);
+            gameData->gameInitFuncs[gameType] = gameInit;
+            gameData->n_gameInits++;
+        }
+    }
+
+}
+
+#pragma endregion
+
 /*** PLAYER ***/
 
 #pragma region PLAYER
@@ -478,7 +521,7 @@ void game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
 }
 
 // loads the settings for the selected game type from the game server data
-GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
+GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
 
     ConfigEntity *cfgEntity = getEntityWithId (gameConfig, gameType);
 	if (!cfgEntity) {
@@ -531,6 +574,8 @@ GameSettings *getGameSettings (Config *gameConfig, u8 gameType) {
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, createString ("Max players: %i", settings->maxPlayers));
     #endif
+
+    settings->gameType = gameType;
 
     if (playerTimeout) free (playerTimeout);
     if (fps) free (fps);
@@ -936,6 +981,43 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
 #pragma region GAME LOGIC
 
+// TODO: 13/11/2018 - do we want to start the game logic in a new thread?
+    // remeber that the lobby is listening in its own thread that can handle imput logic
+    // but what about a thread in the lobby for listenning and another for game logic and sending packets?
+
+
+// FIXME: call the admin defined function
+// the game server starts a new game with the function set for the dessired game type
+u8 gs_startGame (Server *server, Lobby *lobby) {
+
+    if (server && lobby) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+
+        if (!gameData->gameInitFuncs) {
+            logMsg (stderr, ERROR, GAME, "Init game functions not set!");
+            return 1;
+        }
+
+        delegate temp = gameData->gameInitFuncs[lobby->settings->gameType];
+        if (temp) {
+            // FIXME: call the game init function, what output should we expect?
+
+            // we expect the game function to sync players and send game packets directly 
+            // using the framework
+        }
+        
+        else {
+            logMsg (stderr, ERROR, GAME, "No init function set for the desired game type!");
+            return 1;
+        }
+        
+    }
+
+    else return 1;
+
+}
+
+// FIXME: move this function the blackrock game
 // TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
 // this is called from by the owner of the lobby
 u8 startGame (Server *server, Lobby *lobby) {
@@ -1340,7 +1422,6 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
 
 }
 
-// TODO: we need to set a delegate in the game server to init each type of game
 void gs_initGame (Server *server, Player *player, Lobby *lobby) {
 
     if (server && player && lobby) {
@@ -1349,7 +1430,7 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
         if (player->inLobby) {
             if (lobby->owner->id == player->id) {
                 if (lobby->players_nfds >= lobby->settings->minPlayers) {
-                    if (startGame (server, lobby)) {
+                    if (gs_startGame (server, lobby)) {
                         logMsg (stderr, ERROR, GAME, "Failed to start a new game!");
                         // send feedback to the players
                         size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
@@ -1369,6 +1450,7 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
                     }
 
                     // upon success, we expect the start game func to send the packages
+                    // game starts on its new thread, so we just return
                 }
 
                 else {
