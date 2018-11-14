@@ -56,7 +56,8 @@ void gs_add_gameInit (Server *server, GameType gameType, delegate gameInit) {
         // realloc the array and add the new function at the end
         else {
             gameData->gameInitFuncs = 
-                (delegate *) realloc (gameData->gameInitFuncs, gameData->n_gameInits + 1);
+                (delegate *) realloc (gameData->gameInitFuncs, 
+                sizeof (delegate) * gameData->n_gameInits + 1);
             gameData->gameInitFuncs[gameType] = gameInit;
             gameData->n_gameInits++;
         }
