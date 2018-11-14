@@ -274,6 +274,7 @@ typedef enum RequestType {
     LOBBY_UPDATE,
     LOBBY_DESTROY,
 
+    GAME_START,
     GAME_INPUT_UPDATE,
     GAME_SEND_MSG,
 

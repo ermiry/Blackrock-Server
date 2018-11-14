@@ -1085,6 +1085,8 @@ void handleGamePacket (void *data) {
                 case LOBBY_LEAVE: break;
                 case LOBBY_DESTROY: break;
 
+                case GAME_START: 
+                    gs_initGame (packet->server, packet->player, packet->lobby); break;
                 case GAME_INPUT_UPDATE:  break;
                 case GAME_SEND_MSG: break;
 
