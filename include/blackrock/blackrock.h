@@ -27,5 +27,6 @@ typedef unsigned char asciiChar;
 #define THREAD_OK   0
 
 extern u8 blackrock_start_arcade (void *data);
+extern u8 blackrock_loadGameData (void);
 
 #endif

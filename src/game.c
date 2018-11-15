@@ -27,6 +27,27 @@ GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player,
 
 #pragma region GAME SERVER
 
+// add a function to load game data like from a db
+void gs_add_loadGameData (Server *server, Func loadData) {
+
+    if (server) {
+        if (server->type != GAME_SERVER) {
+            logMsg (stderr, ERROR, SERVER, 
+                "Can't add a load game data func. Server of incorrect type.");
+            return;
+        }
+
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (!gameData) {
+            logMsg (stderr, ERROR, SERVER, "NULL game data in the game server!");
+            return;
+        }
+
+        gameData->loadGameData = loadData;
+    }
+
+}
+
 // TODO: 13/11/2018 - do we still need a hash table for a better implementation?
 // we need the game types enum to be 0 indexed and to be in order!
 // adds a game init function to use with a game type
@@ -1069,6 +1090,8 @@ void handlePlayerInput () {
 #pragma region GAME PACKETS
 
 /*** Prototypes of public game server functions ***/
+
+// TODO: how do we want to handle the leaderboards?
 
 /*** reqs outside a lobby ***/
 void gs_createLobby (Server *, Client *, GameType);

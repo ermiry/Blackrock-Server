@@ -1045,6 +1045,7 @@ void initServerValues (Server *server, ServerType type) {
 
             data->n_gameInits = 0;
             data->gameInitFuncs = NULL;
+            data->loadGameData = NULL;
         } break;
         default: break;
     }
@@ -1393,6 +1394,19 @@ u8 cerver_startServer (Server *server) {
     if (server->isRunning) {
         logMsg (stdout, WARNING, SERVER, "The server is already running!");
         return 1;
+    }
+
+    // 14/11/2018 -- one time only inits
+    // if we have a game server, we might wanna load game data -> set by server admin
+    if (server->type == GAME_SERVER) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (gameData) {
+            if (gameData->loadGameData ()) {
+                logMsg (stderr, ERROR, GAME, "Failed to load game data!");
+                // FIXME: how do we want to handle this error?
+            }
+        }
+        else logMsg (stdout, WARNING, GAME, "Game server doesn't have a reference to a game data!");
     }
 
     u8 retval = 1;

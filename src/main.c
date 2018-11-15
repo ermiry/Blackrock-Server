@@ -42,6 +42,9 @@ int main (void) {
 
     gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
     if (gameServer) {
+        // set our own function to load blackrock data
+        gs_add_loadGameData (gameServer, blackrock_loadGameData);
+
         // set blackrock arcade game init function
         gs_add_gameInit (gameServer, ARCADE, blackrock_start_arcade);
 

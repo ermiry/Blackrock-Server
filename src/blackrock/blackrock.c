@@ -165,21 +165,43 @@ void connectEnemiesDB (void) {
     // they need to access the same info but we will not want the same copies 
     // of this memory right?
 
-// this should be called when we first start the game server
-// connects to the game dbs and loads some things into memory
-void getGameData (void) {
-
-    // TODO: how do we better handle this error?
+// TODO: how do we better handle this error?
         // -> maybe we can have a backup where we can get the file
-    // connect to the items db
-    if (sqlite3_open (itemsDBPath, &itemsDB) != SQLITE_OK) 
-        logMsg (stderr, ERROR, GAME, "Failed to open the items db!");
 
-    else logMsg (stdout, GAME, NO_TYPE, "Connected to items db.");
+// TODO: don't forget to add in the documentation that this needs to return 0 on succes, otherwise,
+// we will handle it as an error!
+// we connect to our dbs and get any other data that we need
+u8 blackrock_loadGameData (void) {
+
+    // connect to the items db
+    if (sqlite3_open (itemsDBPath, &itemsDB) != SQLITE_OK) {
+        logMsg (stderr, ERROR, GAME, "Failed to open the items db!");
+        return 1;
+    }
+
+    else {
+        #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "Connected to items db.");
+        #endif
+    }
 
     // get enemy info from enemies db    
-    connectEnemiesDB ();
-    logMsg (stdout, GAME, NO_TYPE, "Done loading enemy data from db.");
+    if (!connectEnemiesDB ()) {
+        #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "Done loading enemies data.");
+        #endif
+    }
+
+    else {
+        logMsg (stderr, ERROR, GAME, "Failed to load enemies data!");
+        return 1;
+    }
+
+    #ifdef DEBUG
+        logMsg (stdout, DEBUG_MSG, GAME, "Done loading enemy data from db.");
+    #endif
+
+    return 0;
 
 }
 

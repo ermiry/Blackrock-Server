@@ -109,6 +109,10 @@ struct _GameServerData {
     // List *players;           // players connected to the server, but outside a lobby -> 24/10/2018
     AVLTree *players;
 
+    // 14/11/2018 - we can define a function to load game data at start, 
+    // for example to connect to a db or something like that
+    Func loadGameData;
+
     // 13//11/2018 -- depending on the game type, we can have different init game functions
     u8 n_gameInits;
     delegate *gameInitFuncs;

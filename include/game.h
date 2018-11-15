@@ -23,6 +23,13 @@ typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
 
+// takes no argument and returns a value (int)
+typedef u8 (*Func)(void);
+// takes an argument and does not return a value
+typedef void (*Action)(void *);
+// takes an argument and returns a value (int)
+typedef u8 (*delegate)(void *);
+
 struct _Server;
 struct _GameServerData;
 struct _Client;
@@ -175,8 +182,8 @@ typedef struct ServerLobby {
 
 /*** GAME SERVER FUNCTIONS ***/
 
-typedef u8 (*delegate)(void *);
 extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
+extern void gs_add_loadGameData (struct _Server *server, Func loadData);
 
 extern void gs_handlePacket (struct _PacketInfo *packet);
 
