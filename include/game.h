@@ -65,54 +65,7 @@ struct _GameSettings {
 
 typedef struct _GameSettings GameSettings;
 
-// in the game we move square by square
-typedef struct Position {
-
-    u8 x, y;
-    // u8 layer;   
-
-} Position;
-
-typedef struct PlayerInput {
-
-	Position pos;
-
-} PlayerInput;
-
-/* typedef struct SPlayer {
-	SPlayerId id;
-	// SBool alive;
-	// SVectorFloat position;
-	float heading;
-	uint32_t score;
-	// SColor color;
-} SPlayer; */
-
-typedef uint64_t SequenceNum;
-
-typedef struct PlayerInputPacket {
-
-	SequenceNum sequenceNum;
-	PlayerInput input;
-	
-} PlayerInputPacket;
-
 typedef uint16_t PlayerId;
-
-typedef struct UpdatedGamePacket {
-
-	GameSettings gameSettings;
-
-	PlayerId playerId;
-
-	SequenceNum sequenceNum;
-	SequenceNum ack_input_sequence_num;
-
-	// SArray players; // Array of SPlayer.
-	// SArray explosions; // Array of SExplosion.
-	// SArray projectiles; // Array of SProjectile.
-
-} UpdatedGamePacket; 
 
 // TODO: maybe add the game components here? as in the client?
 typedef struct Player {
@@ -189,13 +142,62 @@ typedef struct GamePacketInfo {
 
 } GamePacketInfo;
 
-/*** SERIALIZATION ***/
+/*** GAME SERIALIZATION ***/
 
-// game serialized data
+#pragma region GAME SERIALIZATION
 
 typedef struct Splayer {
 
 
 } SPlayer;
+
+typedef struct UpdatedGamePacket {
+
+	GameSettings gameSettings;
+
+	PlayerId playerId;
+
+	SequenceNum sequenceNum;
+	SequenceNum ack_input_sequence_num;
+
+	// SArray players; // Array of SPlayer.
+	// SArray explosions; // Array of SExplosion.
+	// SArray projectiles; // Array of SProjectile.
+
+} UpdatedGamePacket; 
+
+typedef struct PlayerInput {
+
+	Position pos;
+
+} PlayerInput;
+
+typedef uint64_t SequenceNum;
+
+typedef struct PlayerInputPacket {
+
+	SequenceNum sequenceNum;
+	PlayerInput input;
+	
+} PlayerInputPacket;
+
+/* typedef struct SPlayer {
+	SPlayerId id;
+	// SBool alive;
+	// SVectorFloat position;
+	float heading;
+	uint32_t score;
+	// SColor color;
+} SPlayer; */
+
+// in the game we move square by square
+typedef struct Position {
+
+    u8 x, y;
+    // u8 layer;   
+
+} Position;
+
+#pragma endregion
 
 #endif

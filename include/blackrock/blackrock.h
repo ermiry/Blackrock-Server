@@ -43,4 +43,6 @@ typedef struct World {
 extern u8 blackrock_start_arcade (void *data);
 extern u8 blackrock_loadGameData (void);
 
+/*** BLACKROCK SERIALIZED DATA ***/
+
 #endif

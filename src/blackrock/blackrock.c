@@ -212,10 +212,6 @@ u8 blackrock_loadGameData (void) {
 
 }
 
-#pragma endregion
-
-#pragma region BLACKROCK GAME
-
 // TODO: where do we want to keep track of player positions?
 // TODO: how do we want to keep track of scores?
     // maybe a dictionary like quill18 or probably just an entry iniside each player?
@@ -413,5 +409,11 @@ u8 blackrock_start_arcade (void *data) {
     }
 
 }
+
+#pragma endregion
+
+/*** RUNNING GAME ***/
+
+#pragma region BLACKROCK GAME
 
 #pragma endregion
