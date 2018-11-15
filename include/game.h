@@ -165,9 +165,18 @@ struct _Lobby {
 
 typedef struct _Lobby Lobby;
 
+// 10/11/2018 - aux reference to a server and lobby for thread functions
+typedef struct ServerLobby {
+
+    struct _Server *server;
+    Lobby *lobby;
+
+} ServerLobby;
+
 /*** GAME SERVER FUNCTIONS ***/
 
-extern void gs_add_gameInit (Server *server, GameType gameType, delegate *gameInit);
+typedef u8 (*delegate)(void *);
+extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
 
 extern void gs_handlePacket (struct _PacketInfo *packet);
 

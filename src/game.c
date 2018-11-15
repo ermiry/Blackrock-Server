@@ -324,14 +324,6 @@ void addPlayer (struct sockaddr_storage address) {
 
 #pragma region LOBBY
 
-// 10/11/2018 - aux reference to a server and lobby for thread functions
-typedef struct ServerLobby {
-
-    Server *server;
-    Lobby *lobby;
-
-} ServerLobby;
-
 // we remove any fd that was set to -1 for what ever reason
 void compressPlayers (Lobby *lobby) {
 
@@ -986,8 +978,6 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
     // remeber that the lobby is listening in its own thread that can handle imput logic
     // but what about a thread in the lobby for listenning and another for game logic and sending packets?
 
-
-// FIXME: call the admin defined function
 // the game server starts a new game with the function set for the dessired game type
 u8 gs_startGame (Server *server, Lobby *lobby) {
 
@@ -1001,10 +991,31 @@ u8 gs_startGame (Server *server, Lobby *lobby) {
 
         delegate temp = gameData->gameInitFuncs[lobby->settings->gameType];
         if (temp) {
-            // FIXME: call the game init function, what output should we expect?
+            // 14/11/2018 -- al game functions will get a reference to the server and lobby
+            // where they are requested to init
+            ServerLobby *sl = (ServerLobby *) malloc (sizeof (ServerLobby));
+            sl->server = server;
+            sl->lobby = lobby;
+
+            #ifdef DEBUG
+                logMsg (stdout, DEBUG_MSG, GAME, "Starting the game...");
+            #endif
 
             // we expect the game function to sync players and send game packets directly 
             // using the framework
+            if (!temp (sl)) {
+                #ifdef DEBUG
+                    logMsg (stdout, SUCCESS, GAME, "A new game has started!");
+                #endif
+                return 0;
+            }
+
+            else {
+                #ifdef DEBUG
+                    logMsg (stderr, ERROR, GAME, "Failed to start a new game!");
+                #endif
+                return 1;
+            }
         }
         
         else {
@@ -1015,50 +1026,6 @@ u8 gs_startGame (Server *server, Lobby *lobby) {
     }
 
     else return 1;
-
-}
-
-// FIXME: move this function the blackrock game
-// TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
-// this is called from by the owner of the lobby
-u8 startGame (Server *server, Lobby *lobby) {
-
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Starting the game...");
-    #endif
-
-    // FIXME: support a retry function -> we don't need to generate this things again!
-    // first init the in game structures
-
-    // server side
-    // init map
-    // init enemies
-    // place stairs and other map elements
-    // initWorld (lobby->world);
-
-    // client side
-    // init their player
-    // generate map and enemies based on our data
-
-    // place each player in a near spot to each other
-    // get the fov structure
-
-    // TODO: make sure that all the players are sync and have inited their own game
-
-    // FIXME: send messages to the client log
-    // TODO: add different texts here!!
-    // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
-
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
-    #endif
-
-    // init the game
-    // start calculating pathfinding
-    // sync fov of all players
-    // sync player data like health
-    // keep track of players score
-    // sync players movement
 
 }
 

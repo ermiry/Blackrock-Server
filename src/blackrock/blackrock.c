@@ -249,4 +249,54 @@ void initWorld (World *world) {
     
 }
 
+// FIXME: support a retry function -> we don't need to generate this things again!
+    // first init the in game structures
+
+// TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
+// this is called from by the owner of the lobby
+
+// the game admin should set this function to init the desired game type
+// 14/11/2018 - we make use of the cerver framework to create the multiplayer for our game
+u8 blackrock_start_arcade (void *data) {
+
+    if (!data) {
+        logMsg (stderr, ERROR, GAME, "No sl data recieved! Failed to init a new game.");
+        return 1;
+    }
+
+    // we need this to send our game packets to the lobby players
+    ServerLobby *sl = (ServerLobby *) data;
+
+    // server side
+    // init map
+    // init enemies
+    // place stairs and other map elements
+    // initWorld (lobby->world);
+
+    // client side
+    // init their player
+    // generate map and enemies based on our data
+
+    // place each player in a near spot to each other
+    // get the fov structure
+
+    // TODO: make sure that all the players are sync and have inited their own game
+
+    // FIXME: send messages to the client log
+    // TODO: add different texts here!!
+    // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
+
+    #ifdef DEBUG
+    logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
+    #endif
+
+    // init the game
+    // start calculating pathfinding
+    // sync fov of all players
+    // sync player data like health
+    // keep track of players score
+    // sync players movement
+
+}
+
 #pragma endregion

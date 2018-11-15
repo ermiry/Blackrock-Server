@@ -8,6 +8,8 @@
 
 #include "utils/log.h"
 
+#include "blackrock.h"
+
 // TODO: maybe handle this in a separate list by a name?
 Server *gameServer = NULL;
 
@@ -40,7 +42,8 @@ int main (void) {
 
     gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
     if (gameServer) {
-        // FIXME: set blackrock arcade game init function
+        // set blackrock arcade game init function
+        gs_add_gameInit (gameServer, ARCADE, blackrock_start_arcade);
 
         if (!cerver_startServer (gameServer)) 
             logMsg (stdout, SUCCESS, SERVER, "Server started properly!");
