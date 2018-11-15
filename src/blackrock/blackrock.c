@@ -138,17 +138,22 @@ static int loadEnemyData (void *data, int argc, char **argv, char **azColName) {
 
 }
 
-void connectEnemiesDB (void) {
+// FIXME:
+// TODO: try loading the db from the backup sever if we don't find it
+u8 connectEnemiesDB (void) {
 
     if (sqlite3_open (enemiesDBPath, &enemiesDB) != SQLITE_OK) {
         logMsg (stderr, ERROR, GAME, "Failed to open the enemies db!");
         // TODO: try loading the file from a backup
+        return 1;
     } 
 
     // createEnemiesDb ();
 
+    // FIXME: does each lobby need to have its own enemy data?
+    // TODO: create a destroy function for this
     // enemies in memory
-    enemyData = initList (free);
+    /* enemyData = initList (free);
 
     // load the enemies data into memory
     char *err = 0;
@@ -157,7 +162,9 @@ void connectEnemiesDB (void) {
     if (sqlite3_exec (enemiesDB, sql, loadEnemyData, NULL, &err) != SQLITE_OK ) {
         logMsg (stderr, ERROR, GAME, createString ("SQL error: %s\n", err));
         sqlite3_free (err);
-    } 
+    } */
+
+    return 0;
     
 }
 
@@ -209,11 +216,66 @@ u8 blackrock_loadGameData (void) {
 
 #pragma region BLACKROCK GAME
 
+// TODO: where do we want to keep track of player positions?
+// TODO: how do we want to keep track of scores?
+    // maybe a dictionary like quill18 or probably just an entry iniside each player?
+
+typedef struct BrGameData {
+
+    World *world;
+    List *enemyData;
+
+    // TODO: scores
+
+} BrGameData;
+
+World *newWolrd (void) {
+
+    World *world = (World *) malloc (sizeof (World));
+    if (world) {
+        world->level = NULL;
+    }
+
+    return world;
+
+}
+
+// FIXME: pass an enemy data destroy function
+// does each world needs to have its own enemy data structure?
+BrGameData *newBrGameData (void) {
+
+    BrGameData *brdata = (BrGameData *) malloc (sizeof (BrGameData));
+    if (brdata) {
+        brdata->world = newWolrd ();
+        brdata->enemyData = initList (free);
+    }
+
+    return brdata;
+
+}
+
+/****
+ * 15/11/2018 - what does the server needs to keep track of?
+ * 
+ * - player positions
+ * - players stats
+ * - players scores
+ * - enemy positions
+ * - enemy stats
+ * - loot generation
+ * - track items positions
+ * ***/
+
+// FIXME: init game data structures 
+u8 initGameData () {
+
+    // init game data 
+    // init structures of what we need to keep track of
+
+}
+
 // FIXME:
 void generateLevel (World *world) {
-
-    // FIXME: make sure that we have cleared the previous level data
-        // this only should happen inside the same lobby
 
     // FIXME: check if we have to actually create the walls or the server
     // only needs to know about their position
@@ -234,12 +296,15 @@ void generateLevel (World *world) {
     }
 
     #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, createString ("%i / %i monsters created successfully.", count, monCount));
+        logMsg (stdout, DEBUG_MSG, GAME, 
+        createString ("%i / %i monsters created successfully.", count, monCount));
     #endif
 
 }
 
-void enterDungeon (World *world) {
+// FIXME:
+// inits the world data inside the lobby
+u8 initWorld (World *world) {
 
     // this must be called once -> the first time we enter the map
     if (!world->level) {
@@ -250,24 +315,21 @@ void enterDungeon (World *world) {
             world->level->mapCells[i] = (bool *) calloc (MAP_HEIGHT, sizeof (bool));
 
     } 
-    
+
     // generate a random world froms scratch
     // TODO: maybe later we want to specify some parameters based on difficulty?
     // or based on the type of terrain that we want to generate.. we don't want to have the same algorithms
     // to generate rooms and for generating caves or open fields
 
-    // after we have allocated the new level structure, we can start generating the first level
+    // create physical level and level elements, also add monsters
     generateLevel (world);
 
-}
+    // TODO: spawn players
+    // place each player in a near spot to each other
 
-// FIXME:
-// inits the world data inside the lobby
-void initWorld (World *world) {
+    // TODO: calculate fov
 
-    // FIXME: init the necessary world data structures
-
-    enterDungeon (world);   // generates the map
+    return 0;
     
 }
 
@@ -289,35 +351,66 @@ u8 blackrock_start_arcade (void *data) {
     // we need this to send our game packets to the lobby players
     ServerLobby *sl = (ServerLobby *) data;
 
+    // init our own game data inside the cerver lobby
+    BrGameData *brdata = newBrGameData ();
+    if (!brdata) {
+        logMsg (stderr, ERROR, GAME, "Failed to create new Blackrock game data!");
+        return 1;
+    }
+
+    sl->lobby->gameData = brdata;
+
     // server side
     // init map
     // init enemies
     // place stairs and other map elements
     // initWorld (lobby->world);
 
-    // client side
-    // init their player
-    // generate map and enemies based on our data
+    if (!initGameData ()) {
+        if (!initWorld (brdata->world)) {
+            // FIXME: before this, when the owner started the game, 
+            // we need to sync all of the players and they should be waiting
+            // for our game init packets
 
-    // place each player in a near spot to each other
-    // get the fov structure
+            // the server data structures have been generated,
+            // now we can send the players our world data so that they
+            // can generate their own world
 
-    // TODO: make sure that all the players are sync and have inited their own game
+            // after we have sent the game data, we need to wait until all the
+            // players have generated their own levels and we need to be sure
+            // they are on sync
 
-    // FIXME: send messages to the client log
-    // TODO: add different texts here!!
-    // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
+            // FIXME: send messages to the client log
+            // TODO: add different texts here!!
+            // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
 
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
-    #endif
+            // if all goes well, we can now start the new game, so we signal the players
+            // to start their game and start sending and recieving packets
 
-    // init the game
-    // start calculating pathfinding
-    // sync fov of all players
-    // sync player data like health
-    // keep track of players score
-    // sync players movement
+            #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
+            #endif
+
+            // init the game
+            // start calculating pathfinding
+            // sync fov of all players
+            // sync player data like health
+            // keep track of players score
+            // sync players movement
+
+            // FIXME: we need to return 0 to mark as a success!!
+        }
+
+        else {
+            logMsg (stderr, ERROR, GAME, "Failed to init BR world!");
+            return 1;
+        }
+    }
+
+    else {
+        logMsg (stderr, ERROR, GAME, "Failed to init BR game data!");
+        return 1;
+    }
 
 }
 

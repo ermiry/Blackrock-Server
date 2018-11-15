@@ -2,7 +2,6 @@
 #define BLACKROCK_H_
 
 #include <stdint.h>
-#include <stdbool.h>
 
 #define SCREEN_WIDTH    1280    
 #define SCREEN_HEIGHT   720
@@ -25,6 +24,21 @@ typedef int64_t i64;
 typedef unsigned char asciiChar;
 
 #define THREAD_OK   0
+
+typedef struct Level {
+
+    u8 levelNum;
+    bool **mapCells;    // dungeon map
+
+} Level;
+
+// TODO: maybe game objects such as enemies with positions and items 
+// go inside here?
+typedef struct World {
+
+	Level *level;
+
+} World;
 
 extern u8 blackrock_start_arcade (void *data);
 extern u8 blackrock_loadGameData (void);

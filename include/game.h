@@ -128,25 +128,11 @@ typedef struct Player {
 
 	bool alive;
 
+	// FIXME: componets are blackrock specific??
 	// Components
-	Position pos;
+	// Position pos;
 
 } Player;
-
-typedef struct Level {
-
-    u8 levelNum;
-    bool **mapCells;    // dungeon map
-
-} Level;
-
-// TODO: move this from here for a cleaner code
-// in game data structres
-typedef struct World {
-
-	Level *level;
-
-} World;
 
 struct _Lobby {
 
@@ -166,7 +152,9 @@ struct _Lobby {
     bool compress_players;              		// compress the fds array?
     u32 pollTimeout;    
 
-	World *world;			// in game data structres
+	// 15/11/2018 - the server admin can add its server specific data types
+	void *gameData;
+	// TODO: maybe add a ptr to a game data destroy function?
 
 };
 
