@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <stdarg.h>
+
 #include "blackrock/blackrock.h" 
 #include "game.h"
 
@@ -986,53 +988,116 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
 #pragma region SCORE 
 
-// TODO: maybe add the option to init the scores table with some score types, passing 
-// various args?
-Htab *game_score_init (u8 initSize) {
+// 16/11/2018 -- we can now create a scoreboard and pass variable num of score types
+// to be added each time we add a new player!!
+ScoreBoard *game_score_new (u8 playersNum, u8 scoresNum, ...) {
 
-    Htab *ht = htab_init (initSize, NULL, NULL, NULL, NULL);
-    return ht;
+    ScoreBoard *sb = (ScoreBoard *) malloc (sizeof (ScoreBoard));
+    if (sb) {
+        va_list valist;
+        va_start (valist, scoresNum);
+
+        sb->scoresNum = scoresNum;
+        sb->scoreTypes = (char **) calloc (scoresNum, sizeof (char *));
+        char *temp = NULL;
+        for (int i = 0; i < scoresNum; i++) {
+            temp = va_arg (valist, char *);
+            sb->scoreTypes[i] = (char *) calloc (strlen (temp) + 1, sizeof (char));
+            strcpy (sb->scoreTypes[i], temp);
+        }
+
+        sb->registeredPlayers = 0;
+        sb->scores = htab_init (playersNum > 0 ? playersNum : DEFAULT_SCORE_SIZE,
+             NULL, NULL, NULL, NULL);
+
+        va_end (valist);
+    }
+
+    return sb;
 
 }
 
-// adds a new player to the score table
-u8 game_score_add_player (Htab *scores, char *playerName) {
+// TODO:
+// for each player and score type, reset the values to 0
+void game_score_reset (ScoreBoard *sb) {}
 
-    if (scores && playerName) {
-        if (htab_contains_key (scores, playerName, sizeof (playerName))) {
+// TODO: destroy the scoreboard
+void game_score_destroy (ScoreBoard *sb) {}
+
+// TODO:
+void game_score_add_scoreType (ScoreBoard *sb, char *newScore) {}
+
+// TODO:
+void game_score_remove_scoreType (ScoreBoard *sb, char *oldScore) {}
+
+// adds a new player to the score table
+u8 game_score_add_player (ScoreBoard *sb, char *playerName) {
+
+    if (sb && playerName) {
+        if (htab_contains_key (sb->scores, playerName, sizeof (playerName))) {
             #ifdef DEBUG
             logMsg (stderr, ERROR, GAME, 
-                createString ("Scores table already contains name: %s", playerName));
+                createString ("Scores table already contains player: %s", playerName));
             #endif
             return 1;
         }
 
+        // associate the player with his own scores dictionary
         else {
-            Htab *newHt = htab_init (4, NULL, NULL, NULL, NULL);
-            if (!htab_insert (scores, playerName, sizeof (playerName), newHt, sizeof (Htab)))
-                return 0;
+            Htab *newHt = htab_init (sb->scoresNum, NULL, NULL, NULL, NULL);
+            if (newHt) {
+                if (!htab_insert (sb->scores, playerName, sizeof (playerName), newHt, sizeof (Htab))) {
+                    // insert each score type in the player's dictionary
+                    int zero = 0;
+                    for (int i = 0; i < sb->scoresNum; i++) 
+                        htab_insert (newHt, sb->scoreTypes[i], 
+                            sizeof (sb->scoreTypes[i]), &zero, sizeof (int));
+
+                    sb->registeredPlayers++;
+
+                    return 0;   // success adding new player and its scores
+                }
+
+                else return 1;
+            }
+
             else return 1;
         }
     }
 
+    else return 1;
+
 }
 
 // removes a player from the score table
-u8 game_score_remove_player (Htab *scores, char *playerName) {
+u8 game_score_remove_player (ScoreBoard *sb, char *playerName) {
 
-    if (scores && playerName) {
-        
+    if (sb && playerName) {
+        if (htab_contains_key (sb->scores, playerName, sizeof (playerName))) {
+            // TODO: remove the player and player's scores
+            sb->registeredPlayers--;
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Scores table doesn't contains player: %s", playerName));
+            #endif
+            return 1;
+        }
     }
+
+    else return 1;
 
 }
 
 // TODO:
 // sets a new score type, negative values not allowed
-void game_score_set (Htab *scores, char *playerName, char *scoreType, i32 value) {
+void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i32 value) {
 
-    if (scores && playerName && scoreType) {
+    if (sb && playerName && scoreType) {
         size_t htab_size = sizeof (Htab);
-        void *playerScores = htab_getData (scores, playerName, sizeof (playerName), &htab_size);
+        void *playerScores = htab_getData (sb->scores, playerName, sizeof (playerName), &htab_size);
         if (playerScores) {
             size_t int_size = sizeof (unsigned int);
             void *currValue = htab_getData ((Htab *) playerScores, 
@@ -1060,12 +1125,17 @@ void game_score_set (Htab *scores, char *playerName, char *scoreType, i32 value)
 
 }
 
-// gets the value of the player's score type
-i32 game_score_get (Htab *scores, char *playerName, char *scoreType) {
+// TODO: removes a score type from the table
+void game_score_remove (ScoreBoard *sb, char *playerName, char *scoreType) {
 
-    if (scores && playerName && scoreType) {
+}
+
+// gets the value of the player's score type
+i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType) {
+
+    if (sb && playerName && scoreType) {
         size_t htab_size = sizeof (Htab);
-        void *playerScores = htab_getData (scores, playerName, sizeof (playerName), &htab_size);
+        void *playerScores = htab_getData (sb->scores, playerName, sizeof (playerName), &htab_size);
         if (playerScores) {
             size_t int_size = sizeof (unsigned int);
             void *value = htab_getData ((Htab *) playerScores, 
@@ -1088,14 +1158,16 @@ i32 game_score_get (Htab *scores, char *playerName, char *scoreType) {
         }
     }
 
+    else return -1;
+
 }
 
 // updates the value of the player's score type, clamped to 0
-void game_score_update (Htab *scores, char *playerName, char *scoreType, i32 value) {
+void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 value) {
 
-    if (scores && playerName && scoreType) {
+    if (sb && playerName && scoreType) {
         size_t htab_size = sizeof (Htab);
-        void *playerScores = htab_getData (scores, playerName, sizeof (playerName), &htab_size);
+        void *playerScores = htab_getData (sb->scores, playerName, sizeof (playerName), &htab_size);
         if (playerScores) {
             size_t int_size = sizeof (unsigned int);
             void *currValue = htab_getData ((Htab *) playerScores, 

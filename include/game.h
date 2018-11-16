@@ -131,12 +131,25 @@ extern void gs_handlePacket (struct _PacketInfo *packet);
 
 #include "utils/htab.h"
 
-extern Htab *game_score_init (u8 initSize);
-extern u8 game_score_add_player (Htab *scores, char *playerName);
-extern u8 game_score_remove_player (Htab *scores, char *playerName);
-extern i32 game_score_get (Htab *scores, char *playerName, char *scoreType);
-extern void game_score_set (Htab *scores, char *playerName, char *scoreType, i32 value);
-extern void game_score_update (Htab *scores, char *playerName, char *scoreType, i32 value);
+#define DEFAULT_SCORE_SIZE      5   // default players inside the scoreboard
+
+typedef struct ScoreBoard {
+
+    Htab *scores;
+    u8 registeredPlayers;
+    u8 scoresNum;
+    char **scoreTypes;
+
+} ScoreBoard;
+
+extern Htab *game_score_new (u8 initSize);
+
+extern u8 game_score_add_player (ScoreBoard *sb, char *playerName);
+extern u8 game_score_remove_player (ScoreBoard *sb, char *playerName);
+
+extern i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType);
+extern void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i32 value);
+extern void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 value);
 
 /*** GAME PACKETS ***/
 
