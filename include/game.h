@@ -67,7 +67,6 @@ typedef struct _GameSettings GameSettings;
 
 typedef uint16_t PlayerId;
 
-// TODO: maybe add the game components here? as in the client?
 typedef struct Player {
 
 	struct _Client *client;		// client network data associated to this player
@@ -81,9 +80,9 @@ typedef struct Player {
 
 	bool alive;
 
-	// FIXME: componets are blackrock specific??
-	// Components
-	// Position pos;
+	// 15/11/2018 -- we spec the player to be ecs based
+	// the server admin can add its own components
+	void *components;
 
 } Player;
 

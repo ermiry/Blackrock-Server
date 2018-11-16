@@ -212,7 +212,7 @@ u8 player_removeFromLobby (GameServerData *gameData, Lobby *lobby, Player *playe
 
     if (lobby && player) {
         // create a new player and add it to the server's players
-        Player *p = newPlayer (gameData->playersPool, player);
+        Player *p = newPlayer (gameData->playersPool, NULL, player);
         // FIXME: what type of struct do we have for players??
         //  insertAfter (gameData->players, LIST_END (gameData->players), p);
         p->inLobby = false;

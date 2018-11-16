@@ -9,6 +9,7 @@
 #include <sqlite3.h>
 
 #include "game.h"           // game server
+#include "utils/avl.h"
 
 #include "utils/myUtils.h"
 #include "utils/list.h"
@@ -219,11 +220,15 @@ u8 blackrock_loadGameData (void) {
 typedef struct BrGameData {
 
     World *world;
+
+    // TODO: do we want this to be a global data?
     List *enemyData;
 
     // TODO: scores
 
 } BrGameData;
+
+// TODO: create a destroy game data function
 
 World *newWolrd (void) {
 
@@ -263,10 +268,18 @@ BrGameData *newBrGameData (void) {
  * ***/
 
 // FIXME: init game data structures 
-u8 initGameData () {
+u8 initGameData (BrGameData *brdata) {
 
     // init game data 
     // init structures of what we need to keep track of
+    if (brdata) {
+
+    }
+
+    else {
+        logMsg (stderr, ERROR, GAME, "Can't init a NULL BR game data!");
+        return 1;
+    }
 
 }
 
@@ -279,16 +292,24 @@ void generateLevel (World *world) {
     initMap (world->level->mapCells);
 
     // TODO: generate other map structures such as stairs
+    // FIXME: place stairs
 
     // generate the monsters to spawn
-    // FIXME: how do we manage how many monsters to spawn?
-    u8 monCount = 15;
-    u8 count;
-    for (u8 i = 0; i < monCount; i++) {
-        // FIXME: genetare a random monster --> what data does the server needs to know?
-            // position, health (combat), movement (ai), physics?
-        
-        // FIXME: place the monster in a random position in the map
+    u8 monToSpawn = 15;
+    u8 monCount = 0;
+    for (u8 i = 0; i < monToSpawn; i++) {
+        // generate a random monster
+        GameObject *monster = createMonster (getMonsterId ());
+        if (monster) {
+            // spawn in a random position
+            Point monsterSpawnPos = getFreeSpot (world->level->mapCells);
+
+            // FIXME: will we have the same ecs here in the server?
+            // Position *monsterPos = (Position *) getComponent (monster, POSITION);
+            // monsterPos->x = (u8) monsterSpawnPos.x;
+            // monsterPos->y = (u8) monsterSpawnPos.y;
+            monCount++;
+        }
     }
 
     #ifdef DEBUG
@@ -298,9 +319,32 @@ void generateLevel (World *world) {
 
 }
 
-// FIXME:
+// 15/11/2018 -- we spawn the players in the same position
+// TODO: maybe create a function that can traverse the avl and just call the function?
+void spawnPlayers (AVLNode *node, Point playerSpawnPos) {
+
+     if (node) {
+        spawnPlayers (node->right, playerSpawnPos);
+
+        // send packet to curent player
+        if (node->id) {
+            Player *player = (Player *) node->id;
+            if (player) {
+                // FIXME: set the position!!
+
+                // Position *monsterPos = (Position *) getComponent (monster, POSITION);
+                // monsterPos->x = (u8) monsterSpawnPos.x;
+                // monsterPos->y = (u8) monsterSpawnPos.y;
+            }
+        }
+
+        spawnPlayers (node->left, playerSpawnPos);
+    }
+
+}
+
 // inits the world data inside the lobby
-u8 initWorld (World *world) {
+u8 initWorld (AVLNode *players, World *world) {
 
     // this must be called once -> the first time we enter the map
     if (!world->level) {
@@ -320,8 +364,10 @@ u8 initWorld (World *world) {
     // create physical level and level elements, also add monsters
     generateLevel (world);
 
-    // TODO: spawn players
-    // place each player in a near spot to each other
+    // spawn players -> just mark their starting position
+    // 15/11/2018 -- we spawn the players in the same position
+    Point playerSpawnPos = getFreeSpot (world->level->mapCells);
+    spawnPlayers (players, playerSpawnPos);
 
     // TODO: calculate fov
 
@@ -356,14 +402,8 @@ u8 blackrock_start_arcade (void *data) {
 
     sl->lobby->gameData = brdata;
 
-    // server side
-    // init map
-    // init enemies
-    // place stairs and other map elements
-    // initWorld (lobby->world);
-
-    if (!initGameData ()) {
-        if (!initWorld (brdata->world)) {
+    if (!initGameData (brdata)) {
+        if (!initWorld (sl->lobby->players->root, brdata->world)) {
             // FIXME: before this, when the owner started the game, 
             // we need to sync all of the players and they should be waiting
             // for our game init packets
