@@ -36,6 +36,7 @@ extern Htab *htab_init (int size, Hash hash_f, Compare compare_f, Copy kcopy_f, 
 extern int htab_cleanup (Htab *ht);
 extern int htab_insert (Htab *ht, const void *key, size_t ksz, const void *val, size_t vsz);
 extern int htab_get (Htab *ht, const void *key, size_t ksz, void **val, size_t *vsz);
+extern bool htab_contains_key (Htab *ht, const void *key, size_t key_size);
 extern int htab_remove (Htab *ht, const void *key, size_t key_size);
 
 extern void *htab_getData (Htab *ht, const void *key, size_t key_size, size_t *val_size);

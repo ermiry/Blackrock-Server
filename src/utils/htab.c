@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 #include "htab.h"
 
 size_t htab_generic_hash (const void *key, size_t key_size, size_t table_size) {
@@ -89,7 +91,7 @@ int htab_insert (Htab *ht, const void *key, size_t key_size, const void *val,
     HtabNode *node = NULL;
     
     if (!ht || !ht->hash_f || !key || !key_size || !val || !val_size || !ht->compare_f)
-        return -1;
+        return 1;
 
     index = ht->hash_f(key, key_size, ht->size);
     node = ht->table[index];
@@ -107,7 +109,7 @@ int htab_insert (Htab *ht, const void *key, size_t key_size, const void *val,
 
     else {
         node = (HtabNode *) malloc (sizeof(HtabNode));
-        if (!node) return -1;
+        if (!node) return 1;
         htab_node_init(node);
         ht->table[index] = node;
     }
@@ -117,7 +119,7 @@ int htab_insert (Htab *ht, const void *key, size_t key_size, const void *val,
     node->key = malloc(node->key_size);
     node->val = malloc(node->val_size);
 
-    if (!node->key || !node->val) return -1;
+    if (!node->key || !node->val) return 1;
 
     ht->kcopy_f(&node->key, key, node->key_size);
     ht->vcopy_f(&node->val, val, node->val_size);
@@ -184,6 +186,32 @@ int htab_get (Htab *ht, const void *key, size_t key_size, void **val,
     *val_size = 0;
     return -1;
 } 
+
+bool htab_contains_key (Htab *ht, const void *key, size_t key_size) {
+
+    size_t index;
+    HtabNode *node = NULL;
+
+    if (!ht || !key || !ht->compare_f) return -1;
+
+    index = ht->hash_f(key, key_size, ht->size);
+    node = ht->table[index];
+
+    while (node && node->key && node->val) {
+        if (node->key_size == key_size) {
+            if (!ht->compare_f(key, key_size, node->key, node->key_size)) {
+                return true;
+            }
+
+            else node = node->next;
+        }
+
+        else node = node->next;
+    }
+
+    return false;
+
+}
 
 int htab_remove (Htab *ht, const void *key, size_t key_size) {
 

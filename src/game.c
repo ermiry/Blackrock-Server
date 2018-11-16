@@ -20,6 +20,8 @@
 #include <errno.h>
 #include "utils/avl.h"
 
+#include "utils/htab.h"
+
 GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize);
 
@@ -970,6 +972,153 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
     }
     
     return 0;   // the player left the lobby successfully
+
+}
+
+#pragma endregion
+
+/*** SCORE ***/
+
+// this should be part of the cerver framework
+
+// 15/11/2018 - starting to implement a easy to use score manager for any popouse game
+// implementing a C# Dictionary <string, Dictionary <string, int>> using hastables
+
+#pragma region SCORE 
+
+// TODO: maybe add the option to init the scores table with some score types, passing 
+// various args?
+Htab *game_score_init (u8 initSize) {
+
+    Htab *ht = htab_init (initSize, NULL, NULL, NULL, NULL);
+    return ht;
+
+}
+
+// adds a new player to the score table
+u8 game_score_add_player (Htab *scores, char *playerName) {
+
+    if (scores && playerName) {
+        if (htab_contains_key (scores, playerName, sizeof (playerName))) {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Scores table already contains name: %s", playerName));
+            #endif
+            return 1;
+        }
+
+        else {
+            Htab *newHt = htab_init (4, NULL, NULL, NULL, NULL);
+            if (!htab_insert (scores, playerName, sizeof (playerName), newHt, sizeof (Htab)))
+                return 0;
+            else return 1;
+        }
+    }
+
+}
+
+// removes a player from the score table
+u8 game_score_remove_player (Htab *scores, char *playerName) {
+
+    if (scores && playerName) {
+        
+    }
+
+}
+
+// TODO:
+// sets a new score type, negative values not allowed
+void game_score_set (Htab *scores, char *playerName, char *scoreType, i32 value) {
+
+    if (scores && playerName && scoreType) {
+        size_t htab_size = sizeof (Htab);
+        void *playerScores = htab_getData (scores, playerName, sizeof (playerName), &htab_size);
+        if (playerScores) {
+            size_t int_size = sizeof (unsigned int);
+            void *currValue = htab_getData ((Htab *) playerScores, 
+                scoreType, sizeof (scoreType), &int_size);
+
+             // replaces an old value with the new one
+            if (value) {
+               
+            }
+
+            // score type not found, add the new field and set its value
+            else {
+
+            }
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Player: %s has not scores in the table!", playerName));
+            #endif
+            return -1;
+        }
+    }
+
+}
+
+// gets the value of the player's score type
+i32 game_score_get (Htab *scores, char *playerName, char *scoreType) {
+
+    if (scores && playerName && scoreType) {
+        size_t htab_size = sizeof (Htab);
+        void *playerScores = htab_getData (scores, playerName, sizeof (playerName), &htab_size);
+        if (playerScores) {
+            size_t int_size = sizeof (unsigned int);
+            void *value = htab_getData ((Htab *) playerScores, 
+                scoreType, sizeof (scoreType), &int_size);
+
+            if (value) {
+                u32 *retval = (u32 *) value;
+                return *retval;
+            }
+
+            else return -1;     // error
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Player: %s has not scores in the table!", playerName));
+            #endif
+            return -1;
+        }
+    }
+
+}
+
+// updates the value of the player's score type, clamped to 0
+void game_score_update (Htab *scores, char *playerName, char *scoreType, i32 value) {
+
+    if (scores && playerName && scoreType) {
+        size_t htab_size = sizeof (Htab);
+        void *playerScores = htab_getData (scores, playerName, sizeof (playerName), &htab_size);
+        if (playerScores) {
+            size_t int_size = sizeof (unsigned int);
+            void *currValue = htab_getData ((Htab *) playerScores, 
+                scoreType, sizeof (scoreType), &int_size);
+            
+            // directly update the score value adding the new value
+            if (value) {
+                u32 *current = (u32 *) currValue;
+                if ((*current += value) < 0) *current = 0;
+                else *current += value;
+            }
+
+            else return -1;     // error
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Player: %s has not scores in the table!", playerName));
+            #endif
+            return -1;
+        }
+    }
 
 }
 

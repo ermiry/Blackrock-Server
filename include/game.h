@@ -127,6 +127,17 @@ extern void gs_add_loadGameData (struct _Server *server, Func loadData);
 
 extern void gs_handlePacket (struct _PacketInfo *packet);
 
+/*** SCORES ***/
+
+#include "utils/htab.h"
+
+extern Htab *game_score_init (u8 initSize);
+extern u8 game_score_add_player (Htab *scores, char *playerName);
+extern u8 game_score_remove_player (Htab *scores, char *playerName);
+extern i32 game_score_get (Htab *scores, char *playerName, char *scoreType);
+extern void game_score_set (Htab *scores, char *playerName, char *scoreType, i32 value);
+extern void game_score_update (Htab *scores, char *playerName, char *scoreType, i32 value);
+
 /*** GAME PACKETS ***/
 
 // 04/11/2018 -- 21:29 - to handle requests from players inside the lobby
