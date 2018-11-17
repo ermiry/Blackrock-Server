@@ -122,6 +122,16 @@ typedef struct ServerLobby {
 
 /*** GAME SERVER FUNCTIONS ***/
 
+// 17/11/2018 -- aux structure for traversing a players tree
+typedef struct PlayerData {
+
+    void *playerData;
+    void *data;
+
+} PlayerData;
+
+extern void traversePlayers (AVLNode *node, Action action, void *data);
+
 extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
 extern void gs_add_loadGameData (struct _Server *server, Func loadData);
 
@@ -143,14 +153,19 @@ typedef struct ScoreBoard {
 } ScoreBoard;
 
 extern ScoreBoard *game_score_new (u8 playersNum, u8 scoresNum, ...);
-extern void game_score_reset (ScoreBoard *sb, char *playerName);
+extern void game_score_destroy (ScoreBoard *sb);
+
+extern void game_score_add_scoreType (ScoreBoard *sb, char *newScore);
+extern void game_score_add_lobby_players (ScoreBoard *sb, AVLNode *playerNode);
+extern u8 game_score_remove_scoreType (ScoreBoard *sb, char *oldScore);
 
 extern u8 game_score_add_player (ScoreBoard *sb, char *playerName);
 extern u8 game_score_remove_player (ScoreBoard *sb, char *playerName);
 
-extern i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType);
 extern void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i32 value);
+extern i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType);
 extern void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 value);
+extern void game_score_reset (ScoreBoard *sb, char *playerName);
 
 /*** GAME PACKETS ***/
 

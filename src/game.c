@@ -302,6 +302,21 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
 
 }
 
+void traversePlayers (AVLNode *node, Action action, void *data) {
+
+    if (node && action) {
+        traversePlayers (node->right, action, data);
+
+        if (node->id) {
+            PlayerData pd = { .playerData = node->id, .data = data };
+            func (&pd);
+        } 
+
+        traversePlayers (node->left, action, data);
+    }
+
+}
+
 // TODO:
 // this is used to clean disconnected players inside a lobby
 // if we haven't recieved any kind of input from a player, disconnect it 
@@ -986,6 +1001,8 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 // 15/11/2018 - starting to implement a easy to use score manager for any popouse game
 // implementing a C# Dictionary <string, Dictionary <string, int>> using hastables
 
+// FIXME: 17/11/2018 -- we need a way of retrieving the scores in order!!
+
 #pragma region SCORE 
 
 // 16/11/2018 -- we can now create a scoreboard and pass variable num of score types
@@ -1149,6 +1166,21 @@ u8 game_score_add_player (ScoreBoard *sb, char *playerName) {
     }
 
     return 1;
+
+}
+
+// FIXME: how do we get the player name?? the server is not interested in knowing a playe's name
+// inside his player structure, it is the admin reponsability to determine how to get 
+// the player's name
+void game_score_add_lobby_players (ScoreBoard *sb, AVLNode *playerNode) {
+
+    if (sb && playerNode) {
+        game_score_add_lobby_players (sb, playerNode->right);
+
+        // if (playerNode->id) game_score_add_player (sb, ((Player *) playerNode->id));
+
+        game_score_add_lobby_players (sb, playerNode->left);
+    }
 
 }
 

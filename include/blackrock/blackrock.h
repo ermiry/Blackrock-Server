@@ -138,6 +138,20 @@ typedef struct World {
 
 } World;
 
+typedef struct BrGameData {
+
+    World *world;
+
+    List *enemyData;    // reference to a global list of enemy data
+
+    ScoreBoard *sb;
+
+} BrGameData;
+
+// TODO: maybe add an assist value, just to give some variety
+// blackrock keeps track of 3 score types -> kills, deaths, score
+#define BR_SCORES_NUM      3
+
 /*** BLACKROCK PUBLIC FUNCTIONS ***/
 
 extern u8 blackrock_start_arcade (void *data);

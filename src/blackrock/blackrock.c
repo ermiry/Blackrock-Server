@@ -217,19 +217,6 @@ u8 blackrock_loadGameData (void) {
 // TODO: how do we want to keep track of scores?
     // maybe a dictionary like quill18 or probably just an entry iniside each player?
 
-typedef struct BrGameData {
-
-    World *world;
-
-    // TODO: do we want this to be a global data?
-    List *enemyData;
-
-    // TODO: scores
-
-} BrGameData;
-
-// TODO: create a destroy game data function
-
 World *newWolrd (void) {
 
     World *world = (World *) malloc (sizeof (World));
@@ -241,17 +228,27 @@ World *newWolrd (void) {
 
 }
 
-// FIXME: pass an enemy data destroy function
+// TODO: we will only have an enemy data, so do we just have this pointing to that list?
 // does each world needs to have its own enemy data structure?
 BrGameData *newBrGameData (void) {
 
     BrGameData *brdata = (BrGameData *) malloc (sizeof (BrGameData));
     if (brdata) {
         brdata->world = newWolrd ();
-        brdata->enemyData = initList (free);
+        brdata->enemyData = NULL;
+        brdata->sb = NULL;
     }
 
     return brdata;
+
+}
+
+// FIXME:
+BrGameData *deleteBrGameData (BrGameData *brdata) {
+
+    if (brdata) {
+
+    }
 
 }
 
@@ -267,13 +264,23 @@ BrGameData *newBrGameData (void) {
  * - track items positions
  * ***/
 
-// FIXME: init game data structures 
-u8 initGameData (BrGameData *brdata) {
+// init game data structures 
+u8 initGameData (BrGameData *brdata, Lobby *lobby) {
 
-    // init game data 
-    // init structures of what we need to keep track of
     if (brdata) {
+        if (enemyData) brdata->enemyData = enemyData;
+        else {
+            logMsg (stdout, WARNING, GAME, "NULL reference to enemy data list. Creating a new one.");
+            // TODO: init enmy data list
+        }
 
+        // add players to the scoreboard
+        if (!brdata->sb) brdata->sb = game_score_new (lobby->players_nfds, 
+            BR_SCORES_NUM, "kills", "deaths", "score");
+        
+        // FIXME:
+        // this already sets the initial scores to 0
+        game_score_add_lobby_players (brdata->sb, lobby->players->root);
     }
 
     else {
@@ -402,7 +409,7 @@ u8 blackrock_start_arcade (void *data) {
 
     sl->lobby->gameData = brdata;
 
-    if (!initGameData (brdata)) {
+    if (!initGameData (brdata, sl->lobby)) {
         if (!initWorld (sl->lobby->players->root, brdata->world)) {
             // FIXME: before this, when the owner started the game, 
             // we need to sync all of the players and they should be waiting
