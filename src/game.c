@@ -1017,29 +1017,6 @@ ScoreBoard *game_score_new (u8 playersNum, u8 scoresNum, ...) {
 
 }
 
-// TODO:
-// reset all the player's scores
-void game_score_reset (ScoreBoard *sb, char *playerName) {
-
-    if (sb && playerName) {
-        if (htab_contains_key (sb->scores, playerName, sizeof (playerName))) {
-            for (int i = 0; i < sb->scoresNum; i++) {
-                
-            }
-        }
-
-        else {
-            #ifdef DEBUG
-            logMsg (stderr, ERROR, GAME, 
-                createString ("Scores table already contains player: %s", playerName));
-            #endif
-        }
-    }
-
-    return 1;   // error
-
-}
-
 // destroy the scoreboard
 void game_score_destroy (ScoreBoard *sb) {
 
@@ -1054,13 +1031,91 @@ void game_score_destroy (ScoreBoard *sb) {
 
 }
 
-// TODO:
+// FIXME:
 // add a new score type to all current players
-void game_score_add_scoreType (ScoreBoard *sb, char *newScore) {}
+void game_score_add_scoreType (ScoreBoard *sb, char *newScore) {
 
-// TODO:
+    if (sb && newScore) {
+        // first check if we have that score type
+        bool found = false;
+        for (int i = 0; i < sb->scoresNum; i++) {
+            if (!strcmp (sb->scoreTypes[i], newScore)) {
+                found = true;
+                break;
+            }
+        }
+
+        if (found) {
+            // add the new score to all the players
+            // FIXME:
+
+            // add the score to the scoretypes
+            sb->scores = (char **) realloc (sb->scores, sb->scoresNum);
+            if (sb->scores) {
+                sb->scoreTypes[sb->scoresNum] = (char *) calloc (strlen (newScore) + 1, sizeof (char));
+                strcpy (sb->scoreTypes[sb->scoresNum], newScore);
+                sb->scoresNum++;
+            } 
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                "Can't add score type! It already exists in the scoreboard.");
+            #endif
+        }
+    }
+
+}
+
+// FIXME:
 // remove a score type from all current players
-void game_score_remove_scoreType (ScoreBoard *sb, char *oldScore) {}
+u8 game_score_remove_scoreType (ScoreBoard *sb, char *oldScore) {
+
+    if (sb && oldScore) {
+        // first check if we have that score type
+        int found = -1;
+        for (int i = 0; i < sb->scoresNum; i++) {
+            if (!strcmp (sb->scoreTypes[i], oldScore)) {
+                found = i;
+                break;
+            }
+        }
+
+        if (found > 0) {
+            // remove the score from all the players
+            // FIXME:
+
+            // manually copy old scores array and delete it
+            // this is done because we allocate exat space for each score type!
+            char **new_scoreTypes = (char **) calloc (sb->scoresNum - 1, sizeof (char *));
+            int i = 0;
+            while (i < found) {
+                new_scoreTypes[i] = (char *) calloc (strlen (sb->scoreTypes[i]) + 1, sizeof (char));
+                strcpy (new_scoreTypes[i], sb->scoreTypes[i]);
+                i++;
+            }
+
+            for (i = found + 1; i < sb->scoresNum; i++) {
+                new_scoreTypes[i - 1] = (char *) calloc (strlen (sb->scoreTypes[i]) + 1, sizeof (char));
+                strcpy (new_scoreTypes[i - 1], sb->scoreTypes[i]);
+            }
+
+            sb->scoresNum--;
+
+            return 0;
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Can't remove %s scoretype, doesn't exist in the scoreboard!"));
+            #endif
+            return 1;
+        }
+    }
+
+}
 
 // adds a new player to the score table
 u8 game_score_add_player (ScoreBoard *sb, char *playerName) {
@@ -1080,7 +1135,7 @@ u8 game_score_add_player (ScoreBoard *sb, char *playerName) {
             if (newHt) {
                 if (!htab_insert (sb->scores, playerName, sizeof (playerName), newHt, sizeof (Htab))) {
                     // insert each score type in the player's dictionary
-                    int zero = 0;
+                    u32 zero = 0;
                     for (int i = 0; i < sb->scoresNum; i++) 
                         htab_insert (newHt, sb->scoreTypes[i], 
                             sizeof (sb->scoreTypes[i]), &zero, sizeof (int));
@@ -1212,6 +1267,39 @@ void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 v
     }
 
     return -1;  // error
+
+}
+
+// reset all the player's scores
+void game_score_reset (ScoreBoard *sb, char *playerName) {
+
+    if (sb && playerName) {
+        size_t htab_size = sizeof (Htab);
+        void *data = htab_getData (sb->scores, playerName, sizeof (playerName), &htab_size);
+        if (data) {
+            Htab *playerScores = (Htab *) data;
+            void *scoreData = NULL;
+            size_t score_size = sizeof (u32);
+            for (int i = 0; i < sb->scoresNum; i++) {
+                scoreData = htab_getData (playerScores, 
+                    sb->scoreTypes[i], sizeof (sb->scoreTypes[i]), &score_size);
+
+                if (scoreData) {
+                    u32 *current = (u32 *) scoreData;
+                    *current = 0;
+                }
+            }
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Scores table already contains player: %s", playerName));
+            #endif
+        }
+    }
+
+    return 1;   // error
 
 }
 
