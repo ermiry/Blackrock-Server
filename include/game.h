@@ -130,6 +130,8 @@ typedef struct PlayerData {
 
 } PlayerData;
 
+extern void broadcastToAllPlayers (AVLNode *playerNode, struct _Server *server,
+	void *packet, size_t packetSize);
 extern void traversePlayers (AVLNode *node, Action action, void *data);
 
 extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);

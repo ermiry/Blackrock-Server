@@ -1803,7 +1803,7 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
                     }
 
                     // upon success, we expect the start game func to send the packages
-                    // game starts on its new thread, so we just return
+                    // we start the game on the new thread
                 }
 
                 else {

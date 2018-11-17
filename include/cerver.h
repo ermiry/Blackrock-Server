@@ -285,7 +285,8 @@ typedef enum RequestType {
     LOBBY_UPDATE,
     LOBBY_DESTROY,
 
-    GAME_START,
+    GAME_INIT,      // prepares the game structures
+    GAME_START,     // strat running the game
     GAME_INPUT_UPDATE,
     GAME_SEND_MSG,
 

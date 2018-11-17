@@ -9,6 +9,7 @@
 #include <sqlite3.h>
 
 #include "game.h"           // game server
+#include "utils/thpool.h"
 #include "utils/avl.h"
 
 #include "utils/myUtils.h"
@@ -382,15 +383,9 @@ u8 initWorld (AVLNode *players, World *world) {
     
 }
 
-// FIXME: support a retry function -> we don't need to generate this things again!
-    // first init the in game structures
-
-// TODO: make sure that all the players inside the lobby are in sync before starting the game!!!
-// this is called from by the owner of the lobby
-
 // the game admin should set this function to init the desired game type
 // 14/11/2018 - we make use of the cerver framework to create the multiplayer for our game
-u8 blackrock_start_arcade (void *data) {
+u8 blackrock_init_arcade (void *data) {
 
     if (!data) {
         logMsg (stderr, ERROR, GAME, "No sl data recieved! Failed to init a new game.");
@@ -411,37 +406,28 @@ u8 blackrock_start_arcade (void *data) {
 
     if (!initGameData (brdata, sl->lobby)) {
         if (!initWorld (sl->lobby->players->root, brdata->world)) {
-            // FIXME: before this, when the owner started the game, 
-            // we need to sync all of the players and they should be waiting
-            // for our game init packets
+            // we need to sync all of the players -> send them the game data from which
+            // they should generate their own game
+            // FIXME: send all the game data 
+            size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+            void *initPacket = generatePacket (GAME_PACKET, packetSize);
+            char *end = initPacket + sizeof (PacketHeader); 
+            RequestData *reqdata = (RequestData *) end;
+            reqdata->type = GAME_INIT;
 
-            // the server data structures have been generated,
-            // now we can send the players our world data so that they
-            // can generate their own world
+            broadcastToAllPlayers (sl->lobby->players->root, sl->server, initPacket, packetSize);
 
             // after we have sent the game data, we need to wait until all the
             // players have generated their own levels and we need to be sure
             // they are on sync
-
-            // FIXME: send messages to the client log
-            // TODO: add different texts here!!
-            // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
+            // FIXME: be sure that all the players are on the same page
 
             // if all goes well, we can now start the new game, so we signal the players
             // to start their game and start sending and recieving packets
+            void blackrock_update_arcade (void *data);
+            thpool_add_work (sl->server->thpool, (void *) blackrock_update_arcade, brdata);
 
-            #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
-            #endif
-
-            // init the game
-            // start calculating pathfinding
-            // sync fov of all players
-            // sync player data like health
-            // keep track of players score
-            // sync players movement
-
-            // FIXME: we need to return 0 to mark as a success!!
+            return 0;   // we return and the new game should start in a separte thread
         }
 
         else {
@@ -457,10 +443,39 @@ u8 blackrock_start_arcade (void *data) {
 
 }
 
+// TODO: 
+// we don't need to init all the structures like in the start game
+u8 blackrock_retry_arcade (void *data) {}
+
 #pragma endregion
 
 /*** RUNNING GAME ***/
 
 #pragma region BLACKROCK GAME
+
+// FIXME:
+void blackrock_update_arcade (void *data) {
+
+    // FIXME:
+    // send a packet to the players to init their game
+    // so that they can start sending and recieving packets!
+
+    // FIXME: send messages to the client log
+    // TODO: add different texts here!!
+    // TODO: this should go inside the packet above
+    // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
+
+    #ifdef DEBUG
+        logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
+    #endif
+
+    // TODO: start the game -> this should be similar to the update game in blackrcok client
+    // start calculating pathfinding
+    // sync fov of all players
+    // sync player data like health
+    // keep track of players score
+    // sync players movement
+
+}
 
 #pragma endregion
