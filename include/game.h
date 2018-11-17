@@ -142,7 +142,8 @@ typedef struct ScoreBoard {
 
 } ScoreBoard;
 
-extern Htab *game_score_new (u8 initSize);
+extern ScoreBoard *game_score_new (u8 playersNum, u8 scoresNum, ...);
+extern void game_score_reset (ScoreBoard *sb, char *playerName);
 
 extern u8 game_score_add_player (ScoreBoard *sb, char *playerName);
 extern u8 game_score_remove_player (ScoreBoard *sb, char *playerName);

@@ -75,7 +75,7 @@ Htab *htab_init (int table_size, Hash hash_f, Compare compare_f, Copy kcopy_f,
         ht->count = 0;
 
         ht->size = table_size <= 0 ? HTAB_INIT_SIZE : table_size;
-        ht->table = (HtabNode **) calloc (sizeof(HtabNode *), ht->size);
+        ht->table = (HtabNode **) calloc (ht->size, sizeof (HtabNode *));
 
         for (size_t i = 0; i < ht->size; ++i) ht->table[i] = NULL;
     }
@@ -244,22 +244,49 @@ int htab_remove (Htab *ht, const void *key, size_t key_size) {
 
 int htab_cleanup (Htab *ht) {
 
-    HtabNode *node = NULL;
+    if (ht) {
+        HtabNode *node = NULL;
 
-    if (!ht->table || !ht->size) return -1;
+        if (!ht->table || !ht->size) return 1;
 
-    for (size_t i = 0; i < ht->size; ++i) {
-        if (ht->table[i]) {
-            node = ht->table[i];
-            while (node) {
-                if (node->key) free (node->key);
-                if (node->val) free (node->val);
+        for (size_t i = 0; i < ht->size; ++i) {
+            if (ht->table[i]) {
+                node = ht->table[i];
+                while (node) {
+                    if (node->key) free (node->key);
+                    if (node->val) free (node->val);
 
-                node = node->next;
+                    node = node->next;
+                }
             }
         }
+
+        return 0;
     }
 
-    return 0;
+    else return 1;
+
+}
+
+void htab_destroy (Htab *ht) {
+
+    if (ht) {
+        HtabNode *node = NULL;
+        for (size_t i = 0; i < ht->size; i++) {
+            if (ht->table[i]) {
+                node = ht->table[i];
+                while (node) {
+                    if (node->key) free (node->key);
+                    if (node->val) free (node->val);
+
+                    node = node->next;
+                }
+
+                free (node);
+            }
+        }
+
+        free (ht);
+    }
 
 }

@@ -1018,16 +1018,48 @@ ScoreBoard *game_score_new (u8 playersNum, u8 scoresNum, ...) {
 }
 
 // TODO:
-// for each player and score type, reset the values to 0
-void game_score_reset (ScoreBoard *sb) {}
+// reset all the player's scores
+void game_score_reset (ScoreBoard *sb, char *playerName) {
 
-// TODO: destroy the scoreboard
-void game_score_destroy (ScoreBoard *sb) {}
+    if (sb && playerName) {
+        if (htab_contains_key (sb->scores, playerName, sizeof (playerName))) {
+            for (int i = 0; i < sb->scoresNum; i++) {
+                
+            }
+        }
+
+        else {
+            #ifdef DEBUG
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Scores table already contains player: %s", playerName));
+            #endif
+        }
+    }
+
+    return 1;   // error
+
+}
+
+// destroy the scoreboard
+void game_score_destroy (ScoreBoard *sb) {
+
+    if (sb) {
+        if (sb->scores) htab_destroy (sb->scores);
+        if (sb->scoreTypes) {
+            for (int i = 0; i < sb->scoresNum; i++) 
+                if (sb->scoreTypes[i]) free (sb->scoreTypes[i]);
+            
+        }
+    }
+
+}
 
 // TODO:
+// add a new score type to all current players
 void game_score_add_scoreType (ScoreBoard *sb, char *newScore) {}
 
 // TODO:
+// remove a score type from all current players
 void game_score_remove_scoreType (ScoreBoard *sb, char *oldScore) {}
 
 // adds a new player to the score table
@@ -1057,15 +1089,11 @@ u8 game_score_add_player (ScoreBoard *sb, char *playerName) {
 
                     return 0;   // success adding new player and its scores
                 }
-
-                else return 1;
             }
-
-            else return 1;
         }
     }
 
-    else return 1;
+    return 1;
 
 }
 
@@ -1074,7 +1102,15 @@ u8 game_score_remove_player (ScoreBoard *sb, char *playerName) {
 
     if (sb && playerName) {
         if (htab_contains_key (sb->scores, playerName, sizeof (playerName))) {
-            // TODO: remove the player and player's scores
+            size_t htab_size = sizeof (Htab);
+            void *htab = htab_getData (sb->scores, playerName, sizeof (playerName), &htab_size);
+            
+            // destroy player's scores htab
+            if (htab) htab_destroy ((Htab *) htab);
+
+            // remove th player from the scoreboard
+            htab_remove (sb->scores, playerName, sizeof (playerName));
+
             sb->registeredPlayers--;
         }
 
@@ -1083,16 +1119,14 @@ u8 game_score_remove_player (ScoreBoard *sb, char *playerName) {
             logMsg (stderr, ERROR, GAME, 
                 createString ("Scores table doesn't contains player: %s", playerName));
             #endif
-            return 1;
         }
     }
 
-    else return 1;
+    return 1;   // error
 
 }
 
-// TODO:
-// sets a new score type, negative values not allowed
+// sets the score's value, negative values not allowed
 void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i32 value) {
 
     if (sb && playerName && scoreType) {
@@ -1103,14 +1137,11 @@ void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i32 valu
             void *currValue = htab_getData ((Htab *) playerScores, 
                 scoreType, sizeof (scoreType), &int_size);
 
-             // replaces an old value with the new one
-            if (value) {
-               
-            }
-
-            // score type not found, add the new field and set its value
-            else {
-
+            // replace the old value with the new one
+            if (currValue) {
+                u32 *current = (u32 *) currValue;
+                if (value > 0) *current = value;
+                else *current = 0;
             }
         }
 
@@ -1119,14 +1150,8 @@ void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i32 valu
             logMsg (stderr, ERROR, GAME, 
                 createString ("Player: %s has not scores in the table!", playerName));
             #endif
-            return -1;
         }
     }
-
-}
-
-// TODO: removes a score type from the table
-void game_score_remove (ScoreBoard *sb, char *playerName, char *scoreType) {
 
 }
 
@@ -1145,8 +1170,6 @@ i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType) {
                 u32 *retval = (u32 *) value;
                 return *retval;
             }
-
-            else return -1;     // error
         }
 
         else {
@@ -1154,11 +1177,10 @@ i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType) {
             logMsg (stderr, ERROR, GAME, 
                 createString ("Player: %s has not scores in the table!", playerName));
             #endif
-            return -1;
         }
     }
 
-    else return -1;
+    return -1;  // error
 
 }
 
@@ -1179,8 +1201,6 @@ void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 v
                 if ((*current += value) < 0) *current = 0;
                 else *current += value;
             }
-
-            else return -1;     // error
         }
 
         else {
@@ -1188,9 +1208,10 @@ void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 v
             logMsg (stderr, ERROR, GAME, 
                 createString ("Player: %s has not scores in the table!", playerName));
             #endif
-            return -1;
         }
     }
+
+    return -1;  // error
 
 }
 
