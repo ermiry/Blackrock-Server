@@ -328,7 +328,6 @@ void generateLevel (World *world) {
 }
 
 // 15/11/2018 -- we spawn the players in the same position
-// TODO: maybe create a function that can traverse the avl and just call the function?
 void spawnPlayers (AVLNode *node, Point playerSpawnPos) {
 
      if (node) {

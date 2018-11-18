@@ -123,12 +123,12 @@ typedef struct ServerLobby {
 /*** GAME SERVER FUNCTIONS ***/
 
 // 17/11/2018 -- aux structure for traversing a players tree
-typedef struct PlayerData {
+typedef struct PlayerAndData {
 
     void *playerData;
     void *data;
 
-} PlayerData;
+} PlayerAndData;
 
 extern void broadcastToAllPlayers (AVLNode *playerNode, struct _Server *server,
 	void *packet, size_t packetSize);

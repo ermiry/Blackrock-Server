@@ -353,6 +353,50 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
 
 }
 
+void *generateServerInfoPacket (Server *server) {
+
+    if (server) {
+        size_t packetSize = sizeof (PacketHeader) + sizeof (SServer);
+        void *packet = generatePacket (SERVER_PACKET, packetSize);
+        if (packet) {
+            char *end = packet + sizeof (PacketHeader);
+            SServer *sinfo = (SServer *) end;
+            sinfo->authRequired = server->authRequired;
+            sinfo->isRunning = server->isRunning;
+            sinfo->port = server->port;
+            sinfo->protocol = server->protocol;
+            sinfo->type = server->type;
+            sinfo->useIpv6 = server->useIpv6;
+
+            return packet;
+        }
+    }
+
+    return NULL;
+
+}
+
+// 17/11/2018 - send useful server info to the client
+void sendServerInfo (Server *server, Client *client) {
+
+    if (server && client) {
+        if (server->serverInfo) {
+            size_t packetSize = sizeof (PacketHeader) + sizeof (SServer);
+
+            server->protocol == IPPROTO_TCP ? 
+            tcp_sendPacket (client->clientSock, server->serverInfo, packetSize, 0) :
+            udp_sendPacket (server, server->serverInfo, packetSize, client->address);
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            logMsg (stdout, ERROR, SERVER, "No server info to send to client!");
+            #endif
+        } 
+    }
+
+}
+
 #pragma endregion
 
 /*** CLIENTS ***/
@@ -908,6 +952,10 @@ u8 serverPoll (Server *server) {
                     if (newfd < 0)
                         if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
 
+                    // 17/11/2018 - send useful server info to the client
+                    // TODO: this migth not apply on a web server
+                    sendServerInfo (server, client);
+
                     // hold the client until he authenticates
                     if (server->authRequired) {
                         client = newClient (server, newfd, clientAddress, true);
@@ -1031,6 +1079,8 @@ void initServerValues (Server *server, ServerType type) {
         server->auth.reqAuthPacket = NULL;
         server->auth.authPacketSize = 0;
     }
+
+    server->serverInfo = generateServerInfoPacket (server);
 
     switch (type) {
         case FILE_SERVER: break;

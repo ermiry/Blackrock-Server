@@ -174,6 +174,9 @@ struct _Server {
     // 04/11/2018 -- 23:04 -- including a th pool inside each server
     threadpool thpool;
 
+    // 17/11/2018 -- useful info that we can send to clients
+    void *serverInfo;   
+
 };
 
 typedef struct _Server Server;
@@ -250,6 +253,7 @@ extern Version PROTOCOL_VERSION;
 // 01/11/2018 -- this indicates what type of packet we are sending/recieving
 typedef enum PacketType {
 
+    SERVER_PACKET = 0,
     ERROR_PACKET = 1,
 	REQUEST,
     AUTHENTICATION,
@@ -337,6 +341,8 @@ extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char 
 
 /*** GAME SERVER ***/
 
+#pragma region GAME SERVER
+
 struct _GameSettings;
 struct _Lobby;
 
@@ -349,11 +355,28 @@ extern void destroyGameServer (void *data);
 
 extern void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize); 
 
+#pragma endregion
 
 /*** SERIALIZATION ***/
 
+#pragma region SERIALIZATION
+
 // 24/10/2018 -- lets try how this works --> our goal with serialization is to send 
 // a packet without our data structures but whitout any ptrs
+
+// 17/11/2018 - send useful server info to the client trying to connect
+typedef struct SServer {
+
+    u8 useIpv6;  
+    u8 protocol;            // we only support either tcp or udp
+    u16 port; 
+
+    bool isRunning;         // the server is recieving and/or sending packets
+
+    ServerType type;
+    bool authRequired;      // authentication required by the server
+
+} SServer;
 
 typedef struct SLobby {
 
@@ -372,5 +395,7 @@ typedef struct DefAuthData {
     u32 code;
 
 } DefAuthData;
+
+#pragma endregion
 
 #endif

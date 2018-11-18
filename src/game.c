@@ -308,7 +308,7 @@ void traversePlayers (AVLNode *node, Action action, void *data) {
         traversePlayers (node->right, action, data);
 
         if (node->id) {
-            PlayerData pd = { .playerData = node->id, .data = data };
+            PlayerAndData pd = { .playerData = node->id, .data = data };
             func (&pd);
         } 
 
