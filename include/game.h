@@ -130,6 +130,9 @@ typedef struct PlayerAndData {
 
 } PlayerAndData;
 
+extern u8 game_initPlayers (GameServerData *gameData, u8 n_players);
+extern u8 game_initLobbys (GameServerData *gameData, u8 n_lobbys);
+
 extern void broadcastToAllPlayers (AVLNode *playerNode, struct _Server *server,
 	void *packet, size_t packetSize);
 extern void traversePlayers (AVLNode *node, Action action, void *data);

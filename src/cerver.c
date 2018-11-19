@@ -1563,18 +1563,96 @@ u8 cerver_shutdownServer (Server *server) {
 
 // FIXME: what happens with the current lobbys or on going games??
 
+struct _GameServerData {
+
+    Config *gameSettingsConfig;     // stores game modes info
+
+    Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
+    List *currentLobbys;    // a list of the current lobbys
+
+    Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
+    // List *players;           // players connected to the server, but outside a lobby -> 24/10/2018
+    AVLTree *players;
+
+    // 14/11/2018 - we can define a function to load game data at start, 
+    // for example to connect to a db or something like that
+    Func loadGameData;
+    Func deleteGameData;
+
+    // 13//11/2018 -- depending on the game type, we can have different init game functions
+    u8 n_gameInits;
+    delegate *gameInitFuncs;
+
+    // TODO: 13/11/2018 - do we also need separte functions to handle the game stop?
+
+};
+
 // FIXME: !!!!!!
 // TODO: do we want this here? or in the game src file?
 // cleans up all the game structs like lobbys and in game structures like maps
 // if there are players connected, it sends a req to disconnect 
-void destroyGameServer (void *data) {
+u8 destroyGameServer (Server *server) {
 
-    if (!data) return;      // just to be save
+    if (server) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (gameData) {
+            // send server destroy packet to all the players
+            size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+            void *packet = generatePacket (SERVER_PACKET, packetSize);
+            if (packet) {
+                char *end = packet + sizeof (PacketHeader);
+                RequestData *req = (RequestData *) end;
+                req->type = SERVER_TEARDOWN;
 
-    Server *server = (Server *) data;
-    GameServerData *gameData = (GameServerData *) server->serverData;
+                // send the packet to players outside the lobby
+                broadcastToAllPlayers (gameData->players->root, server, packet, packetSize);
 
-    // FIXME: clean on going games
+                // send the packets to all players inside a lobby
+                Lobby *lobby = NULL;
+                for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
+                    lobby = (Lobby *) e->data;
+                    if (lobby) 
+                        if (lobby->players) 
+                            broadcastToAllPlayers (lobby->players->root, server, packet, packetSize);
+                    
+                }
+
+                free (packet);
+            }
+
+            else logMsg (stderr, ERROR, PACKET, "Failed to create server teardown packet!");
+
+            // disconnect all players from the server
+                // -> close connections -> take them out of server poll structures
+
+            // end any on going game inside the lobbys
+
+            // destroy all lobbys
+
+            // destroy players
+            if (gameData->players) avl_clearTree (&gameData->players->root, )
+
+            // destroy game specific data set by the game admin
+            if (gameData->deleteGameData) gameData->deleteGameData ();
+
+            // remove any other data or values in the game server...
+            gameData->loadGameData = NULL;
+            gameData->deleteGameData = NULL;
+
+            free (gameData);
+
+            return 0;
+        }
+
+        else logMsg (stderr, ERROR, SERVER, "Game server doesn't have a reference to game data!");
+    }
+
+    else logMsg (stderr, ERROR, SERVER, "Can't destroy a NULL game server!");
+
+    return 1;
+
+    
+
     // clean any on going game...
     if (LIST_SIZE (gameData->currentLobbys) > 0) {
         Lobby *lobby = NULL;

@@ -168,26 +168,55 @@ void deletePlayer (void *data) {
 
 }
 
-// FIXME: players
+// comparator for players's avl tree
+int playerComparator (const void *a, const void *b) {
+
+    if (a && b) {
+        Player *player_a = (Player *) a;
+        Player *player_b = (Player *) b;
+
+        if (player_a->client->clientSock > player_b->client->clientSock) return 1;
+        else if (player_a->client->clientSock == player_b->client->clientSock) return 0;
+        else return -1;
+    }
+
+}
+
 // inits the players server's structures
-void game_initPlayers (GameServerData *gameData, u8 n_players) {
+u8 game_initPlayers (GameServerData *gameData, u8 n_players) {
 
     if (!gameData) {
         logMsg (stderr, ERROR, SERVER, "Can't init players in a NULL game data!");
-        return;
+        return 1;
     }
 
-    // if (gameData->players) logMsg (stdout, WARNING, SERVER, "The server has already a list of players.");
-    // else gameData->players = initList (deletePlayer);
+    if (gameData->players)
+        logMsg (stdout, WARNING, SERVER, "The server already has an avl of players!");
+    else {
+        gameData->players = avl_init (playerComparator, deletePlayer);
+        if (!gameData->players) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to init server's players avl!");
+            return 1;
+        }
+    } 
 
-    if (gameData->playersPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of players.");
-    else gameData->playersPool = pool_init (deletePlayer);
+    if (gameData->playersPool)  
+        logMsg (stdout, WARNING, SERVER, "The server already has a pool of players.");
+    else {
+        gameData->playersPool = pool_init (deletePlayer);
+        if (!gameData->playersPool) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to init server's players pool!");
+            return 1;
+        }
+    } 
 
     for (u8 i = 0; i < n_players; i++) pool_push (gameData->playersPool, malloc (sizeof (Player)));
 
     #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Players have been init in the game server.");
+        logMsg (stdout, DEBUG_MSG, GAME, "Players have been init in the game server.");
     #endif
+
+    return 0;
 
 }
 
@@ -258,20 +287,6 @@ u8 player_removeFromLobby (GameServerData *gameData, Lobby *lobby, Player *playe
     }
 
     return 1;
-
-}
-
-// comparator for players's avl tree
-int playerComparator (const void *a, const void *b) {
-
-    if (a && b) {
-        Player *player_a = (Player *) a;
-        Player *player_b = (Player *) b;
-
-        if (player_a->client->clientSock > player_b->client->clientSock) return 1;
-        else if (player_a->client->clientSock == player_b->client->clientSock) return 0;
-        else return -1;
-    }
 
 }
 
@@ -514,8 +529,7 @@ Lobby *newLobby (Server *server) {
 
 }
 
-// FIXME: !!!!!
-// FIXME: clear the world
+// FIXME: clear the specific lobby game data set by the admin!
 // deletes a lobby for ever -- called when we teardown the server
 // we do not need to give any feedback to the players if there is any inside
 void deleteLobby (void *data) {
@@ -552,24 +566,40 @@ void deleteLobby (void *data) {
 
 // create a list to manage the server lobbys
 // called when we init the game server
-void game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
+u8 game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
 
     if (!gameData) {
         logMsg (stderr, ERROR, SERVER, "Can't init lobbys in a NULL game data!");
-        return;
+        return 1;
     }
 
-    if (gameData->currentLobbys) logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
-    else gameData->currentLobbys = initList (deleteLobby);
+    if (gameData->currentLobbys) 
+        logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
+    else {
+        gameData->currentLobbys = initList (deleteLobby);
+        if (!gameData->currentLobbys) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to init server's lobby list!");
+            return 1;
+        }
+    }
 
-    if (gameData->lobbyPool)  logMsg (stdout, WARNING, SERVER, "The server has already a pool of lobbys.");
-    else gameData->lobbyPool = pool_init (deleteLobby);
-
+    if (gameData->lobbyPool) 
+        logMsg (stdout, WARNING, SERVER, "The server has already a pool of lobbys.");
+    else {
+        gameData->lobbyPool = pool_init (deleteLobby);
+        if (!gameData->lobbyPool) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to init server's lobby pool!");
+            return 1;
+        }
+    }
+    
     for (u8 i = 0; i < n_lobbys; i++) pool_push (gameData->lobbyPool, malloc (sizeof (Lobby)));
 
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "Lobbys have been init in the game server.");
     #endif
+
+    return 0;
 
 }
 
@@ -711,6 +741,7 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
 
 }
 
+// FIXME: 19/11/2018 - 14:51 - where do we want to destroy the lobby?
 // only the owner of the lobby can destroy the lobby
 // a lobby should only be destroyed when there are no players left or if we teardown the server
 u8 destroyLobby (Server *server, Lobby *lobby) {
@@ -740,6 +771,7 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
         return 1;
     } 
 
+    // FIXME:
     if (lobby->players_nfds > 0) {
         // send the players the correct package so they can handle their logic
         // expected player behaivor -> leave the lobby 
@@ -872,15 +904,17 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         return 1;
     }
 
+    // FIXME: remove the player from the server's players
     // FIXME: remove the players from the previous poll fd structure!!
     // the player is clear to join the lobby...
     // move the player from the server's players to the in lobby players
     GameServerData *gameData = (GameServerData *) server->serverData;
     // tempPlayer = dllist_getPlayerById (gameData->players, player->id);
-    if (!tempPlayer) {
-        logMsg (stderr, ERROR, GAME, "A player wan't found in the current player -- join lobby");
-        return 1;
-    }
+    // FIXME:
+    // if (!tempPlayer) {
+    //     logMsg (stderr, ERROR, GAME, "A player wasn't found in the current server -- join lobby");
+    //     return 1;
+    // }
 
     // FIXME: be sure to send the correct player ptr
     if (!player_addToLobby (lobby, tempPlayer)) {

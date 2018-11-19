@@ -261,8 +261,6 @@ typedef enum PacketType {
     AUTHENTICATION,
     GAME_PACKET,
 
-    SERVER_TEARDOWN,    // FIXME: create a better packet type for server functions
-
     TEST_PACKET = 100,
     DONT_CHECK_TYPE,
 
@@ -280,7 +278,11 @@ typedef struct PacketHeader {
 // 01/11/2018 -- this indicates the data and more info about the packet type
 typedef enum RequestType {
 
-    REQ_GET_FILE = 1,
+    // FIXME: 19/11/2018 - 14:36 - make sure that the players handle this correctly!!
+    SERVER_INFO,
+    SERVER_TEARDOWN,
+
+    REQ_GET_FILE,
     POST_SEND_FILE,
     
     REQ_AUTH_CLIENT,
