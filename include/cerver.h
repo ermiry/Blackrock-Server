@@ -114,6 +114,8 @@ struct _GameServerData {
     Func loadGameData;
     Func deleteGameData;
 
+    delegate *deleteLobbyGameData;
+
     // 13//11/2018 -- depending on the game type, we can have different init game functions
     u8 n_gameInits;
     delegate *gameInitFuncs;
@@ -182,11 +184,11 @@ struct _Server {
 
 typedef struct _Server Server;
 
-extern Server *cerver_createServer (Server *, ServerType, Action);
+extern Server *cerver_createServer (Server *, ServerType);
 
 extern u8 cerver_startServer (Server *);
 
-extern void cerver_shutdownServer (Server *);
+extern u8 cerver_shutdownServer (Server *);
 extern u8 cerver_teardown (Server *);
 extern Server *cerver_restartServer (Server *);
 

@@ -32,7 +32,7 @@ GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player,
 #pragma region GAME SERVER
 
 // add a function to load game data like from a db
-void gs_add_loadGameData (Server *server, Func loadData) {
+void gs_set_loadGameData (Server *server, Func loadData) {
 
     if (server) {
         if (server->type != GAME_SERVER) {
@@ -52,7 +52,7 @@ void gs_add_loadGameData (Server *server, Func loadData) {
 
 }
 
-void gs_add_deleteGameData (Server *server, Func deleteData) {
+void gs_set_deleteGameData (Server *server, Func deleteData) {
 
     if (server) {
         if (server->type != GAME_SERVER) {
@@ -106,6 +106,26 @@ void gs_add_gameInit (Server *server, GameType gameType, delegate gameInit) {
             gameData->gameInitFuncs[gameType] = gameInit;
             gameData->n_gameInits++;
         }
+    }
+
+}
+
+void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData) {
+
+     if (server) {
+        if (server->type != GAME_SERVER) {
+            logMsg (stderr, ERROR, SERVER, 
+                "Can't add a lobby delete game data func. Server of incorrect type.");
+            return;
+        }
+
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (!gameData) {
+            logMsg (stderr, ERROR, SERVER, "NULL game data in the game server!");
+            return;
+        }
+
+        gameData->deleteLobbyGameData = deleteData;
     }
 
 }
@@ -557,8 +577,6 @@ void deleteLobby (void *data) {
 
     // clear lobby data
     if (lobby->settings) free (lobby->settings);
-    // FIXME: is this a cerver function or a blackrock one??
-    // if (lobby->world) deleteWorld (world);   
 
     free (lobby); 
 

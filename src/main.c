@@ -40,14 +40,18 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
-    gameServer = cerver_createServer (NULL, GAME_SERVER, destroyGameServer);
+    gameServer = cerver_createServer (NULL, GAME_SERVER);
     if (gameServer) {
-        // set our own function to load blackrock data
-        gs_add_loadGameData (gameServer, blackrock_loadGameData);
-        gs_add_deleteGameData (gameServer, blackrock_deleteGameData);
+        // set our own functions to load and delete global game data
+        gs_set_loadGameData (gameServer, blackrock_loadGameData);
+        gs_set_deleteGameData (gameServer, blackrock_deleteGameData);
 
         // set blackrock arcade game init function
         gs_add_gameInit (gameServer, ARCADE, blackrock_init_arcade);
+
+        // set lobby game data destroy function, to delete our world and
+        // any other data that blackrock lobby uses
+        gs_set_lobbyDeleteGameData (gameServer, deleteBrGameData);
 
         if (!cerver_startServer (gameServer)) 
             logMsg (stdout, SUCCESS, SERVER, "Server started properly!");

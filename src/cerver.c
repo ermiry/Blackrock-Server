@@ -1048,7 +1048,7 @@ u8 serverPoll (Server *server) {
 const char welcome[64] = "Welcome to cerver!";
 
 // init server's data structures
-void initServerDS (Server *server, ServerType type) {
+u8 initServerDS (Server *server, ServerType type) {
 
     server->clients = avl_init (clientComparator, destroyClient);
     server->onHoldClients = avl_init (clientComparator, destroyClient);
@@ -1083,13 +1083,23 @@ void initServerDS (Server *server, ServerType type) {
             GameServerData *gameData = (GameServerData *) malloc (sizeof (GameServerData));
 
             // init the lobbys with n inactive in the pool
-            game_initLobbys (gameData, GS_LOBBY_POOL_INIT);
-            game_initPlayers (gameData, GS_PLAYER_POOL_INT);
+            
+            if (game_initLobbys (gameData, GS_LOBBY_POOL_INIT)) {
+                logMsg (stderr, ERROR, NO_TYPE, "Failed to init server lobbys!");
+                return 1;
+            }
+
+            if (game_initPlayers (gameData, GS_PLAYER_POOL_INT)) {
+                logMsg (stderr, ERROR, NO_TYPE, "Failed to init server players!");
+                return 1;
+            }
 
             server->serverData = gameData;
         } break;
         default: break;
     }
+
+    return 0;
 
 }
 
@@ -1343,7 +1353,11 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
         return 1;
     }   
 
-    initServerDS (server, type);
+    if (initServerDS (server, type))  {
+        logMsg (stderr, ERROR, NO_TYPE, "Failed to init server data structures!");
+        return 1;
+    }
+
     initServerValues (server, type);
     #ifdef CERVER_DEBUG
     logMsg (stdout, DEBUG_MSG, SERVER, "Done creating server data structures...");
@@ -1371,6 +1385,8 @@ Server *newServer (Server *server) {
         new->type = server->type;
     }
 
+    new->destroyServerData = NULL;
+
     // by default the socket is assumed to be a blocking socket
     new->blocking = true;
     
@@ -1380,13 +1396,12 @@ Server *newServer (Server *server) {
 
 }
 
-Server *cerver_createServer (Server *server, ServerType type, Action destroyServerData) {
+Server *cerver_createServer (Server *server, ServerType type) {
 
     // create a server with the requested parameters
     if (server) {
         Server *s = newServer (server);
         if (!initServer (s, NULL, type)) {
-            s->destroyServerData = destroyServerData;
             logMsg (stdout, SUCCESS, SERVER, "Created a new server!");
             return s;
         }
@@ -1409,7 +1424,6 @@ Server *cerver_createServer (Server *server, ServerType type, Action destroyServ
         else {
             Server *s = newServer (NULL);
             if (!initServer (s, serverConfig, type)) {
-                s->destroyServerData = destroyServerData;
                 log_newServer (server);
                 // we don't need the server config anymore
                 clearConfig (serverConfig);
@@ -1561,35 +1575,8 @@ u8 cerver_shutdownServer (Server *server) {
 
 }
 
-// FIXME: what happens with the current lobbys or on going games??
-
-struct _GameServerData {
-
-    Config *gameSettingsConfig;     // stores game modes info
-
-    Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
-    List *currentLobbys;    // a list of the current lobbys
-
-    Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
-    // List *players;           // players connected to the server, but outside a lobby -> 24/10/2018
-    AVLTree *players;
-
-    // 14/11/2018 - we can define a function to load game data at start, 
-    // for example to connect to a db or something like that
-    Func loadGameData;
-    Func deleteGameData;
-
-    // 13//11/2018 -- depending on the game type, we can have different init game functions
-    u8 n_gameInits;
-    delegate *gameInitFuncs;
-
-    // TODO: 13/11/2018 - do we also need separte functions to handle the game stop?
-
-};
-
 // FIXME: !!!!!!
-// TODO: do we want this here? or in the game src file?
-// cleans up all the game structs like lobbys and in game structures like maps
+// cleans up all the game structs like lobbys and in game data set by the admin
 // if there are players connected, it sends a req to disconnect 
 u8 destroyGameServer (Server *server) {
 
@@ -1625,17 +1612,34 @@ u8 destroyGameServer (Server *server) {
             // disconnect all players from the server
                 // -> close connections -> take them out of server poll structures
 
-            // end any on going game inside the lobbys
+            // FIXME: the game logic for each game is running in its own thread
+            // we need to safely stop that!
+            // FIXME: end any on going game inside the lobbys
+            while (LIST_SIZE (gameData->currentLobbys) > 0) {
+                // TODO: handle if the lobby has an in game going
+                /* if (lobby->inGame) {
+                    // stop the game
+                    // clean necesarry game data
+                    // players scores and anything else will not be registered
+                } */
+            }
 
             // destroy all lobbys
+            // TODO: call the set delete lobby func for each one whene deleting
+            cleanUpList (gameData->currentLobbys);
+            pool_clear (gameData->lobbyPool);
 
             // destroy players
-            if (gameData->players) avl_clearTree (&gameData->players->root, )
+            if (gameData->players) 
+                avl_clearTree (&gameData->players->root, gameData->players->destroy);
+            pool_clear (gameData->playersPool);
 
             // destroy game specific data set by the game admin
             if (gameData->deleteGameData) gameData->deleteGameData ();
 
             // remove any other data or values in the game server...
+            if (gameData->gameSettingsConfig) 
+                clearConfig (gameData->gameSettingsConfig);
             gameData->loadGameData = NULL;
             gameData->deleteGameData = NULL;
 
@@ -1651,88 +1655,6 @@ u8 destroyGameServer (Server *server) {
 
     return 1;
 
-    
-
-    // clean any on going game...
-    if (LIST_SIZE (gameData->currentLobbys) > 0) {
-        Lobby *lobby = NULL;
-        Player *tempPlayer = NULL;
-
-        for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
-            lobby = (Lobby *) e->data;
-            if (lobby->players.elements > 0) {
-                // if we have players inside the lobby, send them a msg so that they can handle
-                // their own logic to leave the logic
-
-                // 27/10/2018 -- we are just sending a generic packet to the player and 
-                // he must handle his own logic
-                size_t packetSize = sizeof (PacketHeader);
-                void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
-                if (packet) {
-                    for (size_t i_player = 0; i_player < lobby->players.elements; i_player++) {
-                        tempPlayer = vector_get (&lobby->players, i_player);
-                        if (tempPlayer) sendPacket (server, packet, packetSize, tempPlayer->client->address);
-                        else logMsg (stderr, ERROR, GAME, "Got a NULL player inside a lobby player's vector!");
-                    }
-                }
-
-                else logMsg (stderr, ERROR, PACKET, "Failed to generate server teardown packet!");
-
-                // send the players back to the server's players list
-                while (lobby->players.elements > 0) {
-                    tempPlayer = vector_get (&lobby->players, 0);
-                    removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
-                }
-
-                // FIXME:
-                // handle if the lobby has an in game going
-                if (lobby->inGame) {
-                    // stop the game
-                    // clean necesarry game data
-                    // players scores and anything else will not be registered
-                }
-            }
-        }
-    }
-
-    // we can now safely delete each lobby structure
-    destroyList (gameData->currentLobbys);
-    pool_clear (gameData->lobbyPool);
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Lobby list and pool have been cleared.");
-    #endif
-
-    // not all the players were inside a lobby, so...
-    // send a msg to any player in the server structure, so that they can handle
-    // their own logic to disconnect from the server
-    if (LIST_SIZE (gameData->players) > 0) {
-        // we have players connected to the server
-        Player *tempPlayer = NULL;
-
-        size_t packetSize = sizeof (PacketHeader);
-        void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
-        if (!packet) logMsg (stderr, ERROR, PACKET, "Failed to generate server teardown packet!");
-
-        for (ListElement *e = NULL; e != NULL; e = e->next) {
-            tempPlayer = (Player *) e->data;
-            if (tempPlayer) 
-                if (packet) sendPacket (server, packet, packetSize, tempPlayer->client->address);
-        }
-    }
-
-    // clean the players list and pool
-    destroyList (gameData->players);
-    pool_clear (gameData->playersPool);
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Player list and pool have been cleared.");
-    #endif
-
-    // clean any other game server values
-    clearConfig (gameData->gameSettingsConfig);     // clean game modes info
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, GAME, "Done clearing game settings config.");
-    #endif 
-    
 }
 
 // cleans up the client's structures in the current server
@@ -1798,10 +1720,20 @@ u8 cerver_teardown (Server *server) {
         if (server->auth.reqAuthPacket) free (server->auth.reqAuthPacket);
 
     // clean independent server type structs
-    // TODO: we need a better way to handle this
-    // the server admin can set the destroy function that we wants
-    // when he creates the server
+    // if the server admin added a destroy server data action...
     if (server->destroyServerData) server->destroyServerData (server);
+    else {
+        // we use the default destroy server data function
+        switch (server->type) {
+            case GAME_SERVER: 
+                if (!destroyGameServer (server))
+                    logMsg (stdout, SUCCESS, SERVER, "Done clearing game server data!"); 
+                break;
+            case FILE_SERVER: break;
+            case WEB_SERVER: break;
+            default: break; 
+        }
+    }
 
     // close the server socket
     if (close (server->serverSock) < 0) {
@@ -1814,8 +1746,9 @@ u8 cerver_teardown (Server *server) {
         logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
     #endif
 
-    // destroy any other server data structures
+    // destroy any other server data
     pool_clear (server->packetPool);
+    if (server->serverInfo) free (server->serverInfo);
 
     free (server);
 

@@ -159,6 +159,8 @@ extern u8 blackrock_deleteGameData (void);
 
 extern u8 blackrock_init_arcade (void *data);
 
+extern BrGameData *deleteBrGameData (BrGameData *brdata);
+
 /*** BLACKROCK SERIALIZED DATA ***/
 
 #endif
