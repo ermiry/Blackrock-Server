@@ -282,6 +282,7 @@ typedef enum RequestType {
     POST_SEND_FILE,
     
     REQ_AUTH_CLIENT,
+    SUCCESS_AUTH,
 
     LOBBY_CREATE,
     LOBBY_JOIN,

@@ -645,7 +645,6 @@ u8 defaultAuthMethod (void *data) {
 
 }
 
-// TODO: send feedback to the client that he is conncted to the server
 // 03/11/2018 - the admin is able to set a ptr to a custom authentication method
 // handles the authentication data that the client sent
 void authenticateClient (void *data) {
@@ -658,7 +657,20 @@ void authenticateClient (void *data) {
                 // successful authentication
                 if (!packet->server->auth.authenticate (packet)) {
                     registerClient (packet->server, packet->client);
-                    // TODO: send feedback to the client that he is conncted to the server
+                    size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+                    void *successPacket = generatePacket (AUTHENTICATION, packetSize);
+                    if (packet) {
+                        char *end = successPacket + sizeof (PacketHeader);
+                        RequestData *reqdata = (RequestData *) end;
+                        reqdata->type = SUCCESS_AUTH;
+
+                        packet->server->protocol == IPPROTO_TCP ?
+                        tcp_sendPacket (packet->client->clientSock, successPacket, packetSize, 0) :
+                        udp_sendPacket (packet->server, successPacket, packetSize, packet->client->address);
+
+                        free (successPacket);
+                    }
+
                     #ifdef CERVER_DEBUG
                     logMsg (stdout, DEBUG_MSG, SERVER, "Client authenticated correctly.");
                     #endif 
@@ -680,7 +692,7 @@ void authenticateClient (void *data) {
             } 
         }
 
-        // dispose the packet -> send to packet pool
+        // dispose the packet info -> send to packet pool
         pool_push (packet->server->packetPool, packet);
     }
 
@@ -819,7 +831,7 @@ u8 handleOnHoldClients (void *data) {
 
 #pragma region CONNECTION HANDLER
 
-// 01/11/2018 -- called with the th pool to handle a new packet
+// called with the th pool to handle a new packet
 void handlePacket (void *data) {
 
     if (!data) {
@@ -858,6 +870,8 @@ void handlePacket (void *data) {
                 break;
         }
     }
+
+    else pool_push (packet->server->packetPool, packet);
 
 }
 
