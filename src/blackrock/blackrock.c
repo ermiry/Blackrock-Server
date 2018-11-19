@@ -214,6 +214,11 @@ u8 blackrock_loadGameData (void) {
 
 }
 
+// FIXME:!!!
+u8 blackrock_deleteGameData (void) {
+
+}
+
 // TODO: where do we want to keep track of player positions?
 // TODO: how do we want to keep track of scores?
     // maybe a dictionary like quill18 or probably just an entry iniside each player?

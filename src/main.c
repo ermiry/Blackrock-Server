@@ -44,6 +44,7 @@ int main (void) {
     if (gameServer) {
         // set our own function to load blackrock data
         gs_add_loadGameData (gameServer, blackrock_loadGameData);
+        gs_add_deleteGameData (gameServer, blackrock_deleteGameData);
 
         // set blackrock arcade game init function
         gs_add_gameInit (gameServer, ARCADE, blackrock_init_arcade);

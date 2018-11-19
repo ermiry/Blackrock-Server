@@ -112,6 +112,7 @@ struct _GameServerData {
     // 14/11/2018 - we can define a function to load game data at start, 
     // for example to connect to a db or something like that
     Func loadGameData;
+    Func deleteGameData;
 
     // 13//11/2018 -- depending on the game type, we can have different init game functions
     u8 n_gameInits;
@@ -231,7 +232,8 @@ struct _PacketInfo {
 
     Server *server;
     Client *client;
-    char packetData[MAX_UDP_PACKET_SIZE];
+    // char packetData[MAX_UDP_PACKET_SIZE];
+    char *packetData;
     size_t packetSize;
 
 };

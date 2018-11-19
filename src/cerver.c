@@ -73,30 +73,42 @@ void s_array_init (void *array, void *begin, size_t n_elems) {
 
 PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize) {
 
-    PacketInfo *new = NULL;
+    PacketInfo *p = NULL;
 
     if (server->packetPool) {
         if (POOL_SIZE (server->packetPool) > 0) {
-            new = pool_pop (server->packetPool);
-            if (!new) new = (PacketInfo *) malloc (sizeof (PacketInfo));
+            p = pool_pop (server->packetPool);
+            if (!p) p = (PacketInfo *) malloc (sizeof (PacketInfo));
+            else if (p->packetData) free (p->packetData);
         }
     }
 
-    else new = (PacketInfo *) malloc (sizeof (PacketInfo));
+    else p = (PacketInfo *) malloc (sizeof (PacketInfo));
 
-    new->server = server;
-    new->client = client;
-    new->packetSize = packetSize;
+    if (p) {
+        p->server = server;
+        p->client = client;
+        p->packetSize = packetSize;
 
-    // copy the contents from the entry buffer to the packet info
-    strcpy (new->packetData, packetData);
+        // copy the contents from the entry buffer to the packet info
+        p->packetData = (char *) calloc (strlen (packetData) + 1, sizeof (char));
+        if (p->packetData) strcpy (p->packetData, packetData);
+    }
 
-    return new;
+    return p;
 
 }
 
-// FIXME: used to destroy remaining packet info in the pools
-void destroyPacketInfo (void *data) {}
+// used to destroy remaining packet info in the pools
+void destroyPacketInfo (void *data) {
+
+    if (data) {
+        PacketInfo *packet = (PacketInfo *) data;
+        packet->client = NULL;
+        if (packet->packetData) free (packet->packetData);
+    }
+
+}
 
 // check for packets with bad size, protocol, version, etc
 u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
@@ -1525,25 +1537,31 @@ u8 cerver_startServer (Server *server) {
 
 }
 
-// TODO: what other logic will we need to handle? -> how to handle players / clients timeouts?
-// what happens with the current lobbys or on going games??
-// disable socket I/O in both ways
+// TODO: how do we stop the poll function?
+// disable socket I/O in both ways and stop any ongoing job
+u8 cerver_shutdownServer (Server *server) {
 
-// FIXME: make sure the poll loop is not running
-// FIXME: getting transport endpoint is not connected if we do not have any clients connected!
-void cerver_shutdownServer (Server *server) {
-
-    /* if (server->isRunning) {
-        if (shutdown (server->serverSock, SHUT_WR) < 0) {
-            logMsg (stderr, ERROR, SERVER, "Failed to shutdown the server!");
-            perror ("");
-        }
+    if (server->isRunning) {
+        // TODO: disbale socket I/O in both ways
+        // if (shutdown (server->serverSock, SHUT_WR) < 0) {
+        //     logMsg (stderr, ERROR, SERVER, "Failed to shutdown the server!");
+        //     perror ("");
+        // }
+        // FIXME: getting transport endpoint is not connected if we do not have any clients connected!
             
+        // TODO: does this work as intended? -> stops any job?
+        // stop any ongoing job
+        if (server->thpool) thpool_destroy (server->thpool);
 
-        else server->isRunning = false;
-    } */
+        server->isRunning = false; 
+        return 0;
+    } 
+
+    return 1;
 
 }
+
+// FIXME: what happens with the current lobbys or on going games??
 
 // FIXME: !!!!!!
 // TODO: do we want this here? or in the game src file?
@@ -1558,7 +1576,7 @@ void destroyGameServer (void *data) {
 
     // FIXME: clean on going games
     // clean any on going game...
-    /* if (LIST_SIZE (gameData->currentLobbys) > 0) {
+    if (LIST_SIZE (gameData->currentLobbys) > 0) {
         Lobby *lobby = NULL;
         Player *tempPlayer = NULL;
 
@@ -1635,12 +1653,10 @@ void destroyGameServer (void *data) {
     clearConfig (gameData->gameSettingsConfig);     // clean game modes info
     #ifdef DEBUG
     logMsg (stdout, DEBUG_MSG, GAME, "Done clearing game settings config.");
-    #endif */
+    #endif 
     
 }
 
-// TODO: what happens with the client descriptors and poll array?
-// TODO: 03/11/2018 -- clean up client trees and pool
 // cleans up the client's structures in the current server
 // if ther are clients connected, we send a server teardown packet
 void cleanUpClients (Server *server) {
@@ -1651,13 +1667,24 @@ void cleanUpClients (Server *server) {
 
     // send a packet to any active client
     broadcastToAllClients (server->clients->root, server, packet, packetSize);
+    
+    // clear the client's poll  -> to stop any connection
+    // this may change to a for if we have a dynamic poll structure
+    memset (server->fds, 0, sizeof (server->fds));
+
     // destroy the active clients tree
     avl_clearTree (&server->clients->root, server->clients->destroy);
 
-    // also send a packet to on hold clients
-    broadcastToAllClients (server->onHoldClients->root, server, packet, packetSize);
-    // destroy the tree
-    avl_clearTree (&server->onHoldClients->root, server->onHoldClients->destroy);
+    if (server->authRequired) {
+        // send a packet to on hold clients
+        broadcastToAllClients (server->onHoldClients->root, server, packet, packetSize);
+        // destroy the tree
+        avl_clearTree (&server->onHoldClients->root, server->onHoldClients->destroy);
+
+        // clear the on hold client's poll
+        // this may change to a for if we have a dynamic poll structure
+        memset (server->hold_fds, 0, sizeof (server->fds));
+    }
 
     // the pool has only "empty" clients
     pool_clear (server->clientsPool);
@@ -1666,33 +1693,37 @@ void cleanUpClients (Server *server) {
 
 }
 
-// FIXME: be sure to free the server data
-
-// 03/11/2018 -- TODO: we need to signal the poll loops to stop inmediatly
-// TODO: stop the start server function 
-
-// FIXME: correctly clean up the poll structures!!!
-// FIXME: we need to join the ongoing threads... 
 // teardown a server -> stop the server and clean all of its data
 u8 cerver_teardown (Server *server) {
-
-    server->isRunning = false;  // don't accept connections anymore
 
     if (!server) {
         logMsg (stdout, ERROR, SERVER, "Can't destroy a NULL server!");
         return 1;
     }
 
-    logMsg (stdout, SERVER, NO_TYPE, "Init server teardown...");
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, SERVER, NO_TYPE, "Init server teardown...");
+    #endif
 
-    // disable socket I/O in both ways
-    cerver_shutdownServer (server);
+    // disable socket I/O in both ways and stop any ongoing job
+    if (!cerver_shutdownServer (server))
+        logMsg (stdout, SUCCESS, SERVER, "Server has been shutted down.");
 
-    // clean independent server type structs
-    if (server->destroyServerData) server->destroyServerData (server);
+    else logMsg (stderr, ERROR, SERVER, "Failed to shutdown server!");
 
     // clean common server structs
     cleanUpClients (server);
+
+    // TODO: what happens if we have a custom auth method?
+    // clean server auth data
+    if (server->authRequired) 
+        if (server->auth.reqAuthPacket) free (server->auth.reqAuthPacket);
+
+    // clean independent server type structs
+    // TODO: we need a better way to handle this
+    // the server admin can set the destroy function that we wants
+    // when he creates the server
+    if (server->destroyServerData) server->destroyServerData (server);
 
     // close the server socket
     if (close (server->serverSock) < 0) {
@@ -1702,7 +1733,7 @@ u8 cerver_teardown (Server *server) {
     }
 
     #ifdef CERVER_DEBUG
-    logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
+        logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
     #endif
 
     // destroy any other server data structures

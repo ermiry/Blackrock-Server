@@ -52,6 +52,26 @@ void gs_add_loadGameData (Server *server, Func loadData) {
 
 }
 
+void gs_add_deleteGameData (Server *server, Func deleteData) {
+
+    if (server) {
+        if (server->type != GAME_SERVER) {
+            logMsg (stderr, ERROR, SERVER, 
+                "Can't add a delete game data func. Server of incorrect type.");
+            return;
+        }
+
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (!gameData) {
+            logMsg (stderr, ERROR, SERVER, "NULL game data in the game server!");
+            return;
+        }
+
+        gameData->deleteGameData = deleteData;
+    }
+
+}
+
 // TODO: 13/11/2018 - do we still need a hash table for a better implementation?
 // we need the game types enum to be 0 indexed and to be in order!
 // adds a game init function to use with a game type

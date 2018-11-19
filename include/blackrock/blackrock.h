@@ -154,8 +154,10 @@ typedef struct BrGameData {
 
 /*** BLACKROCK PUBLIC FUNCTIONS ***/
 
-extern u8 blackrock_init_arcade (void *data);
 extern u8 blackrock_loadGameData (void);
+extern u8 blackrock_deleteGameData (void);
+
+extern u8 blackrock_init_arcade (void *data);
 
 /*** BLACKROCK SERIALIZED DATA ***/
 

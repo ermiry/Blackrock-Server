@@ -134,8 +134,9 @@ extern void broadcastToAllPlayers (AVLNode *playerNode, struct _Server *server,
 	void *packet, size_t packetSize);
 extern void traversePlayers (AVLNode *node, Action action, void *data);
 
-extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
 extern void gs_add_loadGameData (struct _Server *server, Func loadData);
+extern void gs_add_deleteGameData (Server *server, Func deleteData);
+extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
 
 extern void gs_handlePacket (struct _PacketInfo *packet);
 
