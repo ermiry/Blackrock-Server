@@ -385,23 +385,23 @@ typedef struct SServer {
 
 } SServer;
 
-typedef struct SLobby {
-
-    // struct _GameSettings settings;      // 24/10/2018 -- we dont have any ptr in this struct
-    bool inGame;
-
-    // FIXME: how do we want to send this info?
-    // Player owner;               // how do we want to send which is the owner
-    // Vector players;             // ecah client also needs to keep track of other players in the lobby
-
-} SLobby;
-
 // 03/11/2018 -> default auth data to use by default auth function
 typedef struct DefAuthData {
 
     u32 code;
 
 } DefAuthData;
+
+typedef int32_t SRelativePtr;
+
+struct _SArray {
+
+    i32 n_elems;
+    SRelativePtr begin;
+
+};
+
+typedef struct _SArray SArray;
 
 #pragma endregion
 

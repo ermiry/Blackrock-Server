@@ -192,10 +192,32 @@ typedef struct GamePacketInfo {
 
 #pragma region GAME SERIALIZATION
 
+// TODO: 19/11/2018 -- 19:05 - we need to add support for scores!
+
+// info that we need to send to the client about the players
 typedef struct Splayer {
 
+	// TODO:
+	// char name[64];
+
+	// TODO: 
+	// we need a way to add info about the players info for specific game
+	// such as their race or level in blackrock
+
+	bool owner
 
 } SPlayer;
+
+// info that we need to send to the client about the lobby he is in
+typedef struct SLobby {
+
+	GameSettings settings;
+    bool inGame;
+
+	// array of players inside the lobby
+	SArray players;
+
+} SLobby;
 
 typedef struct UpdatedGamePacket {
 
@@ -226,15 +248,6 @@ typedef struct PlayerInputPacket {
 	PlayerInput input;
 	
 } PlayerInputPacket;
-
-/* typedef struct SPlayer {
-	SPlayerId id;
-	// SBool alive;
-	// SVectorFloat position;
-	float heading;
-	uint32_t score;
-	// SColor color;
-} SPlayer; */
 
 // in the game we move square by square
 typedef struct Position {

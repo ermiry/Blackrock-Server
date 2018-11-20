@@ -279,15 +279,13 @@ u8 player_addToLobby (Lobby *lobby, Player *player) {
 
 }
 
-// FIXME:
 // removes a player from the lobby's players structures and sends it to the game server's players
 u8 player_removeFromLobby (GameServerData *gameData, Lobby *lobby, Player *player) {
 
     if (lobby && player) {
         // create a new player and add it to the server's players
         Player *p = newPlayer (gameData->playersPool, NULL, player);
-        // FIXME: what type of struct do we have for players??
-        //  insertAfter (gameData->players, LIST_END (gameData->players), p);
+        avl_insertNode (gameData->players, p);
         p->inLobby = false;
 
         // remove from the poll fds
@@ -375,19 +373,16 @@ void traversePlayers (AVLNode *node, Action action, void *data) {
 // TODO:
 // this is used to clean disconnected players inside a lobby
 // if we haven't recieved any kind of input from a player, disconnect it 
-void checkPlayerTimeouts (void) {
-}
+void checkPlayerTimeouts (void) {}
 
 // TODO: 10/11/2018 -- do we need this?
 // when a client creates a lobby or joins one, it becomes a player in that lobby
-void tcpAddPlayer (Server *server) {
-}
+void tcpAddPlayer (Server *server) {}
 
 // TODO: 10/11/2018 -- do we need this?
 // TODO: as of 22/10/2018 -- we only have support for a tcp connection
 // when we recieve a packet from a player that is not in the lobby, we add it to the game session
-void udpAddPlayer () {
-}
+void udpAddPlayer () {}
 
 // TODO: 10/11/2018 -- do we need this?
 // TODO: this is used in space shooters to add a new player using a udp protocol
@@ -1699,7 +1694,6 @@ void sendGamePackets (Server *server, int to) {
 
 /*** FROM OUTSIDE A LOBBY ***/
 
-// TODO: this logic is okay --> but fix lobby packet
 // request from a from client to create a new lobby 
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
 

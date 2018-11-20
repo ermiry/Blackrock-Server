@@ -12,6 +12,7 @@
 
 #include "network.h"
 
+#include "cerver.h"
 #include "game.h"
 
 #include "utils/thpool.h"
@@ -37,22 +38,43 @@ u16 nextPlayerId = 0;
 #include <stdint.h>
 #include <assert.h>
 
-// TODO:
 #pragma region SERIALIZATION 
 
-typedef int32_t RelativePtr;
+typedef int32_t SRelativePtr;
 
-typedef struct SArray {
+void s_ptr_to_relative (void *relative_ptr, void *pointer) {
 
-	u32 n_elems;
-	RelativePtr begin;
+	SRelativePtr result = (char *) pointer - (char *) relative_ptr;
+	memcpy (relative_ptr, &result, sizeof (result));
 
-} SArray;
+}
 
-void s_ptr_to_relative (void *relativePtr, void *ptr) {
+void *s_relative_to_ptr (void *relative_ptr) {
 
-	RelativePtr result = (char *) ptr - (char *) relativePtr;
-	memcpy (relativePtr, &result, sizeof (RelativePtr));
+	SRelativePtr offset;
+	memcpy (&offset, relative_ptr, sizeof (offset));
+	return (char *) relative_ptr + offset;
+
+}
+
+bool s_relative_valid (void *relative_ptr, void *valid_begin, void *valid_end) {
+
+	void *pointee = s_relative_to_ptr (relative_ptr);
+	return pointee >= valid_begin && pointee < valid_end;
+    
+}
+
+bool s_array_valid (void *array, size_t elem_size, void *valid_begin, void *valid_end) {
+
+	void *begin = s_relative_to_ptr ((char *) array + offsetof (SArray, begin));
+
+	SArray array_;
+	memcpy (&array_, array, sizeof(array_));
+	void *end = (char *) begin + elem_size * array_.n_elems;
+
+	return array_.n_elems == 0
+		|| (begin >= valid_begin && begin < valid_end &&
+		    end >= valid_begin && end <= valid_end);
 
 }
 
@@ -303,11 +325,12 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
 }
 
+// TODO: move this to the game server
 // FIXME: handle the players inside the lobby
 // creates a lobby packet with the passed lobby info
 void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize) {
 
-    /* void *packetBuffer = malloc (packetSize);
+    void *packetBuffer = malloc (packetSize);
     void *begin = packetBuffer;
     char *end = begin; 
 
@@ -328,7 +351,7 @@ void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t pac
     // update the players inside the lobby
     // FIXME: get owner info and the vector ot players
 
-    return begin; */
+    return begin;
 
 }
 
