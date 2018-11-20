@@ -680,38 +680,32 @@ Lobby *newLobby (Server *server) {
 
 }
 
-// TODO: call the set delete lobby func for each one whene deleting
-// FIXME: clear the specific lobby game data set by the admin!
 // deletes a lobby for ever -- called when we teardown the server
 // we do not need to give any feedback to the players if there is any inside
 void deleteLobby (void *data) {
 
-    if (!data) return;
+    if (data) {
+        Lobby *lobby = (Lobby *) data;
 
-    Lobby *lobby = (Lobby *) data;
+        lobby->inGame = false;      // just to be sure
+        lobby->owner = NULL;
 
-    lobby->inGame = false;      // just to be sure
-    lobby->owner = NULL;
+        if (lobby->gameData) {
+            if (lobby->deleteLobbyGameData) lobby->deleteLobbyGameData (lobby->gameData);
+            else free (lobby->gameData);
+        }
 
-    // check that the lobby is empty
-    if (lobby->players_nfds > 0) {
-        // FIXME: send the players to the server player list
+        memset (lobby->players_fds, 0, sizeof (lobby->players_fds));
 
-        // OLD
-        // Player *tempPlayer = NULL;
-        // while (lobby->players.elements > 0) {
-        //     tempPlayer = vector_get (&lobby->players, 0);
-        //     // removePlayerFromLobby (gameData, lobby->players, 0, tempPlayer);
-        //     // 26/10/2018 -- just delete the player, it may be a left behind
-        //     deletePlayer (tempPlayer);
-        // }
+        // delete players avl structure
+        avl_clearTree (&lobby->players, lobby->players->destroy);
+
+        // clear lobby data
+        if (lobby->settings) free (lobby->settings);
+
+        free (lobby); 
     }
-
-    // clear lobby data
-    if (lobby->settings) free (lobby->settings);
-
-    free (lobby); 
-
+    
 }
 
 // create a list to manage the server lobbys
@@ -864,6 +858,8 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
     lobby->players_nfds = 0;
     lobby->compress_players = false;
     lobby->pollTimeout = server->pollTimeout;    // inherit the poll timeout from server
+
+    lobby->deleteLobbyGameData = data->deleteLobbyGameData;
 
     if (!player_addToLobby (lobby, owner)) {
         lobby->inGame = false;

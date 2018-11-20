@@ -53,10 +53,9 @@ struct _GameServerData {
     List *currentLobbys;    // a list of the current lobbys
 
     Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
-    // List *players;           // players connected to the server, but outside a lobby -> 24/10/2018
     AVLTree *players;
 
-    // 14/11/2018 - we can define a function to load game data at start, 
+    // we can define a function to load game data at start, 
     // for example to connect to a db or something like that
     Func loadGameData;
     Func deleteGameData;
@@ -171,7 +170,7 @@ extern void broadcastToAllPlayers (AVLNode *playerNode, struct _Server *server,
 extern void traversePlayers (AVLNode *node, Action action, void *data);
 
 extern void gs_set_loadGameData (struct _Server *server, Func loadData);
-extern void gs_set_deleteGameData (Server *server, Func deleteData);
+extern void gs_set_deleteGameData (struct _Server *server, Func deleteData);
 extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
 extern void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData);
 
