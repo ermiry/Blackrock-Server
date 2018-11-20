@@ -132,14 +132,24 @@ void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData) {
 
 void broadcastToAllPlayers (AVLNode *, Server *, void *, size_t);
 
-// FIXME: !!!!!!
+u8 destroyLobby (Server *server, Lobby *lobby);
+
 // cleans up all the game structs like lobbys and in game data set by the admin
-// if there are players connected, it sends a req to disconnect 
+// if there are players connected, it sends a server teardown packet
 u8 destroyGameServer (Server *server) {
 
     if (server) {
         GameServerData *gameData = (GameServerData *) server->serverData;
         if (gameData) {
+            // first destroy the current lobbys, stoping any ongoing game and sending the players
+            // to the main server players avl structure
+            while (LIST_SIZE (gameData->currentLobbys) > 0) 
+                destroyLobby (server, LIST_START (gameData->currentLobbys));
+
+            // destroy all lobbys
+            cleanUpList (gameData->currentLobbys);
+            pool_clear (gameData->lobbyPool);
+
             // send server destroy packet to all the players
             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
             void *packet = generatePacket (SERVER_PACKET, packetSize);
@@ -151,16 +161,6 @@ u8 destroyGameServer (Server *server) {
                 // send the packet to players outside the lobby
                 broadcastToAllPlayers (gameData->players->root, server, packet, packetSize);
 
-                // send the packets to all players inside a lobby
-                Lobby *lobby = NULL;
-                for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
-                    lobby = (Lobby *) e->data;
-                    if (lobby) 
-                        if (lobby->players) 
-                            broadcastToAllPlayers (lobby->players->root, server, packet, packetSize);
-                    
-                }
-
                 free (packet);
             }
 
@@ -168,23 +168,8 @@ u8 destroyGameServer (Server *server) {
 
             // disconnect all players from the server
                 // -> close connections -> take them out of server poll structures
-
-            // FIXME: the game logic for each game is running in its own thread
-            // we need to safely stop that!
-            // FIXME: end any on going game inside the lobbys
-            while (LIST_SIZE (gameData->currentLobbys) > 0) {
-                // TODO: handle if the lobby has an in game going
-                /* if (lobby->inGame) {
-                    // stop the game
-                    // clean necesarry game data
-                    // players scores and anything else will not be registered
-                } */
-            }
-
-            // destroy all lobbys
-            // TODO: call the set delete lobby func for each one whene deleting
-            cleanUpList (gameData->currentLobbys);
-            pool_clear (gameData->lobbyPool);
+            // 20/11/2108 - this is done in the server teardown function because cleints
+            // and players share the same poll structure
 
             // destroy players
             if (gameData->players) 
@@ -695,6 +680,7 @@ Lobby *newLobby (Server *server) {
 
 }
 
+// TODO: call the set delete lobby func for each one whene deleting
 // FIXME: clear the specific lobby game data set by the admin!
 // deletes a lobby for ever -- called when we teardown the server
 // we do not need to give any feedback to the players if there is any inside
@@ -905,76 +891,69 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
 
 }
 
-// FIXME: 19/11/2018 - 14:51 - where do we want to destroy the lobby?
-// only the owner of the lobby can destroy the lobby
 // a lobby should only be destroyed when there are no players left or if we teardown the server
 u8 destroyLobby (Server *server, Lobby *lobby) {
 
-    if (!server) {
-        logMsg (stderr, ERROR, SERVER, "Don't know from which server to destroy the lobby!");
-        return 1;
-    }
+    if (server && lobby) {
+        if (server->type == GAME_SERVER) {
+            GameServerData *gameData = (GameServerData *) server->serverData;
+            if (gameData) {
+                // the game function must have a check for this every loop!
+                if (lobby->inGame) lobby->inGame = false;
+                if (lobby->gameData) {
+                    if (lobby->deleteLobbyGameData) lobby->deleteLobbyGameData (lobby->gameData);
+                    else free (lobby->gameData);
+                }
 
-    else {
-        if (server->type != GAME_SERVER) {
-            logMsg (stderr, ERROR, SERVER, "Can't destroy a lobby from a server of wrong type!");
-            return 1;
+                if (lobby->players_nfds > 0) {
+                    // send the players the correct package so they can handle their own logic
+                    // expected player behaivor -> leave the lobby 
+                    size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+                    void *destroyPacket = generatePacket (GAME_PACKET, packetSize);
+                    if (destroyPacket) {
+                        char *end = destroyPacket + sizeof (PacketHeader);
+                        RequestData *reqdata = (RequestData *) end;
+                        reqdata->type = LOBBY_DESTROY;
+
+                        broadcastToAllPlayers (lobby->players->root, server, destroyPacket, packetSize);
+                        free (destroyPacket);
+                    }
+
+                    else 
+                        logMsg (stderr, ERROR, PACKET, "Failed to create lobby destroy packet!");
+
+                    // remove the players from this structure and send them to the server's players
+                    Player *tempPlayer = NULL;
+                    while (lobby->players_nfds > 0) {
+                        tempPlayer = (Player *) lobby->players->root->id;
+                        if (tempPlayer) player_removeFromLobby (gameData, lobby, tempPlayer);
+                    }
+                }
+
+                lobby->owner = NULL;
+                if (lobby->settings) free (lobby->settings);
+
+                // we are safe to clear the lobby structure
+                // first remove the lobby from the active ones, then send it to the inactive ones
+                ListElement *le = getListElement (gameData->currentLobbys, lobby);
+                if (le) {
+                    void *temp = removeElement (gameData->currentLobbys, le);
+                    if (temp) pool_push (gameData->lobbyPool, temp);
+                }
+
+                else {
+                    logMsg (stdout, WARNING, GAME, "A lobby wasn't found in the current lobby list.");
+                    deleteLobby (lobby);   // destroy the lobby forever
+                } 
+                
+                return 0;   // success
+            }
+
+            else logMsg (stderr, ERROR, SERVER, "No game data found in the server!");
         }
     }
 
-    if (!lobby) {
-        #ifdef DEBUG
-        logMsg (stderr, ERROR, GAME, "Can't destroy an empty lobby!");
-        #endif
-        return 1;
-    }
-
-    GameServerData *gameData = (GameServerData *) server->serverData;
-    if (!gameData) {
-        logMsg (stderr, ERROR, SERVER, "No game data found in the server!");
-        return 1;
-    } 
-
-    // FIXME:
-    if (lobby->players_nfds > 0) {
-        // send the players the correct package so they can handle their logic
-        // expected player behaivor -> leave the lobby 
-        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
-        void *lobbyPacket = generatePacket (GAME_PACKET, packetSize);
-        char *end = lobbyPacket + sizeof (PacketHeader); 
-
-        RequestData *rdata = (RequestData *) end;
-        if (!lobbyPacket) logMsg (stderr, ERROR, PACKET, "Failed to create lobby destroy packet!");
-        else {
-            broadcastToAllPlayers (lobby->players->root, server, lobbyPacket, packetSize);
-            free (lobbyPacket);
-        }
-
-        // remove the players from this structure and send them to the server's players
-        Player *tempPlayer = NULL;
-        while (lobby->players_nfds > 0) {
-            tempPlayer = (Player *) lobby->players->root->id;
-            if (tempPlayer) player_removeFromLobby (gameData, lobby, tempPlayer);
-        }
-    }
-
-    lobby->owner = NULL;
-    if (lobby->settings) free (lobby->settings);
-
-    // we are safe to clear the lobby structure
-    // first remove the lobby from the active ones, then send it to the inactive ones
-    ListElement *le = getListElement (gameData->currentLobbys, lobby);
-    if (le) {
-        void *temp = removeElement (gameData->currentLobbys, le);
-        if (temp) pool_push (gameData->lobbyPool, temp);
-    }
-
-    else {
-        logMsg (stdout, WARNING, GAME, "A lobby wasn't found in the current lobby list.");
-        free (lobby);   // destroy the lobby forever
-    } 
-    
-    return 0;   // success
+    return 1;
 
 }
 

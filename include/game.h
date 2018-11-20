@@ -61,6 +61,7 @@ struct _GameServerData {
     Func loadGameData;
     Func deleteGameData;
 
+	// FIXME: we need to set this correcly
     delegate *deleteLobbyGameData;
 
     // 13//11/2018 -- depending on the game type, we can have different init game functions
@@ -123,7 +124,6 @@ struct _Lobby {
 	bool inGame;
 
 	Player *owner;				// the client that created the lobby -> he has higher privileges
-	// Vector players;			// the clients connected to the lobby
 
 	bool isRunning;				// lobby is listening for player packets
 
@@ -135,9 +135,9 @@ struct _Lobby {
     bool compress_players;              		// compress the fds array?
     u32 pollTimeout;    
 
-	// 15/11/2018 - the server admin can add its server specific data types
+	// the server admin can add its server specific data types
 	void *gameData;
-	// TODO: maybe add a ptr to a game data destroy function?
+	delegate deleteLobbyGameData;
 
 };
 

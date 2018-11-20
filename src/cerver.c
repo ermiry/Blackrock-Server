@@ -1544,24 +1544,22 @@ u8 cerver_startServer (Server *server) {
 
 }
 
-// TODO: how do we stop the poll function?
 // disable socket I/O in both ways and stop any ongoing job
 u8 cerver_shutdownServer (Server *server) {
 
     if (server->isRunning) {
-        // TODO: disbale socket I/O in both ways
-        // if (shutdown (server->serverSock, SHUT_WR) < 0) {
-        //     logMsg (stderr, ERROR, SERVER, "Failed to shutdown the server!");
-        //     perror ("");
-        // }
-        // FIXME: getting transport endpoint is not connected if we do not have any clients connected!
-            
-        // TODO: does this work as intended? -> stops any job?
-        // stop any ongoing job
-        if (server->thpool) thpool_destroy (server->thpool);
-
         server->isRunning = false; 
-        return 0;
+
+        // close the server socket
+        if (!close (server->serverSock) < 0) {
+            #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
+            #endif
+
+            return 0;
+        }
+
+        else logMsg (stdout, ERROR, SERVER, "Failed to close server socket!");
     } 
 
     return 1;
@@ -1616,15 +1614,6 @@ u8 cerver_teardown (Server *server) {
         logMsg (stdout, SERVER, NO_TYPE, "Init server teardown...");
     #endif
 
-    // disable socket I/O in both ways and stop any ongoing job
-    if (!cerver_shutdownServer (server))
-        logMsg (stdout, SUCCESS, SERVER, "Server has been shutted down.");
-
-    else logMsg (stderr, ERROR, SERVER, "Failed to shutdown server!");
-
-    // clean common server structs
-    cleanUpClients (server);
-
     // TODO: what happens if we have a custom auth method?
     // clean server auth data
     if (server->authRequired) 
@@ -1646,16 +1635,18 @@ u8 cerver_teardown (Server *server) {
         }
     }
 
-    // close the server socket
-    if (close (server->serverSock) < 0) {
-        logMsg (stdout, ERROR, SERVER, "Failed to close server socket!");
-        free (server);
-        return 1;
-    }
+    // clean common server structs
+    cleanUpClients (server);
 
-    #ifdef CERVER_DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
-    #endif
+    // TODO: does this work as intended? -> stops any job?
+    // stop any ongoing job
+    if (server->thpool) thpool_destroy (server->thpool);
+
+    // disable socket I/O in both ways and stop any ongoing job
+    if (!cerver_shutdownServer (server))
+        logMsg (stdout, SUCCESS, SERVER, "Server has been shutted down.");
+
+    else logMsg (stderr, ERROR, SERVER, "Failed to shutdown server!");
 
     // destroy any other server data
     pool_clear (server->packetPool);
