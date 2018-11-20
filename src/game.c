@@ -130,12 +130,163 @@ void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData) {
 
 }
 
+void broadcastToAllPlayers (AVLNode *, Server *, void *, size_t);
+
+// FIXME: !!!!!!
+// cleans up all the game structs like lobbys and in game data set by the admin
+// if there are players connected, it sends a req to disconnect 
+u8 destroyGameServer (Server *server) {
+
+    if (server) {
+        GameServerData *gameData = (GameServerData *) server->serverData;
+        if (gameData) {
+            // send server destroy packet to all the players
+            size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
+            void *packet = generatePacket (SERVER_PACKET, packetSize);
+            if (packet) {
+                char *end = packet + sizeof (PacketHeader);
+                RequestData *req = (RequestData *) end;
+                req->type = SERVER_TEARDOWN;
+
+                // send the packet to players outside the lobby
+                broadcastToAllPlayers (gameData->players->root, server, packet, packetSize);
+
+                // send the packets to all players inside a lobby
+                Lobby *lobby = NULL;
+                for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
+                    lobby = (Lobby *) e->data;
+                    if (lobby) 
+                        if (lobby->players) 
+                            broadcastToAllPlayers (lobby->players->root, server, packet, packetSize);
+                    
+                }
+
+                free (packet);
+            }
+
+            else logMsg (stderr, ERROR, PACKET, "Failed to create server teardown packet!");
+
+            // disconnect all players from the server
+                // -> close connections -> take them out of server poll structures
+
+            // FIXME: the game logic for each game is running in its own thread
+            // we need to safely stop that!
+            // FIXME: end any on going game inside the lobbys
+            while (LIST_SIZE (gameData->currentLobbys) > 0) {
+                // TODO: handle if the lobby has an in game going
+                /* if (lobby->inGame) {
+                    // stop the game
+                    // clean necesarry game data
+                    // players scores and anything else will not be registered
+                } */
+            }
+
+            // destroy all lobbys
+            // TODO: call the set delete lobby func for each one whene deleting
+            cleanUpList (gameData->currentLobbys);
+            pool_clear (gameData->lobbyPool);
+
+            // destroy players
+            if (gameData->players) 
+                avl_clearTree (&gameData->players->root, gameData->players->destroy);
+            pool_clear (gameData->playersPool);
+
+            // destroy game specific data set by the game admin
+            if (gameData->deleteGameData) gameData->deleteGameData ();
+
+            // remove any other data or values in the game server...
+            if (gameData->gameSettingsConfig) 
+                clearConfig (gameData->gameSettingsConfig);
+            gameData->loadGameData = NULL;
+            gameData->deleteGameData = NULL;
+
+            free (gameData);
+
+            return 0;
+        }
+
+        else logMsg (stderr, ERROR, SERVER, "Game server doesn't have a reference to game data!");
+    }
+
+    else logMsg (stderr, ERROR, SERVER, "Can't destroy a NULL game server!");
+
+    return 1;
+
+}
+
+#pragma endregion
+
+#pragma region GAME SERIALIZATION 
+
+// TODO: what info do we want to send?
+void serialize_player (SPlayer *splayer, Player *player) {
+
+    if (splayer && player) {
+        
+    }
+
+}
+
+// FIXME:
+// TODO: what treatment do we want to give the serialized data?
+
+// traverse each player in the lobby's avl and serialize it
+void serialize_lobby_players (AVLNode *node, SArray *sarray) {
+
+    if (node && sarray) {
+        serialize_lobby_players (node->right, sarray);
+
+        if (node->id) {
+
+        }
+
+        serialize_lobby_players (node->left, sarray);
+    }
+
+}
+
+#pragma endregion
+
+#pragma region GAME PACKETS 
+
+// FIXME: serialize players inside the lobby
+// creates a lobby packet with the passed lobby info
+void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize) {
+
+    void *packetBuffer = malloc (packetSize);
+    void *begin = packetBuffer;
+    char *end = begin; 
+
+    PacketHeader *header = (PacketHeader *) end;
+    end += sizeof (PacketHeader);
+    initPacketHeader (header, packetType, packetSize); 
+
+    // serialized lobby data
+    SLobby *slobby = (SLobby *) end;
+    end += sizeof (SLobby);
+
+    slobby->settings.fps = lobby->settings->fps;
+    slobby->settings.minPlayers = lobby->settings->minPlayers;
+    slobby->settings.maxPlayers = lobby->settings->maxPlayers;
+    slobby->settings.playerTimeout = lobby->settings->playerTimeout;
+
+    slobby->inGame = lobby->inGame;
+
+    // FIXME: 
+    // we serialize the players using a vector
+    // slobby->players.n_elems = 0;
+
+    return begin;
+
+}
+
 #pragma endregion
 
 /*** PLAYER ***/
 
 #pragma region PLAYER
 
+// TODO: maybe later the id can be how we store it inside our databse
 // FIXME: player ids, we cannot have infinite ids!!
 // constructor for a new player, option for an object pool
 Player *newPlayer (Pool *pool, Client *client, Player *player) {
@@ -362,7 +513,7 @@ void traversePlayers (AVLNode *node, Action action, void *data) {
 
         if (node->id) {
             PlayerAndData pd = { .playerData = node->id, .data = data };
-            func (&pd);
+            action (&pd);
         } 
 
         traversePlayers (node->left, action, data);

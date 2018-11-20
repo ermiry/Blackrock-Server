@@ -42,6 +42,37 @@ struct _PacketInfo;
 
 #define FPS		20
 
+#define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
+#define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
+
+struct _GameServerData {
+
+    Config *gameSettingsConfig;     // stores game modes info
+
+    Pool *lobbyPool;        // 21/10/2018 -- 22:04 -- each game server has its own pool
+    List *currentLobbys;    // a list of the current lobbys
+
+    Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
+    // List *players;           // players connected to the server, but outside a lobby -> 24/10/2018
+    AVLTree *players;
+
+    // 14/11/2018 - we can define a function to load game data at start, 
+    // for example to connect to a db or something like that
+    Func loadGameData;
+    Func deleteGameData;
+
+    delegate *deleteLobbyGameData;
+
+    // 13//11/2018 -- depending on the game type, we can have different init game functions
+    u8 n_gameInits;
+    delegate *gameInitFuncs;
+
+    // TODO: 13/11/2018 - do we also need separte functions to handle the game stop?
+
+};
+
+typedef struct _GameServerData GameServerData;
+
 typedef enum GameType {
 
 	ARCADE = 0
@@ -120,8 +151,6 @@ typedef struct ServerLobby {
 
 } ServerLobby;
 
-/*** GAME SERVER FUNCTIONS ***/
-
 // 17/11/2018 -- aux structure for traversing a players tree
 typedef struct PlayerAndData {
 
@@ -129,6 +158,10 @@ typedef struct PlayerAndData {
     void *data;
 
 } PlayerAndData;
+
+/*** GAME SERVER FUNCTIONS ***/
+
+extern u8 destroyGameServer (Server *server);
 
 extern u8 game_initPlayers (GameServerData *gameData, u8 n_players);
 extern u8 game_initLobbys (GameServerData *gameData, u8 n_lobbys);
@@ -145,6 +178,8 @@ extern void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData);
 extern void gs_handlePacket (struct _PacketInfo *packet);
 
 /*** SCORES ***/
+
+#pragma region SCORES 
 
 #include "utils/htab.h"
 
@@ -173,6 +208,8 @@ extern void game_score_set (ScoreBoard *sb, char *playerName, char *scoreType, i
 extern i32 game_score_get (ScoreBoard *sb, char *playerName, char *scoreType);
 extern void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 value);
 extern void game_score_reset (ScoreBoard *sb, char *playerName);
+
+#pragma endregion
 
 /*** GAME PACKETS ***/
 

@@ -325,36 +325,6 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
 
 }
 
-// TODO: move this to the game server
-// FIXME: handle the players inside the lobby
-// creates a lobby packet with the passed lobby info
-void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize) {
-
-    void *packetBuffer = malloc (packetSize);
-    void *begin = packetBuffer;
-    char *end = begin; 
-
-    PacketHeader *header = (PacketHeader *) end;
-    end += sizeof (PacketHeader);
-    initPacketHeader (header, packetType, packetSize); 
-
-    // serialized lobby data
-    SLobby *slobby = (SLobby *) end;
-    end += sizeof (SLobby);
-    slobby->settings.fps = lobby->settings->fps;
-    slobby->settings.minPlayers = lobby->settings->minPlayers;
-    slobby->settings.maxPlayers = lobby->settings->maxPlayers;
-    slobby->settings.playerTimeout = lobby->settings->playerTimeout;
-
-    slobby->inGame = lobby->inGame;
-
-    // update the players inside the lobby
-    // FIXME: get owner info and the vector ot players
-
-    return begin;
-
-}
-
 void *createClientAuthReqPacket (void) {
 
     size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
@@ -1593,88 +1563,6 @@ u8 cerver_shutdownServer (Server *server) {
         server->isRunning = false; 
         return 0;
     } 
-
-    return 1;
-
-}
-
-// FIXME: !!!!!!
-// cleans up all the game structs like lobbys and in game data set by the admin
-// if there are players connected, it sends a req to disconnect 
-u8 destroyGameServer (Server *server) {
-
-    if (server) {
-        GameServerData *gameData = (GameServerData *) server->serverData;
-        if (gameData) {
-            // send server destroy packet to all the players
-            size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
-            void *packet = generatePacket (SERVER_PACKET, packetSize);
-            if (packet) {
-                char *end = packet + sizeof (PacketHeader);
-                RequestData *req = (RequestData *) end;
-                req->type = SERVER_TEARDOWN;
-
-                // send the packet to players outside the lobby
-                broadcastToAllPlayers (gameData->players->root, server, packet, packetSize);
-
-                // send the packets to all players inside a lobby
-                Lobby *lobby = NULL;
-                for (ListElement *e = LIST_START (gameData->currentLobbys); e != NULL; e = e->next) {
-                    lobby = (Lobby *) e->data;
-                    if (lobby) 
-                        if (lobby->players) 
-                            broadcastToAllPlayers (lobby->players->root, server, packet, packetSize);
-                    
-                }
-
-                free (packet);
-            }
-
-            else logMsg (stderr, ERROR, PACKET, "Failed to create server teardown packet!");
-
-            // disconnect all players from the server
-                // -> close connections -> take them out of server poll structures
-
-            // FIXME: the game logic for each game is running in its own thread
-            // we need to safely stop that!
-            // FIXME: end any on going game inside the lobbys
-            while (LIST_SIZE (gameData->currentLobbys) > 0) {
-                // TODO: handle if the lobby has an in game going
-                /* if (lobby->inGame) {
-                    // stop the game
-                    // clean necesarry game data
-                    // players scores and anything else will not be registered
-                } */
-            }
-
-            // destroy all lobbys
-            // TODO: call the set delete lobby func for each one whene deleting
-            cleanUpList (gameData->currentLobbys);
-            pool_clear (gameData->lobbyPool);
-
-            // destroy players
-            if (gameData->players) 
-                avl_clearTree (&gameData->players->root, gameData->players->destroy);
-            pool_clear (gameData->playersPool);
-
-            // destroy game specific data set by the game admin
-            if (gameData->deleteGameData) gameData->deleteGameData ();
-
-            // remove any other data or values in the game server...
-            if (gameData->gameSettingsConfig) 
-                clearConfig (gameData->gameSettingsConfig);
-            gameData->loadGameData = NULL;
-            gameData->deleteGameData = NULL;
-
-            free (gameData);
-
-            return 0;
-        }
-
-        else logMsg (stderr, ERROR, SERVER, "Game server doesn't have a reference to game data!");
-    }
-
-    else logMsg (stderr, ERROR, SERVER, "Can't destroy a NULL game server!");
 
     return 1;
 
