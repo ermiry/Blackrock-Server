@@ -1,6 +1,10 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -149,6 +153,9 @@ struct _Server {
 
     // 17/11/2018 -- useful info that we can send to clients
     void *serverInfo;   
+
+    // 21/11/2018 - 9:18 - statistics
+    u32 connectedClients;
 
 };
 

@@ -1,3 +1,7 @@
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -408,7 +412,7 @@ void sendServerInfo (Server *server, Client *client) {
 
 #pragma region CLIENTS
 
-// get a client id based on the poll fd structure
+// the id is an idx based on the main poll array
 i32 getNewClientId (Server *server) {
 
     i32 retval = -1;
@@ -426,6 +430,7 @@ i32 getNewClientId (Server *server) {
 
 }
 
+// the id is the the idx in the hold poll array
 i32 getHoldClientId (Server *server) {
 
     i32 retval = -1;
@@ -446,13 +451,15 @@ i32 getHoldClientId (Server *server) {
 // FIXME: client ids -> is the server full?
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold) {
 
-    Client *new = NULL;
+    Client *new = (Client *) malloc (sizeof (Client));
 
     if (server->clientsPool) {
         if (POOL_SIZE (server->clientsPool) > 0) {
             new = pool_pop (server->clientsPool);
             if (!new) new = (Client *) malloc (sizeof (Client));
         }
+
+        else new = (Client *) malloc (sizeof (Client));
     }
 
     else new = (Client *) malloc (sizeof (Client));
@@ -475,7 +482,7 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     if (server->authRequired) {
         new->authTries = server->auth.maxAuthTries;
         new->dropClient = false;
-    }
+    } 
 
     return new;
 
@@ -530,6 +537,8 @@ Client *getClientBySock (AVLTree *clients, i32 fd) {
 
 }
 
+void dropClient (Server *server, Client *client);
+
 // 13/10/2018 - I think register a client only works for tcp? but i might be wrong...
 
 // TODO: hanlde a max number of clients connected to a server at the same time?
@@ -543,16 +552,8 @@ void client_registerToServer (Server *server, Client *client) {
         // 02/11/2018 -- create a new client structure with the same values
         c = newClient (server, client->clientSock, client->address, false);
 
-        // this destroys the client structure stored in the tree
-        avl_removeNode (server->onHoldClients, client);
-
-        // FIXME: get the correct values
-        // server->hold_fds[c->clientSock].fd = -1;
-
-        // TODO: do we want to do something similar?
-        // 04/11/2018 -- 23:45 - we use the index in the poll array for new client ids
-        // compress the hold fds array in the next poll loop
-        // server->compress_hold_clients = true;
+        // remove the client from the on hold structure
+        dropClient (server, client);
     }
 
     else c = client;
@@ -560,13 +561,17 @@ void client_registerToServer (Server *server, Client *client) {
     // 10/11/2018 -- we use a free idx in the poll array as an unique client id
     // send the client to the server's active clients structures
     server->fds[client->clientID].fd = c->clientSock;
-    server->fds[client->clientID].events = POLLIN;
+    server->fds[client->clientID].events = POLLIN | POLLRDHUP;
     // server->nfds++;
 
     avl_insertNode (server->clients, c);
 
+    server->connectedClients++;
+
     #ifdef CERVER_DEBUG
-    logMsg (stdout, DEBUG_MSG, SERVER, "Registered a client to the server");
+    logMsg (stdout, DEBUG_MSG, SERVER, 
+        createString ("Registered a client to the server.\nConnected clients: %i.", 
+        server->connectedClients));
     #endif
 
 }
@@ -615,7 +620,7 @@ void dropClient (Server *server, Client *client) {
     if (server && client) {
         // drop the client from the on hold structure
         server->hold_fds[client->clientSock].fd = -1;
-        server->compress_hold_clients = true;
+        // server->compress_hold_clients = true;
         // the client socket is closed when we call destroyClient () here
         avl_removeNode (server->onHoldClients, client);
 
@@ -903,29 +908,87 @@ void compressClients (Server *server) {
 
 }
 
-// TODO: add support for handling large files transmissions
-// TODO: 02/11/2018 -- this is only intended for file and game servers only,
-// maybe a web server works different when accesing from the browser
-// TODO: 02/11/2018 -- also THIS poll function only works with a tcp connection because we are
-// accepting each new connection, but for udp might be the same
-// FIXME: we need to signal this process to end when we teardown the server!!!
-// server poll loop to handle events in the registered socket's fds
-u8 serverPoll (Server *server) {
-
-    if (!server) {
-        logMsg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
-        return 1;
-    }
+i32 server_accept (Server *server) {
 
     Client *client = NULL;
+
     i32 clientSocket;
 	struct sockaddr_storage clientAddress;
 	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
     socklen_t sockLen = sizeof (struct sockaddr_storage);
 
-    ssize_t rc;                                   // retval from recv -> size of buffer
-    char packetBuffer[MAX_UDP_PACKET_SIZE];       // buffer for data recieved from fd
+    i32 newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
+
+    // if we get EWOULDBLOCK, we have accepted all connections
+    if (newfd < 0)
+        if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
+
+    // hold the client until he authenticates
+    if (server->authRequired) {
+        client = newClient (server, newfd, clientAddress, true);
+        onHoldClient (server, client);
+    }
+
+    else {
+        client = newClient (server, newfd, clientAddress, false);
+        client_registerToServer (server, client);  
+    } 
+
+    if (server->type != WEB_SERVER) sendServerInfo (server, client);
+
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
+    #endif
+
+    return newfd;
+
+}
+
+// TODO: add support for handling large files transmissions
+// TODO: 03/11/2018 - add support for multiple reads to the socket
+// what happens if my buffer isn't enough, for example a larger file?
+// recive all incoming data from the socket
+void server_recieve (Server *server, i32 fd) {
+
+    ssize_t rc;
+    char packetBuffer[MAX_UDP_PACKET_SIZE];
     PacketInfo *info = NULL;
+
+    do {
+        rc = recv (fd, packetBuffer, sizeof (packetBuffer), 0);
+        
+        // recv error - no more data to read
+        if (rc < 0) {
+            if (errno != EWOULDBLOCK) {
+                logMsg (stderr, ERROR, SERVER, "Recv failed!");
+                perror ("Error:");
+            }
+
+            break;  // there is no more data to handle
+        }
+
+        if (rc == 0) {
+            // man recv -> steam socket perfomed an orderly shutdown
+            // but in dgram it might mean something?
+            // 03/11/2018 -- we just ignore the packet or whatever
+            break;
+        }
+
+        info = newPacketInfo (server, 
+            getClientBySock (server->clients, fd), packetBuffer, rc);
+
+        thpool_add_work (server->thpool, (void *) handlePacket, info);
+    } while (true);
+
+}
+
+// server poll loop to handle events in the registered socket's fds
+u8 server_poll (Server *server) {
+
+    if (!server) {
+        logMsg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
+        return 1;
+    }
 
     int poll_retval;    // ret val from poll function
     int currfds;        // copy of n active server poll fds
@@ -956,81 +1019,17 @@ u8 serverPoll (Server *server) {
         // currfds = server->nfds;
         for (u8 i = 0; i < poll_n_fds; i++) {
             if (server->fds[i].revents == 0) continue;
-
-            // FIXME: how to hanlde an unexpected result??
-            if (server->fds[i].revents != POLLIN) {
-                // TODO: log more detailed info about the fd, or client, etc
-                // printf("  Error! revents = %d\n", fds[i].revents);
-                logMsg (stderr, ERROR, SERVER, "Unexpected poll result!");
-            }
+            if (server->fds[i].revents != POLLIN) continue;
 
             // listening fd is readable (sever socket)
             if (server->fds[i].fd == server->serverSock) {
                 // accept incoming connections that are queued
-                do {
-                    newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
-
-                    // if we get EWOULDBLOCK, we have accepted all connections
-                    if (newfd < 0)
-                        if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
-
-                    // 17/11/2018 - send useful server info to the client
-                    // FIXME:!!!!
-                    // TODO: this migth not apply on a web server
-                    // sendServerInfo (server, client);
-
-                    // hold the client until he authenticates
-                    /* if (server->authRequired) {
-                        client = newClient (server, newfd, clientAddress, true);
-                        onHoldClient (server, client);
-                    } */
-
-                    /* else {
-                        
-                    }  */
-
-                    // FIXME: how do we check if we allready have a connection from that client?
-                    // client = newClient (server, newfd, clientAddress, false);
-                    // client_registerToServer (server, client);  
-
-                    #ifdef CERVER_DEBUG
-                        logMsg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
-                    #endif
-                } while (newfd != -1);
+                newfd = server_accept (server);
             }
 
+            // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable
-            else {
-                // recive all incoming data from this socket
-                // TODO: 03/11/2018 - add support for multiple reads to the socket
-                // what happens if my buffer isn't enough, for example a larger file?
-                do {
-                    rc = recv (server->fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
-                    
-                    // recv error - no more data to read
-                    if (rc < 0) {
-                        if (errno != EWOULDBLOCK) {
-                            logMsg (stderr, ERROR, SERVER, "Recv failed!");
-                            perror ("Error:");
-                        }
-
-                        break;  // there is no more data to handle
-                    }
-
-                    if (rc == 0) {
-                        // man recv -> steam socket perfomed an orderly shutdown
-                        // but in dgram it might mean something?
-                        // 03/11/2018 -- we just ignore the packet or whatever
-                        break;
-                    }
-
-                    info = newPacketInfo (server, 
-                        getClientBySock (server->clients, server->fds[i].fd), packetBuffer, rc);
-
-                    thpool_add_work (server->thpool, (void *) handlePacket, info);
-                } while (true);
-            }
-
+            else server_recieve (server, server->fds[i].fd);
         }
 
         if (server->compress_clients) compressClients (server);
@@ -1144,6 +1143,9 @@ void initServerValues (Server *server, ServerType type) {
         } break;
         default: break;
     }
+
+    // 21/11/2018 - 9:18 - statistics
+    server->connectedClients = 0;
 
 }
 
@@ -1532,7 +1534,7 @@ u8 cerver_startServer (Server *server) {
                     // 04/11/2018 -- keep in mind this is intended for one server at a time,
                     // with a load balancer or diffrent physical servers, it must be different...
                     // main thread handles main poll function
-                    serverPoll (server);
+                    server_poll (server);
 
                     retval = 0;
                 }
