@@ -839,6 +839,7 @@ u8 handleOnHoldClients (void *data) {
 
 #pragma region CONNECTION HANDLER
 
+// TODO: don't forget to send the packet to the pool after using it
 // called with the th pool to handle a new packet
 void handlePacket (void *data) {
 

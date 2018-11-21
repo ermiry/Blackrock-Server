@@ -676,15 +676,17 @@ void handlePlayersInLobby (void *data) {
 
 }
 
+void deleteGamePacketInfo (void *data);
+
 Lobby *newLobby (Server *server) {
 
     if (server) {
         if (server->type == GAME_SERVER) {
             Lobby *lobby = NULL;
-            GameServerData *data = (GameServerData *) server->serverData;
-            if (data->lobbyPool) {
-                if (POOL_SIZE (data->lobbyPool) > 0) {
-                    lobby = (Lobby *) pool_pop (data->lobbyPool);
+            GameServerData *gameData = (GameServerData *) server->serverData;
+            if (gameData->lobbyPool) {
+                if (POOL_SIZE (gameData->lobbyPool) > 0) {
+                    lobby = (Lobby *) pool_pop (gameData->lobbyPool);
                     if (!lobby) lobby = (Lobby *) malloc (sizeof (Lobby));
                 }
             }
@@ -692,6 +694,28 @@ Lobby *newLobby (Server *server) {
             else {
                 logMsg (stderr, WARNING, SERVER, "Game server has no refrence to a lobby pool!");
                 lobby = (Lobby *) malloc (sizeof (Lobby));
+
+                // one time init values
+                if (lobby) {
+                    lobby->players = avl_init (playerComparator, deletePlayer);
+                    lobby->gamePacketsPool = pool_init (deleteGamePacketInfo);
+
+                    // add some packets to the pool
+                    for (u8 i = 0; i < 3; i++)
+                        pool_push (lobby->gamePacketsPool, malloc (sizeof (GamePacketInfo)));
+
+                    if (gameData) lobby->deleteLobbyGameData = gameData->deleteLobbyGameData;
+
+                    lobby->pollTimeout = server->pollTimeout;
+                }
+            }
+
+            // values that have to be init when calling from the pool
+            if (lobby) {
+                lobby->settings = NULL;
+                lobby->owner = NULL;
+                lobby->players_nfds = 0;
+                lobby->compress_players = false;
             }
 
             return lobby;
@@ -710,6 +734,7 @@ void deleteLobby (void *data) {
         Lobby *lobby = (Lobby *) data;
 
         lobby->inGame = false;      // just to be sure
+        lobby->isRunning = false;
         lobby->owner = NULL;
 
         if (lobby->gameData) {
@@ -724,6 +749,8 @@ void deleteLobby (void *data) {
             avl_clearTree (&lobby->players->root, lobby->players->destroy);
             free (lobby->players);
         }
+
+        if (lobby->gamePacketsPool) pool_clear (lobby->gamePacketsPool);
 
         // clear lobby data
         if (lobby->settings) free (lobby->settings);
@@ -1652,9 +1679,6 @@ void gs_leaveLobby (Server *, Player *, Lobby *);
 void gs_initGame (Server *, Player *, Lobby *);
 void gs_sendMsg (Server *, Player *, Lobby *, char *msg);
 
-// TODO: todo public game sever functions
-// player movement and updates
-
 // this is called from the main poll in a new thread
 void gs_handlePacket (PacketInfo *packetInfo) {
 
@@ -1662,19 +1686,25 @@ void gs_handlePacket (PacketInfo *packetInfo) {
     switch (reqData->type) {
         // TODO: get the correct game type from the packet
         case LOBBY_CREATE: gs_createLobby (packetInfo->server, packetInfo->client, 0); break;
-        case LOBBY_JOIN: gs_joinLobby (packetInfo->server, packetInfo->client); break;
-        // case LOBBY_LEAVE: gs_leaveLobby (packetInfo->server, packetInfo->client); break;
-        case LOBBY_DESTROY: break;
+        case LOBBY_JOIN: gs_joinLobby (packetInfo->server, packetInfo->client, 0); break;
+        default: break;
     }
 
 }
 
-// TODO: where do we want to have a pool of these?
 GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize) {
 
     if (server && lobby && player && packetData && (packetSize > 0)) {
-        GamePacketInfo *info = (GamePacketInfo *) malloc (sizeof (GamePacketInfo));
+        GamePacketInfo *info = NULL;
+
+        if (lobby->gamePacketsPool) {
+            info = (GamePacketInfo *) pool_pop (lobby->gamePacketsPool);
+            if (!info) info = (GamePacketInfo *) malloc (sizeof (GamePacketInfo));
+        }
+
+        else info = (GamePacketInfo *) malloc (sizeof (GamePacketInfo));
+
         if (info) {
             info->server = server;
             info->lobby = lobby;
@@ -1690,11 +1720,21 @@ GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player,
 
 }
 
-// TODO:
-void destroyGamePacketInfo (void *data) {}
+void deleteGamePacketInfo (void *data) {
 
-// FIXME:
-// 04/11/2018 -- handles all valid requests a player can make from inside a lobby
+    if (data) {
+        GamePacketInfo *info = (GamePacketInfo *) info;
+
+        info->server = NULL;
+        info->lobby = NULL;
+        info->player = NULL;
+
+        free (info);
+    }
+
+}
+
+// handles all valid requests a player can make from inside a lobby
 void handleGamePacket (void *data) {
 
     if (data) {
@@ -1703,21 +1743,24 @@ void handleGamePacket (void *data) {
             RequestData *rdata = (RequestData *) packet->packetData + sizeof (PacketHeader);
 
             switch (rdata->type) {
-                case LOBBY_LEAVE: break;
-                case LOBBY_DESTROY: break;
+                case LOBBY_LEAVE: 
+                    gs_leaveLobby (packet->server, packet->player, packet->lobby); break;
 
                 case GAME_START: 
                     gs_initGame (packet->server, packet->player, packet->lobby); break;
                 case GAME_INPUT_UPDATE:  break;
                 case GAME_SEND_MSG: break;
 
-                // TODO: dispose the packet -> send it to the pool
+                // dispose the packet -> send it to the pool
                 default: break;
             }
+
+            // after we have use the packet, send it to the pool
+            pool_push (packet->lobby->gamePacketsPool, packet);
         }
 
-        // TODO: invalid packet -> dispose -> send it to the pool
-        // else 
+        // invalid packet -> dispose -> send it to the pool
+        else pool_push (packet->lobby->gamePacketsPool, packet);
     }
 
 }

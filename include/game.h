@@ -8,6 +8,7 @@
 
 #include <poll.h>
 #include "utils/avl.h"
+#include "utils/objectPool.h"
 
 /*** CERVER TYPES ***/
 
@@ -141,6 +142,10 @@ struct _Lobby {
 	// the server admin can add its server specific data types
 	void *gameData;
 	delegate deleteLobbyGameData;
+
+	// 21/11/2018 - we put this here to avoid race conditions if we put it on
+	// the server game data
+	Pool *gamePacketsPool;
 
 };
 
