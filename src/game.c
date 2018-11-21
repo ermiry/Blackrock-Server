@@ -139,6 +139,10 @@ u8 destroyLobby (Server *server, Lobby *lobby);
 u8 destroyGameServer (Server *server) {
 
     if (server) {
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, "Destroying game server data...");
+        #endif
+
         GameServerData *gameData = (GameServerData *) server->serverData;
         if (gameData) {
             // first destroy the current lobbys, stoping any ongoing game and sending the players
@@ -149,6 +153,10 @@ u8 destroyGameServer (Server *server) {
             // destroy all lobbys
             cleanUpList (gameData->currentLobbys);
             pool_clear (gameData->lobbyPool);
+
+            #ifdef DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "Done clearing server lobbys.");
+            #endif
 
             // send server destroy packet to all the players
             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
@@ -166,6 +174,10 @@ u8 destroyGameServer (Server *server) {
 
             else logMsg (stderr, ERROR, PACKET, "Failed to create server teardown packet!");
 
+            #ifdef DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "Done sending server teardown packet to players.");
+            #endif
+
             // disconnect all players from the server
                 // -> close connections -> take them out of server poll structures
             // 20/11/2108 - this is done in the server teardown function because cleints
@@ -175,6 +187,10 @@ u8 destroyGameServer (Server *server) {
             if (gameData->players) 
                 avl_clearTree (&gameData->players->root, gameData->players->destroy);
             pool_clear (gameData->playersPool);
+
+            #ifdef DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "Done clearing server players.");
+            #endif
 
             // destroy game specific data set by the game admin
             if (gameData->deleteGameData) gameData->deleteGameData ();

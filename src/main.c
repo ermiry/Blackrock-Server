@@ -36,6 +36,8 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
+   // FIXME: add a function to set server auth
+
     gameServer = cerver_createServer (NULL, GAME_SERVER);
     if (gameServer) {
         // set our own functions to load and delete global game data
@@ -49,16 +51,14 @@ int main (void) {
         // any other data that blackrock lobby uses
         gs_set_lobbyDeleteGameData (gameServer, deleteBrGameData);
 
-        if (!cerver_startServer (gameServer)) 
-            logMsg (stdout, SUCCESS, SERVER, "Server started properly!");
-
-        else logMsg (stderr, ERROR, SERVER, "Failed to start server!");
+        if (cerver_startServer (gameServer)) 
+            logMsg (stderr, ERROR, SERVER, "Failed to start server!");
     } 
 
     else logMsg (stderr, ERROR, NO_TYPE, "Failed to create Blackrock Server!");
 
     // if we reach this point, be sure to correctly clean all of our data...
-    closeProgram (0);
+    // closeProgram (0);
 
     return 0;
 

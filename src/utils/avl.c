@@ -16,7 +16,7 @@ AVLTree *avl_init (CompPointer comparator, void (*destroy)(void *data)) {
 // removes all nodes from an avl tree
 void avl_clearTree (AVLNode **node, void (*destroy)(void *data)) {
 
-    if (node) {
+    if (*node) {
         AVLNode *ptr = *node;
         avl_clearTree (&(ptr->right), destroy);
         avl_clearTree (&(ptr->left), destroy);

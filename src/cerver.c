@@ -939,9 +939,8 @@ u8 serverPoll (Server *server) {
 
         // poll failed
         if (poll_retval < 0) {
-            logMsg (stderr, ERROR, SERVER, "Poll failed!");
+            logMsg (stderr, ERROR, SERVER, "Main server poll failed!");
             perror ("Error");
-            server->isRunning = false;
             break;
         }
 
@@ -976,19 +975,27 @@ u8 serverPoll (Server *server) {
                         if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
 
                     // 17/11/2018 - send useful server info to the client
+                    // FIXME:!!!!
                     // TODO: this migth not apply on a web server
-                    sendServerInfo (server, client);
+                    // sendServerInfo (server, client);
 
                     // hold the client until he authenticates
-                    if (server->authRequired) {
+                    /* if (server->authRequired) {
                         client = newClient (server, newfd, clientAddress, true);
                         onHoldClient (server, client);
-                    } 
+                    } */
 
-                    else {
-                        client = newClient (server, newfd, clientAddress, false);
-                        client_registerToServer (server, client);  
-                    } 
+                    /* else {
+                        
+                    }  */
+
+                    // FIXME: how do we check if we allready have a connection from that client?
+                    // client = newClient (server, newfd, clientAddress, false);
+                    // client_registerToServer (server, client);  
+
+                    #ifdef CERVER_DEBUG
+                        logMsg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
+                    #endif
                 } while (newfd != -1);
             }
 
@@ -1053,7 +1060,12 @@ u8 initServerDS (Server *server, ServerType type) {
 
     server->packetPool = pool_init (destroyPacketInfo);
     // by default init the packet pool with some members
-    for (u8 i = 0; i < 3; i++) pool_push (server->packetPool, malloc (sizeof (PacketInfo)));
+    PacketInfo *info = NULL;
+    for (u8 i = 0; i < 3; i++) {
+        info = (PacketInfo *) malloc (sizeof (PacketInfo));
+        info->packetData = NULL;
+        pool_push (server->packetPool, info);
+    } 
 
     // initialize pollfd structures
     memset (server->fds, 0, sizeof (server->fds));
@@ -1080,12 +1092,12 @@ u8 initServerDS (Server *server, ServerType type) {
             GameServerData *gameData = (GameServerData *) malloc (sizeof (GameServerData));
 
             // init the lobbys with n inactive in the pool
-            
             if (game_initLobbys (gameData, GS_LOBBY_POOL_INIT)) {
                 logMsg (stderr, ERROR, NO_TYPE, "Failed to init server lobbys!");
                 return 1;
             }
 
+            // init the players with n inactive in the pool
             if (game_initPlayers (gameData, GS_PLAYER_POOL_INT)) {
                 logMsg (stderr, ERROR, NO_TYPE, "Failed to init server players!");
                 return 1;
@@ -1386,6 +1398,9 @@ Server *newServer (Server *server) {
 
     // by default the socket is assumed to be a blocking socket
     new->blocking = true;
+
+    // by default the server does not require authentication
+    new->authRequired = false;
     
     new->isRunning = false;
 
@@ -1555,7 +1570,7 @@ u8 cerver_shutdownServer (Server *server) {
         server->isRunning = false; 
 
         // close the server socket
-        if (!close (server->serverSock) < 0) {
+        if (!close (server->serverSock)) {
             #ifdef CERVER_DEBUG
                 logMsg (stdout, DEBUG_MSG, SERVER, "The server socket has been closed.");
             #endif
@@ -1641,10 +1656,9 @@ u8 cerver_teardown (Server *server) {
 
     // clean common server structs
     cleanUpClients (server);
-
-    // TODO: does this work as intended? -> stops any job?
-    // stop any ongoing job
-    if (server->thpool) thpool_destroy (server->thpool);
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, "Done cleaning up clients.");
+    #endif
 
     // disable socket I/O in both ways and stop any ongoing job
     if (!cerver_shutdownServer (server))
@@ -1652,8 +1666,25 @@ u8 cerver_teardown (Server *server) {
 
     else logMsg (stderr, ERROR, SERVER, "Failed to shutdown server!");
 
+    // FIXME:
+    // TODO: does this work as intended? -> stops any job?
+    // stop any ongoing job
+    /* if (server->thpool) {
+        if (thpool_num_threads_working (server->thpool) > 0) {
+            thpool_pause (server->thpool);
+            thpool_destroy (server->thpool);
+        }
+
+        else {
+            // free(thpool_p->threads);
+	        free (server->thpool);
+        }
+    } */
+
+    // free (server->thpool);
+
     // destroy any other server data
-    pool_clear (server->packetPool);
+    if (server->packetPool) pool_clear (server->packetPool);
     if (server->serverInfo) free (server->serverInfo);
 
     free (server);
