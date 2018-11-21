@@ -457,6 +457,22 @@ u8 blackrock_retry_arcade (void *data) {}
 
 #pragma region BLACKROCK GAME
 
+// 25/10/2018 -- what do we want to do server and client side?
+/***
+ * at the start of the game, we need to be sure that the client has the correct dbs and files
+ * 
+ * server: - init the map
+ *         - init enemies
+ *         - calculate enemy pathfinding and send to client the result
+ *         - enemy loot
+ *         - score and leaderboards
+ *         - keyframes to sync the clients every so often
+ *         - server can send messages to the clients' message log
+ * 
+ * client: - calculate fov: and send server the result
+ *         - comabt and send the result
+ * **/
+
 // FIXME:
 void blackrock_update_arcade (void *data) {
 

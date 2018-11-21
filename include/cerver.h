@@ -264,6 +264,7 @@ typedef enum RequestType {
     LOBBY_JOIN,
     LOBBY_LEAVE,
     LOBBY_UPDATE,
+    LOBBY_NEW_OWNER,
     LOBBY_DESTROY,
 
     GAME_INIT,      // prepares the game structures
@@ -288,6 +289,7 @@ typedef enum ErrorType {
     ERR_CREATE_LOBBY = 1,
     ERR_JOIN_LOBBY,
     ERR_LEAVE_LOBBY,
+    ERR_FIND_LOBBY,
 
     ERR_GAME_INIT,
 

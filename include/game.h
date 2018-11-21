@@ -55,6 +55,10 @@ struct _GameServerData {
     Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
     AVLTree *players;
 
+	// an admin can set a custom function to find a lobby bassed on 
+	// some game parameters
+	Action findLobby;
+
     // we can define a function to load game data at start, 
     // for example to connect to a db or something like that
     Func loadGameData;
