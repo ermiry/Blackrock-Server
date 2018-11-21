@@ -1,14 +1,17 @@
 #ifndef GAME_SERVER_H
 #define GAME_SERVER_H
 
+#include <poll.h>
+
 #include "cerver.h"
+
+#include "utils/list.h"
+#include "utils/avl.h"
+#include "utils/config.h"
+#include "utils/objectPool.h"
 
 // #include "utils/myTime.h"
 // #include "utils/vector.h"
-
-#include <poll.h>
-#include "utils/avl.h"
-#include "utils/objectPool.h"
 
 /*** CERVER TYPES ***/
 
@@ -65,8 +68,7 @@ struct _GameServerData {
     Func loadGameData;
     Func deleteGameData;
 
-	// FIXME: we need to set this correcly
-    delegate *deleteLobbyGameData;
+    Action deleteLobbyGameData;
 
     // 13//11/2018 -- depending on the game type, we can have different init game functions
     u8 n_gameInits;
@@ -110,8 +112,8 @@ typedef struct Player {
 	PlayerId id;
 	bool inLobby;
 
-	PlayerInput input;
-	u32 inputSequenceNum;
+	// PlayerInput input;
+	// u32 inputSequenceNum;
 	// TimeSpec lastInputTime;
 
 	bool alive;
@@ -141,7 +143,7 @@ struct _Lobby {
 
 	// the server admin can add its server specific data types
 	void *gameData;
-	delegate deleteLobbyGameData;
+	Action deleteLobbyGameData;
 
 	// 21/11/2018 - we put this here to avoid race conditions if we put it on
 	// the server game data
@@ -169,7 +171,7 @@ typedef struct PlayerAndData {
 
 /*** GAME SERVER FUNCTIONS ***/
 
-extern u8 destroyGameServer (Server *server);
+extern u8 destroyGameServer (struct _Server *server);
 
 extern u8 game_initPlayers (GameServerData *gameData, u8 n_players);
 extern u8 game_initLobbys (GameServerData *gameData, u8 n_lobbys);
@@ -180,8 +182,8 @@ extern void traversePlayers (AVLNode *node, Action action, void *data);
 
 extern void gs_set_loadGameData (struct _Server *server, Func loadData);
 extern void gs_set_deleteGameData (struct _Server *server, Func deleteData);
-extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate *gameInit);
-extern void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData);
+extern void gs_add_gameInit (struct _Server *server, GameType gameType, delegate gameInit);
+extern void gs_set_lobbyDeleteGameData (struct _Server *server, Action deleteData);
 
 extern void gs_handlePacket (struct _PacketInfo *packet);
 
@@ -237,6 +239,9 @@ typedef struct GamePacketInfo {
 
 #pragma region GAME SERIALIZATION
 
+typedef int32_t SRelativePtr;
+struct _SArray;
+
 // TODO: 19/11/2018 -- 19:05 - we need to add support for scores!
 
 // info that we need to send to the client about the players
@@ -249,7 +254,7 @@ typedef struct Splayer {
 	// we need a way to add info about the players info for specific game
 	// such as their race or level in blackrock
 
-	bool owner
+	bool owner;
 
 } SPlayer;
 
@@ -260,18 +265,19 @@ typedef struct SLobby {
     bool inGame;
 
 	// array of players inside the lobby
-	SArray players;
+	// struct _SArray players;
 
 } SLobby;
 
+// FIXME: do we need this?
 typedef struct UpdatedGamePacket {
 
 	GameSettings gameSettings;
 
 	PlayerId playerId;
 
-	SequenceNum sequenceNum;
-	SequenceNum ack_input_sequence_num;
+	// SequenceNum sequenceNum;
+	// SequenceNum ack_input_sequence_num;
 
 	// SArray players; // Array of SPlayer.
 	// SArray explosions; // Array of SExplosion.
@@ -279,28 +285,31 @@ typedef struct UpdatedGamePacket {
 
 } UpdatedGamePacket; 
 
+// FIXME: do we need this?
 typedef struct PlayerInput {
 
-	Position pos;
+	// Position pos;
 
 } PlayerInput;
 
 typedef uint64_t SequenceNum;
 
+// FIXME:
 typedef struct PlayerInputPacket {
 
-	SequenceNum sequenceNum;
-	PlayerInput input;
+	// SequenceNum sequenceNum;
+	// PlayerInput input;
 	
 } PlayerInputPacket;
 
+// FIXME: this should be a serialized version of the game component
 // in the game we move square by square
-typedef struct Position {
+/* typedef struct Position {
 
     u8 x, y;
     // u8 layer;   
 
-} Position;
+} Position; */
 
 #pragma endregion
 

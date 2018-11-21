@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#include "game.h"
+
+#include "utils/list.h"
+
 /*** BLACKROCK TYPES ***/
 
 #define SCREEN_WIDTH    1280    
@@ -159,7 +163,7 @@ extern u8 blackrock_deleteGameData (void);
 
 extern u8 blackrock_init_arcade (void *data);
 
-extern BrGameData *deleteBrGameData (BrGameData *brdata);
+extern void deleteBrGameData (void *data);
 
 /*** BLACKROCK SERIALIZED DATA ***/
 

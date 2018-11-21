@@ -664,7 +664,7 @@ void authenticateClient (void *data) {
             if (packet->server->auth.authenticate) {
                 // successful authentication
                 if (!packet->server->auth.authenticate (packet)) {
-                    registerClient (packet->server, packet->client);
+                    client_registerToServer (packet->server, packet->client);
                     size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
                     void *successPacket = generatePacket (AUTHENTICATION, packetSize);
                     if (packet) {
@@ -987,7 +987,7 @@ u8 serverPoll (Server *server) {
 
                     else {
                         client = newClient (server, newfd, clientAddress, false);
-                        registerClient (server, client);  
+                        client_registerToServer (server, client);  
                     } 
                 } while (newfd != -1);
             }
@@ -1122,7 +1122,7 @@ void initServerValues (Server *server, ServerType type) {
             GameServerData *data = (GameServerData *) server->serverData;
 
             // get game modes info from a config file
-            data->gameSettingsConfig  = parseConfigFile ("./config/gameSettings.cfg");
+            data->gameSettingsConfig = parseConfigFile ("./config/gameSettings.cfg");
             if (!data->gameSettingsConfig) 
                 logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
 

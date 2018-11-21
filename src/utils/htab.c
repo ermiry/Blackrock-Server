@@ -1,6 +1,6 @@
 #include <stdbool.h>
 
-#include "htab.h"
+#include "utils/htab.h"
 
 size_t htab_generic_hash (const void *key, size_t key_size, size_t table_size) {
 

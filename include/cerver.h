@@ -304,6 +304,7 @@ typedef struct ErrorData {
 
 } ErrorData;
 
+extern void initPacketHeader (void *header, PacketType type, u32 packetSize);
 extern void *generatePacket (PacketType packetType, size_t packetSize);
 extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType);
 

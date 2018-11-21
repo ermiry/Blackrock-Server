@@ -77,7 +77,7 @@ void gs_set_deleteGameData (Server *server, Func deleteData) {
 // adds a game init function to use with a game type
 // TODO: 13/11/2018 -- we need to support the admin to add new game modes without
 // changing the original GameType enum
-void gs_add_gameInit (Server *server, GameType gameType, delegate gameInit) {
+void gs_add_gameInit (struct _Server *server, GameType gameType, delegate gameInit) {
 
     if (server) {
         if (server->type != GAME_SERVER) {
@@ -110,7 +110,7 @@ void gs_add_gameInit (Server *server, GameType gameType, delegate gameInit) {
 
 }
 
-void gs_set_lobbyDeleteGameData (Server *server, delegate deleteData) {
+void gs_set_lobbyDeleteGameData (Server *server, Action deleteData) {
 
      if (server) {
         if (server->type != GAME_SERVER) {
@@ -144,7 +144,7 @@ u8 destroyGameServer (Server *server) {
             // first destroy the current lobbys, stoping any ongoing game and sending the players
             // to the main server players avl structure
             while (LIST_SIZE (gameData->currentLobbys) > 0) 
-                destroyLobby (server, LIST_START (gameData->currentLobbys));
+                destroyLobby (server, (Lobby *) (LIST_START (gameData->currentLobbys)));
 
             // destroy all lobbys
             cleanUpList (gameData->currentLobbys);
@@ -977,7 +977,7 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
                     Player *tempPlayer = NULL;
                     while (lobby->players_nfds > 0) {
                         tempPlayer = (Player *) lobby->players->root->id;
-                        if (tempPlayer) player_removeFromLobby (gameData, lobby, tempPlayer);
+                        if (tempPlayer) player_removeFromLobby (server, lobby, tempPlayer);
                     }
                 }
 
@@ -1251,8 +1251,8 @@ void game_score_add_scoreType (ScoreBoard *sb, char *newScore) {
             // FIXME:
 
             // add the score to the scoretypes
-            sb->scores = (char **) realloc (sb->scores, sb->scoresNum);
-            if (sb->scores) {
+            sb->scoreTypes = (char **) realloc (sb->scores, sb->scoresNum);
+            if (sb->scoreTypes) {
                 sb->scoreTypes[sb->scoresNum] = (char *) calloc (strlen (newScore) + 1, sizeof (char));
                 strcpy (sb->scoreTypes[sb->scoresNum], newScore);
                 sb->scoresNum++;
@@ -1482,8 +1482,6 @@ void game_score_update (ScoreBoard *sb, char *playerName, char *scoreType, i32 v
         }
     }
 
-    return -1;  // error
-
 }
 
 // reset all the player's scores
@@ -1514,8 +1512,6 @@ void game_score_reset (ScoreBoard *sb, char *playerName) {
             #endif
         }
     }
-
-    return 1;   // error
 
 }
 

@@ -8,7 +8,7 @@
 
 #include "utils/log.h"
 
-#include "blackrock.h"
+#include "blackrock/blackrock.h"
 
 // TODO: maybe handle this in a separate list by a name?
 Server *gameServer = NULL;
@@ -18,10 +18,6 @@ void closeProgram (int dummy) {
     
     if (gameServer) cerver_teardown (gameServer);
     else logMsg (stdout, NO_TYPE, NO_TYPE, "There isn't any server to teardown. Quitting application.");
-
-    #ifdef DEBUG
-    logMsg (stdout, DEBUG_MSG, NO_TYPE, "Clearing thread pool...");
-    #endif
 
 }
 

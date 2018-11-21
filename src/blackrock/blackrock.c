@@ -250,9 +250,9 @@ BrGameData *newBrGameData (void) {
 }
 
 // FIXME:
-BrGameData *deleteBrGameData (BrGameData *brdata) {
+void deleteBrGameData (void *data) {
 
-    if (brdata) {
+    if (data) {
 
     }
 
@@ -312,8 +312,9 @@ void generateLevel (World *world) {
     u8 monCount = 0;
     for (u8 i = 0; i < monToSpawn; i++) {
         // generate a random monster
-        GameObject *monster = createMonster (getMonsterId ());
-        if (monster) {
+        // FIXME:
+        // GameObject *monster = createMonster (getMonsterId ());
+        /* if (monster) {
             // spawn in a random position
             Point monsterSpawnPos = getFreeSpot (world->level->mapCells);
 
@@ -322,12 +323,12 @@ void generateLevel (World *world) {
             // monsterPos->x = (u8) monsterSpawnPos.x;
             // monsterPos->y = (u8) monsterSpawnPos.y;
             monCount++;
-        }
+        } */
     }
 
     #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, 
-        createString ("%i / %i monsters created successfully.", count, monCount));
+        createString ("%i / %i monsters created successfully.", monCount, monCount));
     #endif
 
 }
