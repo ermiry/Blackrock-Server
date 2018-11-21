@@ -78,6 +78,8 @@ struct _Client {
 
 typedef struct _Client Client;
 
+extern Client *getClientBySock (AVLTree *clients, i32 fd);
+extern void client_registerToServer (struct _Server *server, Client *client);
 extern void client_unregisterFromServer (struct _Server *server, Client *client);
 
 #pragma endregion

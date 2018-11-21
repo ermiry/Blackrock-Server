@@ -534,7 +534,7 @@ Client *getClientBySock (AVLTree *clients, i32 fd) {
 
 // TODO: hanlde a max number of clients connected to a server at the same time?
 // maybe this can be handled before this call by the load balancer
-void registerClient (Server *server, Client *client) {
+void client_registerToServer (Server *server, Client *client) {
 
     Client *c = NULL;
 
@@ -578,6 +578,9 @@ void registerClient (Server *server, Client *client) {
 // if there is an async disconnection from the client, we need to have a time out
 // that automatically clean up the clients if we do not get any request or input from them
 
+// FIXME: 20/11/2018 - we need to check what happens when we are registering and 
+// unregistering payer to and from the lobby -> what happenes with the client id
+// and also with the position the server poll
 // 10/11/2018 - used to create a new player and add it to the game server data
 // take out a client from the server's clients
 void client_unregisterFromServer (Server *server, Client *client)  {
