@@ -116,9 +116,18 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
         p->client = client;
         p->packetSize = packetSize;
 
+        // strcpy (p->packetData, packetData);
+
+        PacketHeader *header = (PacketHeader *) packetData;
+        printf ("\nPacket Type: %i\n", header->packetType);
+
+        
+
         // copy the contents from the entry buffer to the packet info
-        p->packetData = (char *) calloc (strlen (packetData) + 1, sizeof (char));
-        if (p->packetData) strcpy (p->packetData, packetData);
+        p->packetData = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
+        // if (p->packetData) strcpy (p->packetData, packetData);
+
+        memcpy (p->packetData, packetData, MAX_UDP_PACKET_SIZE);
     }
 
     return p;
@@ -146,6 +155,8 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
         return 1;
     } 
 
+    // void *begin = packetData;
+    // PacketHeader *header = (PacketHeader *) begin;
     PacketHeader *header = (PacketHeader *) packetData;
 
     if (header->protocolID != PROTOCOL_ID) {
@@ -165,12 +176,14 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
 
     // compare the size we got from recv () against what is the expected packet size
     // that the client created 
-    if (packetSize != header->packetSize) {
+    /* if ((u32) packetSize != header->packetSize) {
         #ifdef CERVER_DEBUG
         logMsg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
         #endif
         return 1;
-    }
+    } */
+
+    printf ("\nRecieved size: %i - Expected size %i\n", packetSize, header->packetSize);
 
     if (expectedType != DONT_CHECK_TYPE) {
         // check if the packet is of the expected type
@@ -180,7 +193,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
             #endif
             return 1;
         }
-    }
+    } 
 
     return 0;   // packet is fine
 
@@ -561,7 +574,7 @@ void client_registerToServer (Server *server, Client *client) {
     // 10/11/2018 -- we use a free idx in the poll array as an unique client id
     // send the client to the server's active clients structures
     server->fds[client->clientID].fd = c->clientSock;
-    server->fds[client->clientID].events = POLLIN | POLLRDHUP;
+    server->fds[client->clientID].events = POLLIN;
     // server->nfds++;
 
     avl_insertNode (server->clients, c);
@@ -859,6 +872,7 @@ void handlePacket (void *data) {
 
     if (!checkPacket (packet->packetSize, packet->packetData, DONT_CHECK_TYPE))  {
         PacketHeader *header = (PacketHeader *) packet->packetData;
+        printf ("\nPacket type: %c\n", header->packetType);
 
         switch (header->packetType) {
             // handles an error from the client
@@ -974,6 +988,8 @@ void server_recieve (Server *server, i32 fd) {
             break;
         }
 
+        printf ("\nPacket size recv: %i\n", rc);
+
         info = newPacketInfo (server, 
             getClientBySock (server->clients, fd), packetBuffer, rc);
 
@@ -998,7 +1014,7 @@ u8 server_poll (Server *server) {
     logMsg (stdout, SUCCESS, SERVER, "Server has started!");
     logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
     while (server->isRunning) {
-        poll_retval = poll (server->fds, server->nfds, server->pollTimeout);
+        poll_retval = poll (server->fds, poll_n_fds, server->pollTimeout);
 
         // poll failed
         if (poll_retval < 0) {
@@ -1683,7 +1699,7 @@ u8 cerver_teardown (Server *server) {
         }
     } */
 
-    // free (server->thpool);
+    free (server->thpool);
 
     // destroy any other server data
     if (server->packetPool) pool_clear (server->packetPool);

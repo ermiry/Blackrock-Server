@@ -211,8 +211,8 @@ struct _PacketInfo {
 
     Server *server;
     Client *client;
-    // char packetData[MAX_UDP_PACKET_SIZE];
     char *packetData;
+    // char *packetData;
     size_t packetSize;
 
 };
@@ -247,7 +247,7 @@ typedef enum PacketType {
 
 typedef struct PacketHeader {
 
-	ProtocolId protocolID;
+	uint32_t protocolID;
 	Version protocolVersion;
 	PacketType packetType;
     u32 packetSize;             // expected packet size
@@ -257,7 +257,6 @@ typedef struct PacketHeader {
 // 01/11/2018 -- this indicates the data and more info about the packet type
 typedef enum RequestType {
 
-    // FIXME: 19/11/2018 - 14:36 - make sure that the players handle this correctly!!
     SERVER_INFO,
     SERVER_TEARDOWN,
 
