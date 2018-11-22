@@ -105,27 +105,28 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
         if (POOL_SIZE (server->packetPool) > 0) {
             p = pool_pop (server->packetPool);
             if (!p) p = (PacketInfo *) malloc (sizeof (PacketInfo));
-            else if (p->packetData) free (p->packetData);
+            else {
+                printf ("\nGot a packet info from the pool!\n");
+
+                if (p->packetData) free (p->packetData);
+            }
+            // else if (p->packetData) free (p->packetData);
         }
     }
 
-    else p = (PacketInfo *) malloc (sizeof (PacketInfo));
+    else {
+        p = (PacketInfo *) malloc (sizeof (PacketInfo));
+        p->packetData = NULL;
+    } 
 
     if (p) {
         p->server = server;
         p->client = client;
         p->packetSize = packetSize;
-
-        // strcpy (p->packetData, packetData);
-
-        PacketHeader *header = (PacketHeader *) packetData;
-        printf ("\nPacket Type: %i\n", header->packetType);
-
         
-
         // copy the contents from the entry buffer to the packet info
-        p->packetData = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
-        // if (p->packetData) strcpy (p->packetData, packetData);
+        if (!p->packetData)
+            p->packetData = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
 
         memcpy (p->packetData, packetData, MAX_UDP_PACKET_SIZE);
     }
@@ -139,6 +140,7 @@ void destroyPacketInfo (void *data) {
 
     if (data) {
         PacketInfo *packet = (PacketInfo *) data;
+        packet->server= NULL;
         packet->client = NULL;
         if (packet->packetData) free (packet->packetData);
     }
@@ -155,8 +157,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
         return 1;
     } 
 
-    // void *begin = packetData;
-    // PacketHeader *header = (PacketHeader *) begin;
+    // our clients must send us a packet with the cerver;s packet header to be valid
     PacketHeader *header = (PacketHeader *) packetData;
 
     if (header->protocolID != PROTOCOL_ID) {
@@ -176,14 +177,14 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
 
     // compare the size we got from recv () against what is the expected packet size
     // that the client created 
-    /* if ((u32) packetSize != header->packetSize) {
+    if ((u32) packetSize != header->packetSize) {
         #ifdef CERVER_DEBUG
         logMsg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
+        logMsg (stdout, DEBUG_MSG, PACKET, 
+            createString ("Recieved size: %i - Expected size %i", packetSize, header->packetSize));
         #endif
         return 1;
-    } */
-
-    printf ("\nRecieved size: %i - Expected size %i\n", packetSize, header->packetSize);
+    } 
 
     if (expectedType != DONT_CHECK_TYPE) {
         // check if the packet is of the expected type
@@ -296,6 +297,27 @@ i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flag
 
 }
 
+// handles the correct logic for sending a packet, depending on the supported protocols
+u8 server_sendPacket (Server *server, Client *client, void *packet, size_t packetSize) {
+
+    if (server && client) {
+        switch (server->protocol) {
+            case IPPROTO_TCP: 
+                if (tcp_sendPacket (client->clientSock, packet, packetSize, 0) >= 0)
+                    return 0;
+                break;
+            case IPPROTO_UDP:
+                if (udp_sendPacket (server, packet, packetSize, client->address) >= 0)
+                    return 0;
+                break;
+            default: break;
+        }
+    }
+
+    return 1;
+
+}
+
 // just creates an erro packet -> used directly when broadcasting to many players
 void *generateErrorPacket (ErrorType type, char *msg) {
 
@@ -339,6 +361,23 @@ u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
     free (errpacket);
 
     return 0;
+
+}
+
+u8 sendTestPacket (Server *server, Client *client) {
+
+    if (server && client) {
+        size_t packetSize = sizeof (PacketHeader);
+        void *packet = generatePacket (TEST_PACKET, packetSize);
+        if (packet) {
+            u8 retval = server_sendPacket (server, client, packet, packetSize);
+            free (packet);
+
+            return retval;
+        }
+    }
+
+    return 1;
 
 }
 
@@ -461,6 +500,8 @@ i32 getHoldClientId (Server *server) {
 
 }
 
+// FIXME: should we get a new client id each time we register to the server?
+    // what happens when we are juming back and forth between the server poll and the lobbys?
 // FIXME: client ids -> is the server full?
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold) {
 
@@ -589,18 +630,7 @@ void client_registerToServer (Server *server, Client *client) {
 
 }
 
-// sync disconnection
-// when a clients wants to disconnect, it should send us a request to disconnect
-// so that we can clean the correct structures
-
-// if there is an async disconnection from the client, we need to have a time out
-// that automatically clean up the clients if we do not get any request or input from them
-
-// FIXME: 20/11/2018 - we need to check what happens when we are registering and 
-// unregistering payer to and from the lobby -> what happenes with the client id
-// and also with the position the server poll
-// 10/11/2018 - used to create a new player and add it to the game server data
-// take out a client from the server's clients
+// removes a client form a server's main poll structures
 void client_unregisterFromServer (Server *server, Client *client)  {
 
     if (server && client) {
@@ -614,12 +644,29 @@ void client_unregisterFromServer (Server *server, Client *client)  {
 
 }
 
-// FIXME: don't forget to call this function in the server teardown to clean up our structures?
-// take out a client from the server's clients and disconnect it from the server
-void client_disconnectFromServer (Server *server, Client *client) {}
+// disconnect a client from the server and take it out from the server's clients and 
+void client_closeConnection (Server *server, Client *client) {
+
+    if (server && client) {
+        // first close the connection
+        close (client->clientSock);
+
+        // remove it from the server structures
+        client_unregisterFromServer (server, client);
+
+        server->connectedClients--;
+
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, CLIENT, 
+                createString ("Disconnected a client from the server.\
+                \nConnected clients remainning: %i.", server->connectedClients));
+        #endif
+    }
+
+}
 
 // TODO: used to check for client timeouts in any type of server
-void checkClientTimeout (Server *server) {}
+void client_checkTimeouts (Server *server) {}
 
 #pragma endregion
 
@@ -857,49 +904,49 @@ u8 handleOnHoldClients (void *data) {
 
 #pragma region CONNECTION HANDLER
 
-// TODO: don't forget to send the packet to the pool after using it
 // called with the th pool to handle a new packet
 void handlePacket (void *data) {
 
-    if (!data) {
-        #ifdef CERVER_DEBUG
-        logMsg (stdout, WARNING, PACKET, "Can't handle NULL packet data.");
-        #endif
-        return;
-    }
+    if (data) {
+        PacketInfo *packet = (PacketInfo *) data;
 
-    PacketInfo *packet = (PacketInfo *) data;
+        if (!checkPacket (packet->packetSize, packet->packetData, DONT_CHECK_TYPE))  {
+            PacketHeader *header = (PacketHeader *) packet->packetData;
 
-    if (!checkPacket (packet->packetSize, packet->packetData, DONT_CHECK_TYPE))  {
-        PacketHeader *header = (PacketHeader *) packet->packetData;
-        printf ("\nPacket type: %c\n", header->packetType);
+            switch (header->packetType) {
+                // handles an error from the client
+                case ERROR_PACKET: break;
 
-        switch (header->packetType) {
-            // handles an error from the client
-            case ERROR_PACKET: break;
+                // a client is trying to authenticate himself
+                case AUTHENTICATION: break;
 
-            // a client is trying to authenticate himself
-            case AUTHENTICATION: break;
+                // handles a request made from the client
+                case REQUEST: break;
 
-            // handles a request made from the client
-            case REQUEST: break;
+                // handle a game packet sent from a client
+                case GAME_PACKET: gs_handlePacket (packet); break;
 
-            // handle a game packet sent from a client
-            case GAME_PACKET: gs_handlePacket (packet); break;
+                case TEST_PACKET: 
+                    logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                    // send a test packet back to the client
+                    if (!sendTestPacket (packet->server, packet->client))
+                        logMsg (stdout, DEBUG_MSG, PACKET, "Success answering the test packet.");
 
-            case TEST_PACKET: 
-                logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
-                pool_push (packet->server->packetPool, packet);
-                break;
+                    else logMsg (stderr, ERROR, PACKET, "Failed to answer test packet!");
+                    break;
 
-            default: 
-                logMsg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
-                pool_push (packet->server->packetPool, packet);
-                break;
+                default: 
+                    logMsg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
+                    break;
+            }
         }
-    }
 
-    else pool_push (packet->server->packetPool, packet);
+        // FIXME: 22/11/2018 - error with packet pool!!! seg fault always the second time 
+        // a client sends a packet!!
+        // no matter what, we send the packet to the pool after using it
+        // pool_push (packet->server->packetPool, data);
+        destroyPacketInfo (packet);
+    }
 
 }
 
@@ -971,14 +1018,16 @@ void server_recieve (Server *server, i32 fd) {
     do {
         rc = recv (fd, packetBuffer, sizeof (packetBuffer), 0);
         
-        // recv error - no more data to read
+        // recv error - no more data to read - so end the connection and remove client
         if (rc < 0) {
             if (errno != EWOULDBLOCK) {
-                logMsg (stderr, ERROR, SERVER, "Recv failed!");
-                perror ("Error:");
+                // logMsg (stderr, ERROR, SERVER, "Recv failed!");
+                // perror ("Error:");
+                // logMsg (stdout, DEBUG_MSG, CLIENT, "Ending connection with client...");
+                client_closeConnection (server, getClientBySock (server->clients, fd));
             }
 
-            break;  // there is no more data to handle
+            break;
         }
 
         if (rc == 0) {
@@ -987,8 +1036,6 @@ void server_recieve (Server *server, i32 fd) {
             // 03/11/2018 -- we just ignore the packet or whatever
             break;
         }
-
-        printf ("\nPacket size recv: %i\n", rc);
 
         info = newPacketInfo (server, 
             getClientBySock (server->clients, fd), packetBuffer, rc);
@@ -1032,7 +1079,6 @@ u8 server_poll (Server *server) {
         }
 
         // one or more fd(s) are readable, need to determine which ones they are
-        // currfds = server->nfds;
         for (u8 i = 0; i < poll_n_fds; i++) {
             if (server->fds[i].revents == 0) continue;
             if (server->fds[i].revents != POLLIN) continue;

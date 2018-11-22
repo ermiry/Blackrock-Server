@@ -21,29 +21,41 @@ Pool *pool_init (void (*destroy)(void *data)) {
 
 void pool_push (Pool *pool, void *data) {
 
-    if (data == NULL) return;
+    if (pool && data) {
+        PoolMember *new = (PoolMember *) malloc (sizeof (PoolMember));
+        if (new) {
+            new->data = data;
 
-    PoolMember *new = (PoolMember *) malloc (sizeof (PoolMember));
-    new->data = data;
+            if (POOL_SIZE (pool) == 0) new->next = NULL;
+            else new->next = pool->top;
 
-    if (POOL_SIZE (pool) == 0) new->next = NULL;
-    else new->next = pool->top;
+            pool->top = new;
+            pool->size++;
+        }
 
-    pool->top = new;
-    pool->size++;
+        // failed to insert on the pool
+        else {
+            if (pool->destroy) pool->destroy (data);
+            else free (data);
+        }
+    }
 
 }
 
 void *pool_pop (Pool *pool) {
 
-    void *data;
+    if (pool) {
+        PoolMember *top = POOL_TOP (pool);
 
-    data = pool->top->data;
+        void *data = top->data;
 
-    pool->top = pool->top->next;
-    pool->size--;
+        pool->top = top->next;
+        pool->size--;
 
-    return data;
+        free (top);
+
+        return data;
+    }
 
 }
 

@@ -29,7 +29,8 @@ typedef enum LogMsgType {
     GAME,
     PLAYER,
 
-    SERVER = 100
+    SERVER = 100,
+    CLIENT,
 
 } LogMsgType;
 
