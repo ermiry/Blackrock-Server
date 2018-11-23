@@ -1793,6 +1793,10 @@ void handleGamePacket (void *data) {
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
 
     if (server && client) {
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "Creating a new lobby...");
+        #endif
+
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         // check if the client is associated with a player

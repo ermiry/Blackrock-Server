@@ -86,7 +86,6 @@ typedef enum GameType {
 
 } GameType;
 
-// TODO: what other settings do we need?? map? enemies? loot?
 struct _GameSettings {
 
 	GameType gameType;
