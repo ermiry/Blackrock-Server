@@ -914,6 +914,17 @@ void handlePacket (void *data) {
             PacketHeader *header = (PacketHeader *) packet->packetData;
 
             switch (header->packetType) {
+                case CLIENT_PACKET: {
+                    RequestData *reqdata = (RequestData *) (packet->packetData + sizeof (PacketHeader));
+                    
+                    switch (reqdata->type) {
+                        case CLIENT_DISCONNET: 
+                            client_closeConnection (packet->server, packet->client); 
+                            break;
+                        default: break;
+                    }
+                }
+
                 // handles an error from the client
                 case ERROR_PACKET: break;
 
@@ -1018,9 +1029,9 @@ void server_recieve (Server *server, i32 fd) {
     do {
         rc = recv (fd, packetBuffer, sizeof (packetBuffer), 0);
         
-        // recv error - no more data to read - so end the connection and remove client
+        // recv error - - so end the connection and remove client
         if (rc < 0) {
-            if (errno != EWOULDBLOCK) {
+            if (errno != EWOULDBLOCK) {     // no more data to read 
                 // logMsg (stderr, ERROR, SERVER, "Recv failed!");
                 // perror ("Error:");
                 // logMsg (stdout, DEBUG_MSG, CLIENT, "Ending connection with client...");
@@ -1033,7 +1044,7 @@ void server_recieve (Server *server, i32 fd) {
         if (rc == 0) {
             // man recv -> steam socket perfomed an orderly shutdown
             // but in dgram it might mean something?
-            // 03/11/2018 -- we just ignore the packet or whatever
+            client_closeConnection (server, getClientBySock (server->clients, fd));
             break;
         }
 

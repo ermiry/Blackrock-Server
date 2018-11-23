@@ -235,7 +235,8 @@ extern Version PROTOCOL_VERSION;
 typedef enum PacketType {
 
     SERVER_PACKET = 0,
-    ERROR_PACKET = 1,
+    CLIENT_PACKET,
+    ERROR_PACKET,
 	REQUEST,
     AUTHENTICATION,
     GAME_PACKET,
@@ -259,6 +260,8 @@ typedef enum RequestType {
 
     SERVER_INFO,
     SERVER_TEARDOWN,
+
+    CLIENT_DISCONNET,
 
     REQ_GET_FILE,
     POST_SEND_FILE,
