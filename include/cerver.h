@@ -353,8 +353,6 @@ typedef struct SServer {
     u8 protocol;            // we only support either tcp or udp
     u16 port; 
 
-    bool isRunning;         // the server is recieving and/or sending packets
-
     ServerType type;
     bool authRequired;      // authentication required by the server
 

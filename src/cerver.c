@@ -417,13 +417,18 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
 void *generateServerInfoPacket (Server *server) {
 
     if (server) {
-        size_t packetSize = sizeof (PacketHeader) + sizeof (SServer);
+        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
         void *packet = generatePacket (SERVER_PACKET, packetSize);
+         (packet + sizeof (RequestData));
         if (packet) {
             char *end = packet + sizeof (PacketHeader);
+            RequestData *reqdata = (RequestData *) end;
+            reqdata->type = SERVER_INFO;
+
+            end += sizeof (RequestData);
+
             SServer *sinfo = (SServer *) end;
             sinfo->authRequired = server->authRequired;
-            sinfo->isRunning = server->isRunning;
             sinfo->port = server->port;
             sinfo->protocol = server->protocol;
             sinfo->type = server->type;
@@ -442,7 +447,7 @@ void sendServerInfo (Server *server, Client *client) {
 
     if (server && client) {
         if (server->serverInfo) {
-            size_t packetSize = sizeof (PacketHeader) + sizeof (SServer);
+            size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
 
             server->protocol == IPPROTO_TCP ? 
             tcp_sendPacket (client->clientSock, server->serverInfo, packetSize, 0) :
@@ -580,11 +585,9 @@ Client *getClientBySock (AVLTree *clients, i32 fd) {
         Client temp = { .clientSock = fd };
         void *data = avl_getNodeData (clients, &temp);
         if (data) return (Client *) data;
-        else {
+        else 
             logMsg (stderr, ERROR, SERVER, 
                 createString ("Couldn't find a client associated with the passed fd: %i.", fd));
-            return NULL;
-        } 
     }
 
     return NULL;
@@ -918,9 +921,10 @@ void handlePacket (void *data) {
                     RequestData *reqdata = (RequestData *) (packet->packetData + sizeof (PacketHeader));
                     
                     switch (reqdata->type) {
-                        case CLIENT_DISCONNET: 
+                        /* case CLIENT_DISCONNET: 
+                            logMsg (stdout, DEBUG_MSG, CLIENT, "Ending client connection - client_disconnect ()");
                             client_closeConnection (packet->server, packet->client); 
-                            break;
+                            break; */
                         default: break;
                     }
                 }
@@ -1034,7 +1038,8 @@ void server_recieve (Server *server, i32 fd) {
             if (errno != EWOULDBLOCK) {     // no more data to read 
                 // logMsg (stderr, ERROR, SERVER, "Recv failed!");
                 // perror ("Error:");
-                // logMsg (stdout, DEBUG_MSG, CLIENT, "Ending connection with client...");
+                logMsg (stdout, DEBUG_MSG, CLIENT, 
+                    "Ending client connection - server_recieve () - rc < 0");
                 client_closeConnection (server, getClientBySock (server->clients, fd));
             }
 
@@ -1044,6 +1049,8 @@ void server_recieve (Server *server, i32 fd) {
         if (rc == 0) {
             // man recv -> steam socket perfomed an orderly shutdown
             // but in dgram it might mean something?
+            logMsg (stdout, DEBUG_MSG, CLIENT, 
+                    "Ending client connection - server_recieve () - rc == 0");
             client_closeConnection (server, getClientBySock (server->clients, fd));
             break;
         }
@@ -1442,14 +1449,13 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
         return 1;
     }
 
-    initServerValues (server, type);
+    server->type = type;
+    initServerValues (server, server->type);
     #ifdef CERVER_DEBUG
     logMsg (stdout, DEBUG_MSG, SERVER, "Done creating server data structures...");
     #endif
 
-    server->type = type;
-
-	return 0;   // success
+	return 0;
 
 }
 
