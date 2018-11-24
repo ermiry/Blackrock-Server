@@ -794,9 +794,9 @@ void onHoldClient (Server *server, Client *client) {
 
             // send the authentication request
             if (server->auth.reqAuthPacket) 
-                server->protocol == IPPROTO_TCP ? 
-                tcp_sendPacket (client->clientSock, server->auth.reqAuthPacket, server->auth.authPacketSize, 0) :
-                udp_sendPacket (server, server->auth.reqAuthPacket, server->auth.authPacketSize, client->address);
+                server_sendPacket (server, client, 
+                    server->auth.reqAuthPacket, server->auth.authPacketSize);
+
             else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet.");
         }
     }
@@ -821,6 +821,8 @@ void compressHoldClients (Server *server) {
     }
 
 }
+
+void server_recieve (Server *server, i32 fd);
 
 // handles packets from the on hold clients until they authenticate
 u8 handleOnHoldClients (void *data) {
@@ -862,38 +864,13 @@ u8 handleOnHoldClients (void *data) {
         }
 
         // one or more fd(s) are readable, need to determine which ones they are
-        currfds = server->hold_nfds;
-        for (u8 i = 0; i < currfds; i++) {
-            if (server->hold_fds[i].revents == 0) continue;
+        for (u8 i = 0; i < poll_n_fds; i++) {
+            if (server->fds[i].revents == 0) continue;
+            if (server->fds[i].revents != POLLIN) continue;
 
-            // FIXME: how to hanlde an unexpected result??
-            if (server->hold_fds[i].revents != POLLIN) {
-                // TODO: log more detailed info about the fd, or client, etc
-                // printf("  Error! revents = %d\n", fds[i].revents);
-                logMsg (stderr, ERROR, SERVER, "Unexpected poll result!");
-            }
-
-            // recive all incoming data from this socket
-            do {
-                rc = recv (server->hold_fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
-                
-                if (rc < 0) {
-                    if (errno != EWOULDBLOCK) {
-                        logMsg (stderr, ERROR, SERVER, "On hold recv failed!");
-                        perror ("Error:");
-                    }
-
-                    break;  // there is no more data to handle
-                }
-
-                if (rc == 0) break;
-
-                info = newPacketInfo (server, 
-                    getClientBySock (server->onHoldClients, server->hold_fds[i].fd), packetBuffer, rc);
-
-                // we have a dedicated function to authenticate the clients
-                thpool_add_work (server->thpool, (void *) authenticateClient, info);
-            } while (true);
+            // TODO: maybe later add this directly to the thread pool
+            // not the server socket, so a connection fd must be readable
+            server_recieve (server, server->fds[i].fd);
         }
 
         if (server->compress_hold_clients) compressHoldClients (server);
@@ -996,8 +973,10 @@ i32 server_accept (Server *server) {
     i32 newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
 
     // if we get EWOULDBLOCK, we have accepted all connections
-    if (newfd < 0)
+    if (newfd < 0) {
         if (errno != EWOULDBLOCK) logMsg (stderr, ERROR, SERVER, "Accept failed!");
+        return -1;
+    }
 
     // hold the client until he authenticates
     if (server->authRequired) {
@@ -1074,8 +1053,6 @@ u8 server_poll (Server *server) {
     int poll_retval;    // ret val from poll function
     int currfds;        // copy of n active server poll fds
 
-    int newfd;          // fd of new connection
-
     logMsg (stdout, SUCCESS, SERVER, "Server has started!");
     logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
     while (server->isRunning) {
@@ -1102,10 +1079,9 @@ u8 server_poll (Server *server) {
             if (server->fds[i].revents != POLLIN) continue;
 
             // listening fd is readable (sever socket)
-            if (server->fds[i].fd == server->serverSock) {
-                // accept incoming connections that are queued
-                newfd = server_accept (server);
-            }
+            // accept incoming connections that are queued
+            if (server->fds[i].fd == server->serverSock) 
+                server_accept (server);
 
             // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable
