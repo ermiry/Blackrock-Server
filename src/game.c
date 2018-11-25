@@ -568,10 +568,10 @@ void udpAddPlayer () {}
 void addPlayer (struct sockaddr_storage address) {
 
     // TODO: handle ipv6 ips
-    char addrStr[IP_TO_STR_LEN];
+    /* char addrStr[IP_TO_STR_LEN];
     sock_ip_to_string ((struct sockaddr *) &address, addrStr, sizeof (addrStr));
     logMsg (stdout, SERVER, PLAYER, createString ("New player connected from ip: %s @ port: %d.\n", 
-        addrStr, sock_ip_port ((struct sockaddr *) &address)));
+        addrStr, sock_ip_port ((struct sockaddr *) &address))); */
 
     // TODO: init other necessarry game values
     // add the new player to the game

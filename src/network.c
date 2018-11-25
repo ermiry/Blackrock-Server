@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include <fcntl.h>
@@ -27,23 +28,24 @@ bool sock_setBlocking (int32_t fd, bool isBlocking) {
 
 } */
 
-const char *sock_ip_to_string (const struct sockaddr *address, char *string, size_t string_size) {
+char *sock_ip_to_string ( const struct sockaddr *address) {
 
-	switch(address->sa_family) {
+    char *ipstr = (char *) calloc (INET6_ADDRSTRLEN, sizeof (char));
+
+	switch (address->sa_family) {
         case AF_INET:
-            return inet_ntop(AF_INET,
-                            &((struct sockaddr_in *) address)->sin_addr,
-                            string, string_size);
+            inet_ntop (AF_INET, &((struct sockaddr_in *) address)->sin_addr,
+                        ipstr, INET6_ADDRSTRLEN);
             break;
         case AF_INET6:
-            return inet_ntop(AF_INET6,
-                            &((struct sockaddr_in6 *) address)->sin6_addr,
-                            string, string_size);
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *) address)->sin6_addr,
+                        ipstr, INET6_ADDRSTRLEN);
             break;
-        default:
-            strncpy(string, "[Unknown AF!]", string_size);
-            return NULL;
+
+        default: return NULL;
 	}
+
+    return ipstr;
 
 }
 

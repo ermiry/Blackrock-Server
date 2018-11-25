@@ -298,7 +298,8 @@ i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flag
 }
 
 // handles the correct logic for sending a packet, depending on the supported protocols
-u8 server_sendPacket (Server *server, Client *client, void *packet, size_t packetSize) {
+u8 server_sendPacket (Server *server, Client *client, 
+    const void *packet, size_t packetSize) {
 
     if (server && client) {
         switch (server->protocol) {
@@ -319,7 +320,7 @@ u8 server_sendPacket (Server *server, Client *client, void *packet, size_t packe
 }
 
 // just creates an erro packet -> used directly when broadcasting to many players
-void *generateErrorPacket (ErrorType type, char *msg) {
+void *generateErrorPacket (ErrorType type, const char *msg) {
 
     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     
@@ -348,7 +349,8 @@ void *generateErrorPacket (ErrorType type, char *msg) {
 }
 
 // creates and sends an error packet
-u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg) {
+u8 sendErrorPacket (Server *server, Client *client, 
+    ErrorType type, const char *msg) {
 
     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     void *errpacket = generateErrorPacket (type, msg);
@@ -507,6 +509,7 @@ i32 getHoldClientId (Server *server) {
 
 }
 
+// TODO: 24/11/2018 -- how about using the session id as the id in the clients avl??
 // FIXME: should we get a new client id each time we register to the server?
     // what happens when we are juming back and forth between the server poll and the lobbys?
 // FIXME: client ids -> is the server full?
@@ -1011,6 +1014,26 @@ void compressClients (Server *server) {
 
 }
 
+// create a unique session id for each client
+void session_generate_id (i32 fd, const struct sockaddr_storage address) {
+
+    char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
+    u16 port = sock_ip_port ((const struct sockaddr *) &address);
+
+    if (ipstr && (port > 0)) {
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, CLIENT,
+                createString ("Client connected form IP address: %s -- Peer port: %i", 
+                ipstr, port));
+        #endif
+
+        // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
+        char *session_id = createString ("%s-%i", ipstr, port);
+        // printf ("New session id: %s\n", session_id);
+    }
+
+}
+
 i32 server_accept (Server *server) {
 
     Client *client = NULL;
@@ -1018,9 +1041,9 @@ i32 server_accept (Server *server) {
     i32 clientSocket;
 	struct sockaddr_storage clientAddress;
 	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
-    socklen_t sockLen = sizeof (struct sockaddr_storage);
+    socklen_t socklen = sizeof (struct sockaddr_storage);
 
-    i32 newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &sockLen);
+    i32 newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &socklen);
 
     // if we get EWOULDBLOCK, we have accepted all connections
     if (newfd < 0) {
@@ -1031,6 +1054,12 @@ i32 server_accept (Server *server) {
     #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, CLIENT, "Accepted a new client connection.");
     #endif
+
+    // 24/11/2018 - 21:44 - taking into account client sessions
+    // generate a session id bassed on client info
+    session_generate_id (newfd, clientAddress);
+    
+
 
     // hold the client until he authenticates
     if (server->authRequired) {
@@ -1089,7 +1118,7 @@ void server_recieve (Server *server, i32 fd) {
         char *buffer_data = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
         if (buffer_data) {
             memcpy (buffer_data, packetBuffer, rc);
-            handlePacketBuffer (server, fd, packetBuffer, rc);
+            handleRecvBuffer (server, fd, packetBuffer, rc);
         }
 
     } while (true);
@@ -1132,7 +1161,6 @@ u8 server_poll (Server *server) {
             if (server->fds[i].revents == 0) continue;
             if (server->fds[i].revents != POLLIN) continue;
 
-            // listening fd is readable (sever socket)
             // accept incoming connections that are queued
             if (server->fds[i].fd == server->serverSock) 
                 server_accept (server);
