@@ -258,7 +258,7 @@ typedef struct PacketHeader {
 // 01/11/2018 -- this indicates the data and more info about the packet type
 typedef enum RequestType {
 
-    SERVER_INFO,
+    SERVER_INFO = 0,
     SERVER_TEARDOWN,
 
     CLIENT_DISCONNET,

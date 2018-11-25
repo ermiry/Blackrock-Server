@@ -449,9 +449,11 @@ void sendServerInfo (Server *server, Client *client) {
         if (server->serverInfo) {
             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
 
-            server->protocol == IPPROTO_TCP ? 
-            tcp_sendPacket (client->clientSock, server->serverInfo, packetSize, 0) :
-            udp_sendPacket (server, server->serverInfo, packetSize, client->address);
+            if (!server_sendPacket (server, client, server->serverInfo, packetSize)) {
+                #ifdef CERVER_DEBUG
+                    logMsg (stdout, DEBUG_MSG, SERVER, "Sent server info packet.");
+                #endif
+            }
         }
 
         else {
@@ -688,7 +690,8 @@ void dropClient (Server *server, Client *client) {
         avl_removeNode (server->onHoldClients, client);
 
         #ifdef CERVER_DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, "Client removed from on hold structure. Failed to authenticate");
+        logMsg (stdout, DEBUG_MSG, SERVER, 
+            "Client removed from on hold structure. Failed to authenticate");
         #endif
     }   
 
@@ -793,11 +796,16 @@ void onHoldClient (Server *server, Client *client) {
             #endif
 
             // send the authentication request
-            if (server->auth.reqAuthPacket) 
-                server_sendPacket (server, client, 
-                    server->auth.reqAuthPacket, server->auth.authPacketSize);
-
-            else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet.");
+            /* if (server->auth.reqAuthPacket) {
+                if (!server_sendPacket (server, client, 
+                    server->auth.reqAuthPacket, server->auth.authPacketSize)) {
+                        #ifdef CERVER_DEBUG
+                            logMsg (stdout, DEBUG_MSG, PACKET, "Sent server auth packet!");
+                        #endif
+                    }
+            }
+                
+            else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet."); */ 
         }
     }
 
@@ -839,7 +847,7 @@ u8 handleOnHoldClients (void *data) {
     PacketInfo *info = NULL;
 
     #ifdef CERVER_DEBUG
-    logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
+        logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
     #endif
 
     int poll_retval;    // ret val from poll function
@@ -865,12 +873,12 @@ u8 handleOnHoldClients (void *data) {
 
         // one or more fd(s) are readable, need to determine which ones they are
         for (u8 i = 0; i < poll_n_fds; i++) {
-            if (server->fds[i].revents == 0) continue;
-            if (server->fds[i].revents != POLLIN) continue;
+            if (server->hold_fds[i].revents == 0) continue;
+            if (server->hold_fds[i].revents != POLLIN) continue;
 
             // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable
-            server_recieve (server, server->fds[i].fd);
+            server_recieve (server, server->hold_fds[i].fd);
         }
 
         if (server->compress_hold_clients) compressHoldClients (server);
@@ -942,6 +950,48 @@ void handlePacket (void *data) {
 
 }
 
+// split the entry buffer in packets of the correct size
+void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) {
+
+    if (buffer && (total_size > 0)) {
+        u32 buffer_idx = 0;
+        char *end = buffer;
+
+        PacketHeader *header = NULL;
+        u32 packet_size;
+        char *packet_data = NULL;
+
+        PacketInfo *info = NULL;
+
+        while (buffer_idx < total_size) {
+            header = (PacketHeader *) end;
+
+            // check the packet size
+            packet_size = header->packetSize;
+            if (packet_size > 0) {
+                // copy the content of the packet from the buffer
+                packet_data = (char *) calloc (packet_size, sizeof (char));
+                for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
+                    packet_data[i] = buffer[buffer_idx];
+
+                info = newPacketInfo (server, 
+                    getClientBySock (server->clients, fd), packet_data, packet_size);
+
+                thpool_add_work (server->thpool, (void *) handlePacket, info);
+
+                end += packet_size;
+            }
+
+            else break;
+        }
+
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, PACKET, "Done splitting recv buffer!");
+        #endif
+    }
+
+}
+
 // we remove any fd that was set to -1 for what ever reason
 void compressClients (Server *server) {
 
@@ -978,6 +1028,10 @@ i32 server_accept (Server *server) {
         return -1;
     }
 
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, CLIENT, "Accepted a new client connection.");
+    #endif
+
     // hold the client until he authenticates
     if (server->authRequired) {
         client = newClient (server, newfd, clientAddress, true);
@@ -1000,19 +1054,17 @@ i32 server_accept (Server *server) {
 }
 
 // TODO: add support for handling large files transmissions
-// TODO: 03/11/2018 - add support for multiple reads to the socket
 // what happens if my buffer isn't enough, for example a larger file?
 // recive all incoming data from the socket
 void server_recieve (Server *server, i32 fd) {
 
     ssize_t rc;
     char packetBuffer[MAX_UDP_PACKET_SIZE];
-    PacketInfo *info = NULL;
+    memset (packetBuffer, 0, MAX_UDP_PACKET_SIZE);
 
     do {
         rc = recv (fd, packetBuffer, sizeof (packetBuffer), 0);
         
-        // recv error - - so end the connection and remove client
         if (rc < 0) {
             if (errno != EWOULDBLOCK) {     // no more data to read 
                 // logMsg (stderr, ERROR, SERVER, "Recv failed!");
@@ -1034,10 +1086,12 @@ void server_recieve (Server *server, i32 fd) {
             break;
         }
 
-        info = newPacketInfo (server, 
-            getClientBySock (server->clients, fd), packetBuffer, rc);
+        char *buffer_data = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
+        if (buffer_data) {
+            memcpy (buffer_data, packetBuffer, rc);
+            handlePacketBuffer (server, fd, packetBuffer, rc);
+        }
 
-        thpool_add_work (server->thpool, (void *) handlePacket, info);
     } while (true);
 
 }
@@ -1110,7 +1164,6 @@ const char welcome[64] = "Welcome to cerver!";
 u8 initServerDS (Server *server, ServerType type) {
 
     server->clients = avl_init (clientComparator, destroyClient);
-    server->onHoldClients = avl_init (clientComparator, destroyClient);
     server->clientsPool = pool_init (destroyClient);
 
     server->packetPool = pool_init (destroyPacketInfo);
@@ -1131,6 +1184,8 @@ u8 initServerDS (Server *server, ServerType type) {
     for (u16 i = 0; i < poll_n_fds; i++) server->fds[i].fd = -1;
 
     if (server->authRequired) {
+        server->onHoldClients = avl_init (clientComparator, destroyClient);
+
         memset (server->hold_fds, 0, sizeof (server->fds));
         server->hold_nfds = 0;
         server->compress_hold_clients = false;
