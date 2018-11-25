@@ -474,12 +474,12 @@ void sendServerInfo (Server *server, Client *client) {
 #pragma region CLIENTS
 
 // the id is an idx based on the main poll array
-i32 getNewClientId (Server *server) {
+i32 getNewClientID (Server *server) {
 
     i32 retval = -1;
 
     // search for a marked index in the array
-    for (u16 i = 0; i < poll_n_fds; i++) {
+    for (u16 i = 1; i < poll_n_fds; i++) {
         if (server->fds[i].fd == -1) {
             // this id n. is available
             retval = i;
@@ -509,46 +509,45 @@ i32 getHoldClientId (Server *server) {
 
 }
 
+// TODO: 24/11/2018 - how to handle the load balancer?
 // TODO: 24/11/2018 -- how about using the session id as the id in the clients avl??
 // FIXME: should we get a new client id each time we register to the server?
     // what happens when we are juming back and forth between the server poll and the lobbys?
 // FIXME: client ids -> is the server full?
-Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold) {
+Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold,
+    char *session_id) {
 
-    Client *new = (Client *) malloc (sizeof (Client));
+    Client *client = (Client *) malloc (sizeof (Client));
 
-    if (server->clientsPool) {
-        if (POOL_SIZE (server->clientsPool) > 0) {
-            new = pool_pop (server->clientsPool);
-            if (!new) new = (Client *) malloc (sizeof (Client));
-        }
+    // if (server->clientsPool) client = pool_pop (server->clientsPool);
 
-        else new = (Client *) malloc (sizeof (Client));
-    }
-
-    else new = (Client *) malloc (sizeof (Client));
+    // if (!client) client = 
     
-    new->clientSock = clientSock;
-    new->address = address;
+    client->clientSock = clientSock;
+    client->address = address;
  
     // if the client is on hold, we don't need to assign him a client id
     // until he authenticates and is sent to the main server poll
     if (onHold) {
-        new->clientID = getHoldClientId (server);
+        client->clientID = getHoldClientId (server);
         // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
     } 
 
     else {
-        new->clientID = getNewClientId (server);
+        client->clientID = getNewClientID (server);
         // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
     }
 
     if (server->authRequired) {
-        new->authTries = server->auth.maxAuthTries;
-        new->dropClient = false;
+        client->authTries = server->auth.maxAuthTries;
+        client->dropClient = false;
     } 
 
-    return new;
+    // client->clientID = getNewClientID (server);
+
+    client->sessionID = session_id;
+
+    return client;
 
 }
 
@@ -566,15 +565,18 @@ void destroyClient (void *data) {
 }
 
 // comparator for client's avl tree
-int clientComparator (const void *a, const void *b) {
+int client_comparator (const void *a, const void *b) {
 
     if (a && b) {
         Client *client_a = (Client *) a;
         Client *client_b = (Client *) b;
 
-        if (client_a->clientSock > client_b->clientSock) return 1;
-        else if (client_a->clientSock == client_b->clientSock) return 0;
-        else return -1;
+        // 24/11/2018 -- using session ids
+        return strcmp (client_a->sessionID, client_b->sessionID);
+
+        // if (client_a->clientSock > client_b->clientSock) return 1;
+        // else if (client_a->clientSock == client_b->clientSock) return 0;
+        // else return -1;
 
         // if (*((int *) a) >  *((int *)b)) return 1;
         // else if (*((int *) a) == *((int *)b)) return 0;
@@ -583,6 +585,7 @@ int clientComparator (const void *a, const void *b) {
 
 }
 
+// FIXME: this does work any more because of session ids
 // search a client in the server's clients avl by his sock's fd
 Client *getClientBySock (AVLTree *clients, i32 fd) {
 
@@ -599,6 +602,24 @@ Client *getClientBySock (AVLTree *clients, i32 fd) {
 
 }
 
+Client *getClientBySession (AVLTree *clients, char *sessionID) {
+
+    if (clients) {
+        Client temp;
+        temp.sessionID = createString ("%s", sessionID);
+        
+        void *data = avl_getNodeData (clients, &temp);
+        if (data) return (Client *) data;
+        else 
+            logMsg (stderr, ERROR, SERVER, 
+                createString ("Couldn't find a client associated with the session ID: %s.", 
+                sessionID));
+    }
+
+    return NULL;
+
+}
+
 void dropClient (Server *server, Client *client);
 
 // 13/10/2018 - I think register a client only works for tcp? but i might be wrong...
@@ -607,24 +628,27 @@ void dropClient (Server *server, Client *client);
 // maybe this can be handled before this call by the load balancer
 void client_registerToServer (Server *server, Client *client) {
 
-    Client *c = NULL;
+    Client *c = client;
 
+    // FIXME:
     // at this point we assume the client was al ready authenticated
-    if (server->authRequired) {
+    /* if (server->authRequired) {
         // 02/11/2018 -- create a new client structure with the same values
         c = newClient (server, client->clientSock, client->address, false);
 
         // remove the client from the on hold structure
         dropClient (server, client);
-    }
+    } */
 
-    else c = client;
+    // else c = client;
 
+    // FIXME: clean up
     // 10/11/2018 -- we use a free idx in the poll array as an unique client id
     // send the client to the server's active clients structures
-    server->fds[client->clientID].fd = c->clientSock;
-    server->fds[client->clientID].events = POLLIN;
-    // server->nfds++;
+    
+    server->fds[c->clientID].fd = c->clientSock;
+    server->fds[c->clientID].events = POLLIN;
+    server->nfds++;
 
     avl_insertNode (server->clients, c);
 
@@ -632,7 +656,7 @@ void client_registerToServer (Server *server, Client *client) {
 
     #ifdef CERVER_DEBUG
     logMsg (stdout, DEBUG_MSG, SERVER, 
-        createString ("Registered a client to the server.\nConnected clients: %i.", 
+        createString ("Registered a client to the server. Connected clients: %i.", 
         server->connectedClients));
     #endif
 
@@ -977,10 +1001,15 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) 
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
-                info = newPacketInfo (server, 
-                    getClientBySock (server->clients, fd), packet_data, packet_size);
+                // FIXME: 22:56!!!
+                // info = newPacketInfo (server, 
+                //     getClientBySock (server->clients, fd), packet_data, packet_size);
 
-                thpool_add_work (server->thpool, (void *) handlePacket, info);
+                // info = newPacketInfo (server, 
+                //     getClientBySession (server->clients,
+                //     session_generate_id (client->clientSock, client->address)))
+
+                // thpool_add_work (server->thpool, (void *) handlePacket, info);
 
                 end += packet_size;
             }
@@ -1015,7 +1044,7 @@ void compressClients (Server *server) {
 }
 
 // create a unique session id for each client
-void session_generate_id (i32 fd, const struct sockaddr_storage address) {
+char *session_generate_id (i32 fd, const struct sockaddr_storage address) {
 
     char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
     u16 port = sock_ip_port ((const struct sockaddr *) &address);
@@ -1023,14 +1052,17 @@ void session_generate_id (i32 fd, const struct sockaddr_storage address) {
     if (ipstr && (port > 0)) {
         #ifdef CERVER_DEBUG
             logMsg (stdout, DEBUG_MSG, CLIENT,
-                createString ("Client connected form IP address: %s -- Peer port: %i", 
+                createString ("Client connected form IP address: %s -- Port: %i", 
                 ipstr, port));
         #endif
 
         // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
         char *session_id = createString ("%s-%i", ipstr, port);
         // printf ("New session id: %s\n", session_id);
+        return session_id;
     }
+
+    return NULL;
 
 }
 
@@ -1038,7 +1070,6 @@ i32 server_accept (Server *server) {
 
     Client *client = NULL;
 
-    i32 clientSocket;
 	struct sockaddr_storage clientAddress;
 	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
     socklen_t socklen = sizeof (struct sockaddr_storage);
@@ -1057,12 +1088,18 @@ i32 server_accept (Server *server) {
 
     // 24/11/2018 - 21:44 - taking into account client sessions
     // generate a session id bassed on client info
-    session_generate_id (newfd, clientAddress);
+    char *sessionID = session_generate_id (newfd, clientAddress);
     
+    // create a new client bassed on the session id
+    client = newClient (server, newfd, clientAddress, false, sessionID);
 
+    // search for an active session id
+    // if (!(getClientBySession (server->clients, sessionID))) 
+        client_registerToServer (server, client);
 
+    // FIXME: sessions
     // hold the client until he authenticates
-    if (server->authRequired) {
+    /* if (server->authRequired) {
         client = newClient (server, newfd, clientAddress, true);
         onHoldClient (server, client);
     }
@@ -1070,7 +1107,7 @@ i32 server_accept (Server *server) {
     else {
         client = newClient (server, newfd, clientAddress, false);
         client_registerToServer (server, client);  
-    } 
+    }  */
 
     if (server->type != WEB_SERVER) sendServerInfo (server, client);
 
@@ -1165,9 +1202,10 @@ u8 server_poll (Server *server) {
             if (server->fds[i].fd == server->serverSock) 
                 server_accept (server);
 
+            // FIXME:
             // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable
-            else server_recieve (server, server->fds[i].fd);
+            // else server_recieve (server, server->fds[i].fd);
         }
 
         if (server->compress_clients) compressClients (server);
@@ -1191,7 +1229,7 @@ const char welcome[64] = "Welcome to cerver!";
 // init server's data structures
 u8 initServerDS (Server *server, ServerType type) {
 
-    server->clients = avl_init (clientComparator, destroyClient);
+    server->clients = avl_init (client_comparator, destroyClient);
     server->clientsPool = pool_init (destroyClient);
 
     server->packetPool = pool_init (destroyPacketInfo);
@@ -1212,7 +1250,7 @@ u8 initServerDS (Server *server, ServerType type) {
     for (u16 i = 0; i < poll_n_fds; i++) server->fds[i].fd = -1;
 
     if (server->authRequired) {
-        server->onHoldClients = avl_init (clientComparator, destroyClient);
+        server->onHoldClients = avl_init (client_comparator, destroyClient);
 
         memset (server->hold_fds, 0, sizeof (server->fds));
         server->hold_nfds = 0;
