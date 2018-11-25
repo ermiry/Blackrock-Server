@@ -469,9 +469,73 @@ void sendServerInfo (Server *server, Client *client) {
 
 #pragma endregion
 
+/*** SESSIONS ***/
+
+#pragma region SESSIONS
+
+// create a unique session id for each client based on connection values
+char *session_default_generate_id (i32 fd, const struct sockaddr_storage address) {
+
+    char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
+    u16 port = sock_ip_port ((const struct sockaddr *) &address);
+
+    if (ipstr && (port > 0)) {
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, CLIENT,
+                createString ("Client connected form IP address: %s -- Port: %i", 
+                ipstr, port));
+        #endif
+
+        // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
+        char *session_id = createString ("%s-%i", ipstr, port);
+        // printf ("New session id: %s\n", session_id);
+        return session_id;
+    }
+
+    return NULL;
+
+}
+
+// the server admin can define a custom session id generator
+void session_setIDGenerator (Server *server, Action idGenerator) {
+
+    if (server && idGenerator) {
+        if (server->useSessions) 
+            server->generateSessionID = idGenerator;
+
+        else logMsg (stderr, ERROR, SERVER, "Server is not set to use sessions!");
+    }
+
+}
+
+#pragma endregion
+
 /*** CLIENTS ***/
 
 #pragma region CLIENTS
+
+// FIXME: get from where the client is connecting
+void client_getConnectionValues () {
+
+    /* char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
+    u16 port = sock_ip_port ((const struct sockaddr *) &address);
+
+    if (ipstr && (port > 0)) {
+        #ifdef CERVER_DEBUG
+            logMsg (stdout, DEBUG_MSG, CLIENT,
+                createString ("Client connected form IP address: %s -- Port: %i", 
+                ipstr, port));
+        #endif
+
+        // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
+        char *session_id = createString ("%s-%i", ipstr, port);
+        // printf ("New session id: %s\n", session_id);
+        return session_id;
+    }
+
+    return NULL; */
+
+}
 
 // the id is an idx based on the main poll array
 i32 getNewClientID (Server *server) {
@@ -517,18 +581,24 @@ i32 getHoldClientId (Server *server) {
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address, bool onHold,
     char *session_id) {
 
-    Client *client = (Client *) malloc (sizeof (Client));
+    Client *client = NULL;
 
-    // if (server->clientsPool) client = pool_pop (server->clientsPool);
+    if (server->clientsPool) client = pool_pop (server->clientsPool);
 
-    // if (!client) client = 
+    if (!client) {
+        client = (Client *) malloc (sizeof (Client));
+        client->sessionID = NULL;
+        client->active_connections = NULL;
+    } 
     
+    // FIXME: we will not need this anymore -> moved to active connections
     client->clientSock = clientSock;
     client->address = address;
  
+    // FIXME:
     // if the client is on hold, we don't need to assign him a client id
     // until he authenticates and is sent to the main server poll
-    if (onHold) {
+    /* if (onHold) {
         client->clientID = getHoldClientId (server);
         // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
     } 
@@ -541,11 +611,22 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     if (server->authRequired) {
         client->authTries = server->auth.maxAuthTries;
         client->dropClient = false;
-    } 
+    }  */
 
-    // client->clientID = getNewClientID (server);
+    client->clientID = getNewClientID (server);
 
+    if (client->sessionID) free (client->sessionID);
     client->sessionID = session_id;
+
+    client->n_active_cons = 0;
+    if (client->active_connections) free (client->active_connections);
+    client->active_connections = (i32 *) malloc (sizeof (i32));
+
+    // add the fd to the active connections
+    if (client->active_connections) {
+        client->active_connections[client->n_active_cons] = clientSock;
+        client->n_active_cons++;
+    } 
 
     return client;
 
@@ -557,7 +638,15 @@ void destroyClient (void *data) {
     if (data) {
         Client *client = (Client *) data;
 
-        close (client->clientSock);
+        if (client->active_connections) {
+            // close all the client's active connections
+            for (u8 i = 0; i < client->n_active_cons; i++)
+                close (client->active_connections[i]);
+
+            free (client->active_connections);
+        }
+
+        if (client->sessionID) free (client->sessionID);
 
         free (client);
     }
@@ -617,6 +706,31 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
     }
 
     return NULL;
+
+}
+
+// the client made a new connection to the server
+void client_registerNewConnection (Client *client) {
+
+    if (client) {
+        if (client->active_connections) {
+            client->n_active_cons++;
+            client->active_connections = (i32 *) realloc (client->active_connections, 
+                client->n_active_cons * sizeof (i32));
+        }
+    }
+
+}
+
+void client_unregisterConnection (Client *client) {
+
+    if (client) {
+        if (client->active_connections) {
+            client->n_active_cons--;
+            client->active_connections = (i32 *) realloc (client->active_connections, 
+                client->n_active_cons * sizeof (i32));
+        }
+    }
 
 }
 
@@ -1001,6 +1115,8 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) 
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
+                // FIXME: we need to take into account the session id
+
                 // FIXME: 22:56!!!
                 // info = newPacketInfo (server, 
                 //     getClientBySock (server->clients, fd), packet_data, packet_size);
@@ -1043,29 +1159,6 @@ void compressClients (Server *server) {
 
 }
 
-// create a unique session id for each client
-char *session_generate_id (i32 fd, const struct sockaddr_storage address) {
-
-    char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
-    u16 port = sock_ip_port ((const struct sockaddr *) &address);
-
-    if (ipstr && (port > 0)) {
-        #ifdef CERVER_DEBUG
-            logMsg (stdout, DEBUG_MSG, CLIENT,
-                createString ("Client connected form IP address: %s -- Port: %i", 
-                ipstr, port));
-        #endif
-
-        // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
-        char *session_id = createString ("%s-%i", ipstr, port);
-        // printf ("New session id: %s\n", session_id);
-        return session_id;
-    }
-
-    return NULL;
-
-}
-
 i32 server_accept (Server *server) {
 
     Client *client = NULL;
@@ -1088,16 +1181,33 @@ i32 server_accept (Server *server) {
 
     // 24/11/2018 - 21:44 - taking into account client sessions
     // generate a session id bassed on client info
-    char *sessionID = session_generate_id (newfd, clientAddress);
+    // FIXME:
+    // char *sessionID = session_generate_id (newfd, clientAddress);
+    char *sessionID;
     
+    // FIXME: move this to where we call client_registerToServer
     // create a new client bassed on the session id
     client = newClient (server, newfd, clientAddress, false, sessionID);
 
-    // search for an active session id
-    // if (!(getClientBySession (server->clients, sessionID))) 
+    // TODO: 24/11/2018 - 23:54 - how do we want to manage clients 
+    // that have not authenticated them selves?
+
+    // TODO: we need to send back the session id so that the client can use it
+    // as a token and no autenticate it self every time!!!
+
+    // TODO: add support for multiple connections from the same client!!!
+
+    // FIXME: check for client values first, then ask for authentication of the new connection!!!
+    // if we do not have a client with the same session, it must be a new one
+    if (!(getClientBySession (server->clients, sessionID))) 
         client_registerToServer (server, client);
 
-    // FIXME: sessions
+    // FIXME: we need to get the client!!!
+    // else, is a client creating a new connection
+    else client_registerNewConnection (client);
+
+    
+
     // hold the client until he authenticates
     /* if (server->authRequired) {
         client = newClient (server, newfd, clientAddress, true);
@@ -1202,10 +1312,9 @@ u8 server_poll (Server *server) {
             if (server->fds[i].fd == server->serverSock) 
                 server_accept (server);
 
-            // FIXME:
             // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable
-            // else server_recieve (server, server->fds[i].fd);
+            else server_recieve (server, server->fds[i].fd);
         }
 
         if (server->compress_clients) compressClients (server);
