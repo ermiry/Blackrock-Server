@@ -88,7 +88,9 @@ struct _Client {
 
 typedef struct _Client Client;
 
-extern Client *getClientBySock (AVLTree *clients, i32 fd);
+extern Client *getClientBySocket (AVLNode *node, i32 socket_fd);
+extern Client *getClientBySession (AVLTree *clients, char *sessionID);
+
 extern void client_registerToServer (struct _Server *server, Client *client);
 extern void client_unregisterFromServer (struct _Server *server, Client *client);
 
@@ -150,6 +152,7 @@ struct _Server {
     // TODO: option to make this dynamic
     struct pollfd hold_fds[poll_n_fds];
     u16 hold_nfds;
+    u16 n_hold_clients;
     bool compress_hold_clients;              // compress the hold fds array?
     bool holdingClients;
 

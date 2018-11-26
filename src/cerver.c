@@ -628,20 +628,31 @@ int client_comparator_sessionID (const void *a, const void *b) {
 
 }
 
-// FIXME: this does work any more because of session ids
-// search a client in the server's clients avl by his sock's fd
-Client *getClientBySock (AVLTree *clients, i32 fd) {
+// recursively get the client associated with the socket
+Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
 
-    /* if (clients) {
-        Client temp = { .clientSock = fd };
-        void *data = avl_getNodeData (clients, &temp);
-        if (data) return (Client *) data;
-        else 
-            logMsg (stderr, ERROR, SERVER, 
-                createString ("Couldn't find a client associated with the passed fd: %i.", fd));
+    if (node) {
+        Client *client = NULL;
+
+        client = getClientBySocket (node->right, socket_fd);
+
+        if (!client) {
+            if (node->id) {
+                client = (Client *) node->id;
+                
+                // search the socket fd in the clients active connections
+                for (int i = 0; i < client->n_active_cons; i++) 
+                    if (socket_fd == client->active_connections[i])
+                        return client;
+            }
+
+            client = getClientBySocket (node->left, socket_fd);
+        }
+
+        return client;
     }
 
-    return NULL; */
+    return NULL;
 
 }
 
@@ -664,19 +675,23 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
 }
 
 // the client made a new connection to the server
-void client_registerNewConnection (Client *client) {
+void client_registerNewConnection (Client *client, i32 socket_fd) {
 
     if (client) {
         if (client->active_connections) {
             client->n_active_cons++;
             client->active_connections = (i32 *) realloc (client->active_connections, 
                 client->n_active_cons * sizeof (i32));
+
+            // add the connection at the end
+            client->active_connections[client->n_active_cons - 1] = socket_fd;
         }
     }
 
 }
 
-void client_unregisterConnection (Client *client) {
+// FIXME: unregister the correct fd!!
+void client_unregisterConnection (Client *client, i32 socket_fd) {
 
     if (client) {
         if (client->active_connections) {
@@ -692,6 +707,7 @@ void dropClient (Server *server, Client *client);
 
 // 13/10/2018 - I think register a client only works for tcp? but i might be wrong...
 
+// FIXME:!!!
 // TODO: hanlde a max number of clients connected to a server at the same time?
 // maybe this can be handled before this call by the load balancer
 void client_registerToServer (Server *server, Client *client) {
@@ -750,9 +766,6 @@ void client_unregisterFromServer (Server *server, Client *client)  {
 void client_closeConnection (Server *server, Client *client) {
 
     if (server && client) {
-        // first close the connection
-        // close (client->clientSock);
-        
         if (client->active_connections) {
             // close all the client's active connections
             for (u8 i = 0; i < client->n_active_cons; i++)
@@ -888,6 +901,7 @@ void authenticateClient (void *data) {
 
 u8 handleOnHoldClients (void *data);
 
+// FIXME: register the new connection to the client!!
 // if the server requires authentication, we send the newly connected clients to an on hold
 // structure until they authenticate, if not, they are just dropped by the server
 void onHoldClient (Server *server, Client *client, i32 fd) {
@@ -901,6 +915,8 @@ void onHoldClient (Server *server, Client *client, i32 fd) {
             server->hold_fds[server->hold_nfds].fd = fd;
             server->hold_fds[server->hold_nfds].events = POLLIN;
             server->hold_nfds++; 
+
+            server->n_hold_clients++;
 
             avl_insertNode (server->onHoldClients, client);
 
@@ -954,7 +970,7 @@ u8 handleOnHoldClients (void *data) {
     #endif
 
     int poll_retval;    // ret val from poll function
-    while (server->isRunning) {
+    while (server->holdingClients) {
         poll_retval = poll (server->hold_fds, poll_n_fds, server->pollTimeout);
         
         // poll failed
@@ -1127,7 +1143,7 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) 
 // TODO: add support for handling large files transmissions
 // what happens if my buffer isn't enough, for example a larger file?
 // recive all incoming data from the socket
-void server_recieve (Server *server, i32 fd, bool onHold) {
+void server_recieve (Server *server, i32 socket_fd, bool onHold) {
 
     if (onHold) logMsg (stdout, SUCCESS, PACKET, "server_recieve () - on hold client!");
 
@@ -1136,7 +1152,7 @@ void server_recieve (Server *server, i32 fd, bool onHold) {
     memset (packetBuffer, 0, MAX_UDP_PACKET_SIZE);
 
     // do {
-        rc = recv (fd, packetBuffer, sizeof (packetBuffer), 0);
+        rc = recv (socket_fd, packetBuffer, sizeof (packetBuffer), 0);
         
         // FIXME: remove it from on hold structure!!!
         if (rc < 0) {
@@ -1146,12 +1162,41 @@ void server_recieve (Server *server, i32 fd, bool onHold) {
                 logMsg (stdout, DEBUG_MSG, CLIENT, 
                     "Ending client connection - server_recieve () - rc < 0");
 
-                // FIXME: do we just close the socket like this?
-                close (fd);
+                if (onHold) {
+                    // close the socket
+                    close (socket_fd);
 
-                // TODO: check that there are no other clients in the on hold structre
+                    // get the client associated with the fd
+                    Client *client = getClientBySocket (server->onHoldClients->root, socket_fd);
 
-                // client_closeConnection (server, getClientBySock (server->clients, fd));
+                    if (client) {
+                        // unregister the connection from the client
+                        client_unregisterConnection (client, socket_fd);
+
+                        // FIXME: do this in drop client function to remove all other data!!
+                        // TODO: also set the client hold fd to -1
+                        // TODO: when inserting into the hold structure, search for a -1!!!
+                        // check if client still has active connections
+                        if (client->n_active_cons <= 0) {
+                            avl_removeNode (server->onHoldClients, client);
+                            server->n_hold_clients--;
+                        }
+
+                        // check if we still have on hold clients
+                        // if not, end on hold thread
+                        if (server->n_hold_clients <= 0) 
+                            server->holdingClients = false;
+                    }
+
+                    else {
+                        logMsg (stderr, ERROR, CLIENT, "Could not find client associated with socket!");
+                        server->holdingClients = false;
+                    }
+                        
+
+                }
+
+                // FIXME: add logic for regular clients
             }
 
             // break;
@@ -1164,12 +1209,41 @@ void server_recieve (Server *server, i32 fd, bool onHold) {
             logMsg (stdout, DEBUG_MSG, CLIENT, 
                     "Ending client connection - server_recieve () - rc == 0");
 
-            // FIXME: do we just close the socket like this?
-            close (fd);
+            if (onHold) {
+                // close the socket
+                close (socket_fd);
 
-            // TODO: check that there are no other clients in the on hold structre
+                // get the client associated with the fd
+                Client *client = getClientBySocket (server->onHoldClients->root, socket_fd);
 
-            // client_closeConnection (server, getClientBySock (server->clients, fd));
+                if (client) {
+                    // unregister the connection from the client
+                    client_unregisterConnection (client, socket_fd);
+
+                    // FIXME: do this in drop client function to remove all other data!!
+                    // TODO: also set the client hold fd to -1
+                    // TODO: when inserting into the hold structure, search for a -1!!!
+                    // check if client still has active connections
+                    if (client->n_active_cons <= 0) {
+                        avl_removeNode (server->onHoldClients, client);
+                        server->n_hold_clients--;
+                    }
+
+                    // check if we still have on hold clients
+                    // if not, end on hold thread
+                    if (server->n_hold_clients <= 0) 
+                        server->holdingClients = false;
+                }
+
+                else {
+                    logMsg (stderr, ERROR, CLIENT, "Could not find client associated with socket!");
+                    server->holdingClients = false;
+                }
+
+            }
+
+            // FIXME: add logic for regular clients
+
             // break;
         }
 
@@ -1177,7 +1251,7 @@ void server_recieve (Server *server, i32 fd, bool onHold) {
             char *buffer_data = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
             if (buffer_data) {
                 memcpy (buffer_data, packetBuffer, rc);
-                handleRecvBuffer (server, fd, packetBuffer, rc);
+                handleRecvBuffer (server, socket_fd, packetBuffer, rc);
             }
         }
 
@@ -1373,6 +1447,8 @@ u8 initServerDS (Server *server, ServerType type) {
         memset (server->hold_fds, 0, sizeof (server->hold_fds));
         server->hold_nfds = 0;
         server->compress_hold_clients = false;
+
+        server->n_hold_clients = 0;
 
         for (u16 i = 0; i < poll_n_fds; i++) server->hold_fds[i].fd = -1;
     }
