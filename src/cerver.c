@@ -995,57 +995,58 @@ u8 defaultAuthMethod (void *data) {
 
 }
 
-// FIXME: client socket!!!
 // 03/11/2018 - the admin is able to set a ptr to a custom authentication method
 // handles the authentication data that the client sent
 void authenticateClient (void *data) {
 
     if (data) {
-        PacketInfo *packet = (PacketInfo *) data;
+        PacketInfo *pack_info = (PacketInfo *) data;
 
-        if (!checkPacket (packet->packetSize, packet->packetData, AUTHENTICATION)) {            
-            if (packet->server->auth.authenticate) {
-                // successful authentication
-                if (!packet->server->auth.authenticate (packet)) {
-                    client_registerToServer (packet->server, packet->client);
+        if (pack_info->server->auth.authenticate) {
+            // we expect the function to return us a 0 on success
+            if (!pack_info->server->auth.authenticate (pack_info)) {
+                // FIXME: we need to register a new client or add it to an existing client
+                // that has the same session ID
+                // client_registerToServer (packet->server, packet->client);
+
+
+
+                if (pack_info->server->type != WEB_SERVER) {
                     size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
                     void *successPacket = generatePacket (AUTHENTICATION, packetSize);
-                    if (packet) {
+                    if (successPacket) {
                         char *end = successPacket + sizeof (PacketHeader);
                         RequestData *reqdata = (RequestData *) end;
                         reqdata->type = SUCCESS_AUTH;
 
-                        // packet->server->protocol == IPPROTO_TCP ?
-                        // tcp_sendPacket (packet->client->clientSock, successPacket, packetSize, 0) :
-                        // udp_sendPacket (packet->server, successPacket, packetSize, packet->client->address);
+                        server_sendPacket (pack_info->server, pack_info->clientSock, 
+                            pack_info->client->address, successPacket, packetSize);
 
                         free (successPacket);
                     }
-
-                    #ifdef CERVER_DEBUG
-                    logMsg (stdout, DEBUG_MSG, SERVER, "Client authenticated correctly.");
-                    #endif 
-                }
-
-                else {
-                    // FIXME:
-                    // send feedback to the client
-                    // sendErrorPacket (packet->server, packet->client, ERR_FAILED_AUTH, "Wrong credentials!");
-                    if (packet->client->dropClient) dropClient (packet->server, packet->client);
                 }
             }
 
-            // no authentication method -- clients are not able to interact to the server!
             else {
-                logMsg (stderr, ERROR, SERVER, "Server doesn't have an authenticate method!");
-                logMsg (stderr, ERROR, SERVER, "Clients are not able to interact with the server!");
-                // just drop the client, the server admin must fix this!
-                dropClient (packet->server, packet->client);
-            } 
+                // send feedback to the client
+                sendErrorPacket (pack_info->server, pack_info->clientSock, 
+                    pack_info->client->address, ERR_FAILED_AUTH, "Wrong credentials!");
+
+                // FIXME:
+                // check how many auth tries the client has left
+                // if (pack_info->client->authTries >= pack_info->server->auth.maxAuthTries)
+                //     dropClient (packet->server, packet->client);
+            }
         }
 
-        // dispose the packet info -> send to packet pool
-        pool_push (packet->server->packetPool, packet);
+        // no authentication method -- clients are not able to interact to the server!
+        else {
+            logMsg (stderr, ERROR, SERVER, "Server doesn't have an authenticate method!");
+            logMsg (stderr, ERROR, SERVER, "Clients are not able to interact with the server!");
+            // FIXME:
+            // just drop the client, the server admin must fix this!
+            // 
+        }
     }
 
 }
@@ -1064,13 +1065,19 @@ void handleOnHoldPacket (void *data) {
                 case ERROR_PACKET: break;
 
                 // a client is trying to authenticate himself
-                case AUTHENTICATION: break;
+                case AUTHENTICATION: {
+                    RequestData *reqdata = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
+                    switch (reqdata->type) {
+                        case CLIENT_AUTH_DATA: authenticateClient (pack_info); break;
+                        default: break;
+                    }
+                } break;
 
                 case TEST_PACKET: 
                     logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
                     // send a test packet back to the client
                     if (!sendTestPacket (pack_info->server, pack_info->clientSock, pack_info->client->address))
-                        logMsg (stdout, DEBUG_MSG, PACKET, "Success answering the test packet.");
+                        logMsg (stdout, TEST, PACKET, "Success answering the test packet.");
 
                     else logMsg (stderr, ERROR, PACKET, "Failed to answer test packet!");
                     break;
@@ -1081,10 +1088,7 @@ void handleOnHoldPacket (void *data) {
             }
         }
 
-        // FIXME: 22/11/2018 - error with packet pool!!! seg fault always the second time 
-        // a client sends a packet!!
-        // no matter what, we send the packet to the pool after using it
-        // pool_push (packet->server->packetPool, data);
+        // TODO: send the packet to the pool
         destroyPacketInfo (pack_info);
     }
 
