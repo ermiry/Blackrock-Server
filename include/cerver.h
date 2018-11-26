@@ -230,6 +230,7 @@ struct _PacketInfo {
 
     Server *server;
     Client *client;
+    i32 clientSock; 
     char *packetData;
     // char *packetData;
     size_t packetSize;
@@ -336,7 +337,8 @@ extern void initPacketHeader (void *header, PacketType type, u32 packetSize);
 extern void *generatePacket (PacketType packetType, size_t packetSize);
 extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType);
 
-extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
+// FIXME:
+// extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
 
 extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
 extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 

@@ -97,7 +97,8 @@ void s_array_init (void *array, void *begin, size_t n_elems) {
 
 #pragma region PACKETS
 
-PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize) {
+PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
+    char *packetData, size_t packetSize) {
 
     PacketInfo *p = NULL;
 
@@ -105,12 +106,7 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
         if (POOL_SIZE (server->packetPool) > 0) {
             p = pool_pop (server->packetPool);
             if (!p) p = (PacketInfo *) malloc (sizeof (PacketInfo));
-            else {
-                printf ("\nGot a packet info from the pool!\n");
-
-                if (p->packetData) free (p->packetData);
-            }
-            // else if (p->packetData) free (p->packetData);
+            else if (p->packetData) free (p->packetData);
         }
     }
 
@@ -122,6 +118,7 @@ PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, siz
     if (p) {
         p->server = server;
         p->client = client;
+        p->clientSock = clientSock;
         p->packetSize = packetSize;
         
         // copy the contents from the entry buffer to the packet info
@@ -366,18 +363,16 @@ u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage address
 
 }
 
-// FIXME: client socket!!
-u8 sendTestPacket (Server *server, Client *client) {
+u8 sendTestPacket (Server *server, i32 sock_fd, struct sockaddr_storage address) {
 
-    if (server && client) {
+    if (server) {
         size_t packetSize = sizeof (PacketHeader);
         void *packet = generatePacket (TEST_PACKET, packetSize);
         if (packet) {
-
-            // u8 retval = server_sendPacket (server, client, packet, packetSize);
+            u8 retval = server_sendPacket (server, sock_fd, address, packet, packetSize);
             free (packet);
 
-            // return retval;
+            return retval;
         }
     }
 
@@ -814,6 +809,121 @@ void client_checkTimeouts (Server *server) {}
 
 #pragma region CLIENT AUTHENTICATION
 
+i32 getOnHoldIdx (Server *server) {
+
+    if (server && server->authRequired) 
+        for (u32 i = 0; i < poll_n_fds; i++)
+            if (server->hold_fds[i].fd == -1) return i;
+
+    return -1;
+
+}
+
+// we remove any fd that was set to -1 for what ever reason
+void compressHoldClients (Server *server) {
+
+    if (server) {
+        server->compress_hold_clients = false;
+        
+        for (u16 i = 0; i < server->hold_nfds; i++) {
+            if (server->hold_fds[i].fd == -1) {
+                for (u16 j = i; j < server->hold_nfds; j++) 
+                    server->hold_fds[j].fd = server->hold_fds[j + 1].fd;
+
+                i--;
+                server->hold_nfds--;
+            }
+        }
+    }
+
+}
+
+void server_recieve (Server *server, i32 fd, bool onHold);
+
+// handles packets from the on hold clients until they authenticate
+u8 handleOnHoldClients (void *data) {
+
+    if (!data) {
+        logMsg (stderr, ERROR, SERVER, "Can't handle on hold clients on a NULL server!");
+        return 1;
+    }
+
+    Server *server = (Server *) data;
+
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
+    #endif
+
+    int poll_retval;    // ret val from poll function
+    while (server->holdingClients) {
+        poll_retval = poll (server->hold_fds, poll_n_fds, server->pollTimeout);
+        
+        // poll failed
+        if (poll_retval < 0) {
+            logMsg (stderr, ERROR, SERVER, "On hold poll failed!");
+            perror ("Error");
+            server->isRunning = false;
+            break;
+        }
+
+        // if poll has timed out, just continue to the next loop... 
+        if (poll_retval == 0) {
+            #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, SERVER, "On hold poll timeout.");
+            #endif
+            continue;
+        }
+
+        // one or more fd(s) are readable, need to determine which ones they are
+        for (u16 i = 0; i < poll_n_fds; i++) {
+            if (server->hold_fds[i].revents == 0) continue;
+            if (server->hold_fds[i].revents != POLLIN) continue;
+
+            // TODO: maybe later add this directly to the thread pool
+            server_recieve (server, server->hold_fds[i].fd, true);
+        }
+
+        // if (server->compress_hold_clients) compressHoldClients (server);
+    } 
+
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, SERVER, NO_TYPE, "Servr on hold poll has stopped!");
+    #endif
+
+}
+
+// if the server requires authentication, we send the newly connected clients to an on hold
+// structure until they authenticate, if not, they are just dropped by the server
+void onHoldClient (Server *server, Client *client, i32 fd) {
+
+    // add the client to the on hold structres -> avl and poll
+    if (server && client) {
+        if (server->onHoldClients) {
+            i32 idx = getOnHoldIdx (server);
+            // TODO: what happens if we get -1?
+
+            server->hold_fds[idx].fd = fd;
+            server->hold_fds[idx].events = POLLIN;
+            server->hold_nfds++; 
+
+            server->n_hold_clients++;
+
+            avl_insertNode (server->onHoldClients, client);
+
+            if (server->holdingClients == false) {
+                thpool_add_work (server->thpool, (void *) handleOnHoldClients, server);
+                server->holdingClients = true;
+            }          
+
+            #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, 
+                    "Added a new client to the on hold structures.");
+            #endif
+        }
+    }
+
+}
+
 // drops a client from the on hold structure because he was unable to authenticate
 void dropClient (Server *server, Client *client) {
 
@@ -940,112 +1050,43 @@ void authenticateClient (void *data) {
 
 }
 
-u8 handleOnHoldClients (void *data);
+// we don't want on hold clients to make any other request
+void handleOnHoldPacket (void *data) {
 
-// TODO: when inserting into the hold structure, search for a -1!!!
-// FIXME: register the new connection to the client!!
-// if the server requires authentication, we send the newly connected clients to an on hold
-// structure until they authenticate, if not, they are just dropped by the server
-void onHoldClient (Server *server, Client *client, i32 fd) {
+    if (data) {
+        PacketInfo *pack_info = (PacketInfo *) data;
 
-    // add the client to the on hold structres -> avl and poll
-    if (server && client) {
-        if (server->onHoldClients) {
-            // we add the client's las active connection
-            // server->hold_fds[server->hold_nfds].fd = 
-            //     client->active_connections[client->n_active_cons - 1];
-            server->hold_fds[server->hold_nfds].fd = fd;
-            server->hold_fds[server->hold_nfds].events = POLLIN;
-            server->hold_nfds++; 
+        if (!checkPacket (pack_info->packetSize, pack_info->packetData, DONT_CHECK_TYPE))  {
+            PacketHeader *header = (PacketHeader *) pack_info->packetData;
 
-            server->n_hold_clients++;
+            switch (header->packetType) {
+                // handles an error from the client
+                case ERROR_PACKET: break;
 
-            avl_insertNode (server->onHoldClients, client);
+                // a client is trying to authenticate himself
+                case AUTHENTICATION: break;
 
-            if (server->holdingClients == false) {
-                thpool_add_work (server->thpool, (void *) handleOnHoldClients, server);
-                server->holdingClients = true;
-            }          
+                case TEST_PACKET: 
+                    logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                    // send a test packet back to the client
+                    if (!sendTestPacket (pack_info->server, pack_info->clientSock, pack_info->client->address))
+                        logMsg (stdout, DEBUG_MSG, PACKET, "Success answering the test packet.");
 
-            #ifdef CERVER_DEBUG
-                logMsg (stdout, DEBUG_MSG, SERVER, 
-                    "Added a new client to the on hold structures.");
-            #endif
-        }
-    }
+                    else logMsg (stderr, ERROR, PACKET, "Failed to answer test packet!");
+                    break;
 
-}
-
-// we remove any fd that was set to -1 for what ever reason
-void compressHoldClients (Server *server) {
-
-    if (server) {
-        server->compress_hold_clients = false;
-        
-        for (u16 i = 0; i < server->hold_nfds; i++) {
-            if (server->hold_fds[i].fd == -1) {
-                for (u16 j = i; j < server->hold_nfds; j++) 
-                    server->hold_fds[j].fd = server->hold_fds[j + 1].fd;
-
-                i--;
-                server->hold_nfds--;
+                default: 
+                    logMsg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
+                    break;
             }
         }
+
+        // FIXME: 22/11/2018 - error with packet pool!!! seg fault always the second time 
+        // a client sends a packet!!
+        // no matter what, we send the packet to the pool after using it
+        // pool_push (packet->server->packetPool, data);
+        destroyPacketInfo (pack_info);
     }
-
-}
-
-void server_recieve (Server *server, i32 fd, bool onHold);
-
-// handles packets from the on hold clients until they authenticate
-u8 handleOnHoldClients (void *data) {
-
-    if (!data) {
-        logMsg (stderr, ERROR, SERVER, "Can't handle on hold clients on a NULL server!");
-        return 1;
-    }
-
-    Server *server = (Server *) data;
-
-    #ifdef CERVER_DEBUG
-        logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
-    #endif
-
-    int poll_retval;    // ret val from poll function
-    while (server->holdingClients) {
-        poll_retval = poll (server->hold_fds, poll_n_fds, server->pollTimeout);
-        
-        // poll failed
-        if (poll_retval < 0) {
-            logMsg (stderr, ERROR, SERVER, "On hold poll failed!");
-            perror ("Error");
-            server->isRunning = false;
-            break;
-        }
-
-        // if poll has timed out, just continue to the next loop... 
-        if (poll_retval == 0) {
-            #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "On hold poll timeout.");
-            #endif
-            continue;
-        }
-
-        // one or more fd(s) are readable, need to determine which ones they are
-        for (u16 i = 0; i < poll_n_fds; i++) {
-            if (server->hold_fds[i].revents == 0) continue;
-            if (server->hold_fds[i].revents != POLLIN) continue;
-
-            // TODO: maybe later add this directly to the thread pool
-            server_recieve (server, server->hold_fds[i].fd, true);
-        }
-
-        // if (server->compress_hold_clients) compressHoldClients (server);
-    } 
-
-    #ifdef CERVER_DEBUG
-        logMsg (stdout, SERVER, NO_TYPE, "Servr on hold poll has stopped!");
-    #endif
 
 }
 
@@ -1111,7 +1152,7 @@ void handlePacket (void *data) {
                 case TEST_PACKET: 
                     logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
                     // send a test packet back to the client
-                    if (!sendTestPacket (packet->server, packet->client))
+                    if (!sendTestPacket (packet->server, packet->clientSock, packet->client->address))
                         logMsg (stdout, DEBUG_MSG, PACKET, "Success answering the test packet.");
 
                     else logMsg (stderr, ERROR, PACKET, "Failed to answer test packet!");
@@ -1132,9 +1173,10 @@ void handlePacket (void *data) {
 
 }
 
+// TODO: 25/11/2018 -- 23:34 -- use the session id to handle the packets!!
 // TODO: take into account that we dont need to check the identity when recieving game packets!!!
 // split the entry buffer in packets of the correct size
-void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) {
+void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, bool onHold) {
 
     if (buffer && (total_size > 0)) {
         u32 buffer_idx = 0;
@@ -1157,17 +1199,21 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) 
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
-                // FIXME: we need to take into account the session id
+                // TODO: 25/11/2018 -- 23:34 -- use the session id!!!
 
-                // FIXME: 22:56!!!
-                // info = newPacketInfo (server, 
-                //     getClientBySock (server->clients, fd), packet_data, packet_size);
+                info = newPacketInfo (server,
+                    onHold ? getClientBySocket (server->onHoldClients->root, fd) :
+                        getClientBySocket (server->clients->root, fd),
+                        fd, packet_data, packet_size);
 
-                // info = newPacketInfo (server, 
-                //     getClientBySession (server->clients,
-                //     session_generate_id (client->clientSock, client->address)))
+                thpool_add_work (server->thpool, onHold ?
+                    (void *) handleOnHoldPacket : (void *) handlePacket, info);
 
-                // thpool_add_work (server->thpool, (void *) handlePacket, info);
+                #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, 
+                    createString ("Server active thpool threads: %i", 
+                    thpool_num_threads_working (server->thpool)));
+                #endif
 
                 end += packet_size;
             }
@@ -1182,6 +1228,7 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size) 
 
 }
 
+// FIXME: add logic for dropping regular clients
 // TODO: add support for handling large files transmissions
 // what happens if my buffer isn't enough, for example a larger file?
 // recive all incoming data from the socket
@@ -1215,7 +1262,6 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
             // break;
         }
 
-        // FIXME: remove it from on hold structure!!!
         else if (rc == 0) {
             // man recv -> steam socket perfomed an orderly shutdown
             // but in dgram it might mean something?
@@ -1237,14 +1283,14 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
             char *buffer_data = (char *) calloc (MAX_UDP_PACKET_SIZE, sizeof (char));
             if (buffer_data) {
                 memcpy (buffer_data, packetBuffer, rc);
-                handleRecvBuffer (server, socket_fd, packetBuffer, rc);
+                handleRecvBuffer (server, socket_fd, packetBuffer, rc, onHold);
             }
         }
-
     // } while (true);
 
 }
 
+// FIXME: clean up
 i32 server_accept (Server *server) {
 
     Client *client = NULL;
@@ -2008,7 +2054,8 @@ u8 cerver_teardown (Server *server) {
     }
 
     // clean common server structs
-    cleanUpClients (server);
+    // FIXME: 25/11/2018 -- 23:50 - getting a seg fault!!
+    // cleanUpClients (server);
     #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "Done cleaning up clients.");
     #endif
@@ -2034,6 +2081,11 @@ u8 cerver_teardown (Server *server) {
         }
     } */
 
+    #ifdef CERVER_DEBUG
+    logMsg (stdout, DEBUG_MSG, SERVER, 
+        createString ("Server active thpool threads: %i", 
+        thpool_num_threads_working (server->thpool)));
+    #endif
     free (server->thpool);
 
     // destroy any other server data
