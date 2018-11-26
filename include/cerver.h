@@ -132,12 +132,11 @@ struct _Server {
     void *serverData;
     Action destroyServerData;
 
-    // 01/11/2018 - lets try this
     // do web servers need this?
-    AVLTree *clients;                   // 02/11/2018 -- connected clients with avl tree
+    AVLTree *clients;                   // connected clients
     Pool *clientsPool;       
 
-    // 28/10/2018 -- poll test
+    // TODO: option to make this dynamic
     struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
     u16 nfds;                           // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
@@ -146,11 +145,13 @@ struct _Server {
     bool authRequired;      // 02/11/2018 - authentication required by the server
     Auth auth;              // server auth info
 
-    // 02/11/2018 -- 21:51 -- on hold clients         
+    // on hold clients         
     AVLTree *onHoldClients;                 // hold on the clients until they authenticate
+    // TODO: option to make this dynamic
     struct pollfd hold_fds[poll_n_fds];
     u16 hold_nfds;
     bool compress_hold_clients;              // compress the hold fds array?
+    bool holdingClients;
 
     Pool *packetPool;       // 02/11/2018 - packet info
 
@@ -337,11 +338,12 @@ extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetDa
 extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
 extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 
     const struct sockaddr_storage address);
-extern u8 server_sendPacket (Server *server, Client *client, 
+extern u8 server_sendPacket (Server *server, i32 socket_fd, struct sockaddr_storage address, 
     const void *packet, size_t packetSize);
 
 extern void *generateErrorPacket (ErrorType type, const char *msg);
-extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, const char *msg);
+extern u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage address,
+    ErrorType type, const char *msg);
 
 #pragma endregion
 

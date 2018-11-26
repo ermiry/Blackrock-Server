@@ -25,7 +25,7 @@
 #include "utils/config.h"
 #include "utils/myUtils.h"
 
-#include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
+#include "utils/avl.h" 
 
 /*** VALUES ***/
 
@@ -297,28 +297,25 @@ i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flag
 
 }
 
-// FIXME: we need to know to which client socket to send the packet
 // handles the correct logic for sending a packet, depending on the supported protocols
-u8 server_sendPacket (Server *server, Client *client, 
+u8 server_sendPacket (Server *server, i32 socket_fd, struct sockaddr_storage address, 
     const void *packet, size_t packetSize) {
 
-    /* if (server && client) {
+    if (server) {
         switch (server->protocol) {
             case IPPROTO_TCP: 
-                if (tcp_sendPacket (client->clientSock, packet, packetSize, 0) >= 0)
+                if (tcp_sendPacket (socket_fd, packet, packetSize, 0) >= 0)
                     return 0;
                 break;
             case IPPROTO_UDP:
-                if (udp_sendPacket (server, packet, packetSize, client->address) >= 0)
+                if (udp_sendPacket (server, packet, packetSize, address) >= 0)
                     return 0;
                 break;
             default: break;
         }
     }
 
-    return 1; */
-
-    return 0;
+    return 1;
 
 }
 
@@ -351,35 +348,36 @@ void *generateErrorPacket (ErrorType type, const char *msg) {
 
 }
 
-// FIXME: send packet
 // creates and sends an error packet
-u8 sendErrorPacket (Server *server, Client *client, 
+u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage address,
     ErrorType type, const char *msg) {
 
     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     void *errpacket = generateErrorPacket (type, msg);
 
-    // send the packet to the client
-    /* server->protocol == IPPROTO_TCP ? 
-    tcp_sendPacket (client->clientSock, errpacket, packetSize, 0) :
-    udp_sendPacket (server, errpacket, packetSize, client->address); */
+    if (errpacket) {
+        // send the packet to the client
+        server_sendPacket (server, sock_fd, address, errpacket, packetSize);
 
-    free (errpacket);
+        free (errpacket);
+    }
 
     return 0;
 
 }
 
+// FIXME: client socket!!
 u8 sendTestPacket (Server *server, Client *client) {
 
     if (server && client) {
         size_t packetSize = sizeof (PacketHeader);
         void *packet = generatePacket (TEST_PACKET, packetSize);
         if (packet) {
-            u8 retval = server_sendPacket (server, client, packet, packetSize);
+
+            // u8 retval = server_sendPacket (server, client, packet, packetSize);
             free (packet);
 
-            return retval;
+            // return retval;
         }
     }
 
@@ -400,7 +398,7 @@ void *createClientAuthReqPacket (void) {
 
 }
 
-// FIXME: send packet
+// FIXME: to which client active connection do we send the packet??!!
 // broadcast a packet/msg to all clients inside a client's tree
 void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
@@ -410,10 +408,7 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
         // send packet to current node
         if (node->id) {
             Client *client = (Client *) node->id;
-            /* if (client) 
-                server->protocol == IPPROTO_TCP ? 
-                    tcp_sendPacket (client->clientSock, packet, packetSize, 0) : 
-                    udp_sendPacket (server, packet, packetSize, client->address); */
+            // if (client) FIXME:
         }
 
         broadcastToAllClients (node->left, server, packet, packetSize);
@@ -449,6 +444,7 @@ void *generateServerInfoPacket (Server *server) {
 
 }
 
+// FIXME: to which client active connection do we send the packet??!!
 // 17/11/2018 - send useful server info to the client
 void sendServerInfo (Server *server, Client *client) {
 
@@ -456,11 +452,12 @@ void sendServerInfo (Server *server, Client *client) {
         if (server->serverInfo) {
             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
 
-            if (!server_sendPacket (server, client, server->serverInfo, packetSize)) {
+            // FIXME:
+            /* if (!server_sendPacket (server, )) {
                 #ifdef CERVER_DEBUG
                     logMsg (stdout, DEBUG_MSG, SERVER, "Sent server info packet.");
                 #endif
-            }
+            } */
         }
 
         else {
@@ -517,6 +514,8 @@ void session_setIDGenerator (Server *server, Action idGenerator) {
 
 /*** CLIENTS ***/
 
+// FIXME: return the data from the avl when we remove it!!!
+
 #pragma region CLIENTS
 
 // get from where the client is connecting
@@ -534,49 +533,15 @@ char *client_getConnectionValues (i32 fd, const struct sockaddr_storage address)
 
 }
 
-// the id is an idx based on the main poll array
-i32 getNewClientID (Server *server) {
+void client_set_sessionID (Client *client, char *sessionID) {
 
-    i32 retval = -1;
-
-    // search for a marked index in the array
-    for (u16 i = 1; i < poll_n_fds; i++) {
-        if (server->fds[i].fd == -1) {
-            // this id n. is available
-            retval = i;
-            break;
-        }
+    if (client && sessionID) {
+        if (client->sessionID) free (client->sessionID);
+        client->sessionID = sessionID;
     }
-
-    return retval;
 
 }
 
-// the id is the the idx in the hold poll array
-i32 getHoldClientId (Server *server) {
-
-    i32 retval = -1;
-
-    // search for a marked index in the array
-    for (u16 i = 0; i < poll_n_fds; i++) {
-        if (server->hold_fds[i].fd == -1) {
-            // this id n. is available
-            retval = i;
-            break;
-        }
-    }
-
-    return retval;
-
-}
-
-// FIXME: return the data from the avl when we remove it!!!
-
-// TODO: 24/11/2018 - how to handle the load balancer?
-// TODO: 24/11/2018 -- how about using the session id as the id in the clients avl??
-// FIXME: should we get a new client id each time we register to the server?
-    // what happens when we are juming back and forth between the server poll and the lobbys?
-// FIXME: client ids -> is the server full?
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address,
     char *connection_values) {
 
@@ -589,19 +554,6 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
         client->sessionID = NULL;
         client->active_connections = NULL;
     } 
- 
-    // FIXME: 25/11/2018 - this doesn't work if we can support multiple connections!!!
-    // if the client is on hold, we don't need to assign him a client id
-    // until he authenticates and is sent to the main server poll
-    /* if (onHold) {
-        client->clientID = getHoldClientId (server);
-        // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
-    } 
-
-    else {
-        client->clientID = getNewClientID (server);
-        // if (new->clientID < 0) FIXME: we didn't find a new client id, is the server full?
-    } */
 
     // 25/11/2018 - 16:00 - using connection values as the client id
     if (connection_values) {
@@ -626,14 +578,6 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
     client->address = address;
 
-    // client->clientID = getNewClientID (server);
-
-    // FIXME: 25/11/2018 - 15:49 - move this from here!!
-    /* if (session_id) {
-        if (client->sessionID) free (client->sessionID);
-        client->sessionID = session_id;
-    } */
-
     return client;
 
 }
@@ -652,6 +596,7 @@ void destroyClient (void *data) {
             free (client->active_connections);
         }
 
+        if (client->clientID) free (client->clientID);
         if (client->sessionID) free (client->sessionID);
 
         free (client);
@@ -919,8 +864,9 @@ void authenticateClient (void *data) {
                 }
 
                 else {
+                    // FIXME:
                     // send feedback to the client
-                    sendErrorPacket (packet->server, packet->client, ERR_FAILED_AUTH, "Wrong credentials!");
+                    // sendErrorPacket (packet->server, packet->client, ERR_FAILED_AUTH, "Wrong credentials!");
                     if (packet->client->dropClient) dropClient (packet->server, packet->client);
                 }
             }
@@ -942,7 +888,6 @@ void authenticateClient (void *data) {
 
 u8 handleOnHoldClients (void *data);
 
-// TODO: 03/11/2018 -- what happens when we have a load balancer?
 // if the server requires authentication, we send the newly connected clients to an on hold
 // structure until they authenticate, if not, they are just dropped by the server
 void onHoldClient (Server *server, Client *client, i32 fd) {
@@ -950,38 +895,24 @@ void onHoldClient (Server *server, Client *client, i32 fd) {
     // add the client to the on hold structres -> avl and poll
     if (server && client) {
         if (server->onHoldClients) {
-            /* server->hold_fds[server->hold_nfds].fd = client->clientSock;
-            server->hold_fds[server->hold_nfds].events = POLLIN;
-            server->hold_nfds++; */
-
             // we add the client's las active connection
             // server->hold_fds[server->hold_nfds].fd = 
             //     client->active_connections[client->n_active_cons - 1];
-            // server->hold_fds[server->hold_nfds].events = POLLIN;
-            // server->hold_nfds++; 
+            server->hold_fds[server->hold_nfds].fd = fd;
+            server->hold_fds[server->hold_nfds].events = POLLIN;
+            server->hold_nfds++; 
 
-            server->hold_fds[10].fd = fd;
-            server->hold_fds[10].events = POLLIN;
+            avl_insertNode (server->onHoldClients, client);
 
-            // avl_insertNode (server->onHoldClients, client);
-
-            thpool_add_work (server->thpool, (void *) handleOnHoldClients, server);
+            if (server->holdingClients == false) {
+                thpool_add_work (server->thpool, (void *) handleOnHoldClients, server);
+                server->holdingClients = true;
+            }          
 
             #ifdef CERVER_DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "Added a new client to the on hold structures.");
+                logMsg (stdout, DEBUG_MSG, SERVER, 
+                    "Added a new client to the on hold structures.");
             #endif
-
-            // send the authentication request
-            /* if (server->auth.reqAuthPacket) {
-                if (!server_sendPacket (server, client, 
-                    server->auth.reqAuthPacket, server->auth.authPacketSize)) {
-                        #ifdef CERVER_DEBUG
-                            logMsg (stdout, DEBUG_MSG, PACKET, "Sent server auth packet!");
-                        #endif
-                    }
-            }
-                
-            else logMsg (stdout, WARNING, PACKET, "Server does not have a request auth packet."); */ 
         }
     }
 
@@ -1006,8 +937,6 @@ void compressHoldClients (Server *server) {
 
 }
 
-// FIXME: this is only for testing!!!
-i32 server_accept (Server *server);
 void server_recieve (Server *server, i32 fd, bool onHold);
 
 // handles packets from the on hold clients until they authenticate
@@ -1049,18 +978,16 @@ u8 handleOnHoldClients (void *data) {
             if (server->hold_fds[i].revents == 0) continue;
             if (server->hold_fds[i].revents != POLLIN) continue;
 
-            // if (server->hold_fds[i].fd == server->serverSock) 
-            //     server_accept (server);
-
             // TODO: maybe later add this directly to the thread pool
-            // not the server socket, so a connection fd must be readable
             server_recieve (server, server->hold_fds[i].fd, true);
         }
 
         // if (server->compress_hold_clients) compressHoldClients (server);
     } 
 
-    logMsg (stdout, DEBUG_MSG, SERVER, "On hold poll has ended!");
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, SERVER, NO_TYPE, "Servr on hold poll has stopped!");
+    #endif
 
 }
 
@@ -1216,8 +1143,14 @@ void server_recieve (Server *server, i32 fd, bool onHold) {
             if (errno != EWOULDBLOCK) {     // no more data to read 
                 // logMsg (stderr, ERROR, SERVER, "Recv failed!");
                 // perror ("Error:");
-                // logMsg (stdout, DEBUG_MSG, CLIENT, 
-                //     "Ending client connection - server_recieve () - rc < 0");
+                logMsg (stdout, DEBUG_MSG, CLIENT, 
+                    "Ending client connection - server_recieve () - rc < 0");
+
+                // FIXME: do we just close the socket like this?
+                close (fd);
+
+                // TODO: check that there are no other clients in the on hold structre
+
                 // client_closeConnection (server, getClientBySock (server->clients, fd));
             }
 
@@ -1228,8 +1161,14 @@ void server_recieve (Server *server, i32 fd, bool onHold) {
         else if (rc == 0) {
             // man recv -> steam socket perfomed an orderly shutdown
             // but in dgram it might mean something?
-            // logMsg (stdout, DEBUG_MSG, CLIENT, 
-            //         "Ending client connection - server_recieve () - rc == 0");
+            logMsg (stdout, DEBUG_MSG, CLIENT, 
+                    "Ending client connection - server_recieve () - rc == 0");
+
+            // FIXME: do we just close the socket like this?
+            close (fd);
+
+            // TODO: check that there are no other clients in the on hold structre
+
             // client_closeConnection (server, getClientBySock (server->clients, fd));
             // break;
         }
@@ -1269,9 +1208,11 @@ i32 server_accept (Server *server) {
     #endif
 
     // TODO: 25/11/2018 - 15:27
-    // TODO: don't forget to free this!!
     // get client values to use as default id in avls
     char *connection_values = client_getConnectionValues (newfd, clientAddress);
+    if (!connection_values) {
+        // TODO: error and drop connection
+    }
 
     // FIXME: where do we want to put this?
     // create a new client bassed on the session id
@@ -1326,6 +1267,8 @@ i32 server_accept (Server *server) {
 
     // if (server->type != WEB_SERVER) sendServerInfo (server, client);
 
+    if (connection_values) free (connection_values);
+
     #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
     #endif
@@ -1335,19 +1278,18 @@ i32 server_accept (Server *server) {
 }
 
 // server poll loop to handle events in the registered socket's fds
-u8 server_poll (void *data) {
+u8 server_poll (Server *server) {
 
-    // if (!server) {
-    //     logMsg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
-    //     return 1;
-    // }
+    if (!server) {
+        logMsg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
+        return 1;
+    }
 
-    Server *server = (Server *) data;
-
-    int poll_retval;    // ret val from poll function
+    int poll_retval;
 
     logMsg (stdout, SUCCESS, SERVER, "Server has started!");
     logMsg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+
     while (server->isRunning) {
         poll_retval = poll (server->fds, poll_n_fds, server->pollTimeout);
 
@@ -1383,6 +1325,10 @@ u8 server_poll (void *data) {
         if (server->compress_clients) compressClients (server);
     }
 
+    #ifdef CERVER_DEBUG
+        logMsg (stdout, SERVER, NO_TYPE, "Servr main poll has stopped!");
+    #endif
+
 }
 
 #pragma endregion
@@ -1398,7 +1344,6 @@ u8 server_poll (void *data) {
 
 const char welcome[64] = "Welcome to cerver!";
 
-// FIXME: correctly support sessions!!
 // init server's data structures
 u8 initServerDS (Server *server, ServerType type) {
 
@@ -1430,43 +1375,14 @@ u8 initServerDS (Server *server, ServerType type) {
         server->compress_hold_clients = false;
 
         for (u16 i = 0; i < poll_n_fds; i++) server->hold_fds[i].fd = -1;
-
-        // add a dummy socket
-        /* i32 dummy;
-        switch (server->protocol) {
-            case IPPROTO_TCP: 
-                dummy = socket ((server->useIpv6 == 1 ? AF_INET6 : AF_INET), SOCK_STREAM, 0);
-                break;
-            case IPPROTO_UDP:
-                dummy = socket ((server->useIpv6 == 1 ? AF_INET6 : AF_INET), SOCK_DGRAM, 0);
-                break;
-
-            default: logMsg (stderr, ERROR, SERVER, "Unkonw protocol type!"); return 1;
-        }
-
-        if (dummy < 0) logMsg (stderr, ERROR, SERVER, "Failed to create dummy socket!");
-        else logMsg (stdout, SUCCESS, SERVER, "Created dummy socket!"); */
-
-        // set the socket to non blocking mode
-        // if (!sock_setBlocking (dummy, true)) {
-        //     logMsg (stderr, ERROR, CLIENT, "Failed to set client socket to non blocking mode!");
-        //     close (dummy);
-        // }
-
-        // else {
-        //     #ifdef CERVER_DEBUG
-        //     logMsg (stdout, DEBUG_MSG, CLIENT, "Client socket set to non blocking mode.");
-        //     #endif
-        // }
-
-        // server->hold_fds[server->hold_nfds].fd = dummy;
-        // server->hold_fds[server->hold_nfds].events = POLLIN;
-        // server->hold_nfds++;
     }
 
     // initialize server's own thread pool
     server->thpool = thpool_init (DEFAULT_TH_POOL_INIT);
-    if (!server->thpool) logMsg (stderr, ERROR, SERVER, "Failed to init server's thread pool!");
+    if (!server->thpool) {
+        logMsg (stderr, ERROR, SERVER, "Failed to init server's thread pool!");
+        return 1;
+    } 
 
     switch (type) {
         case FILE_SERVER: break;
@@ -1883,16 +1799,14 @@ u8 cerver_startServer (Server *server) {
         return 1;
     }
 
-    // 14/11/2018 -- one time only inits
+    // one time only inits
     // if we have a game server, we might wanna load game data -> set by server admin
     if (server->type == GAME_SERVER) {
         GameServerData *gameData = (GameServerData *) server->serverData;
-        if (gameData) {
-            if (gameData->loadGameData ()) {
+        if (gameData && gameData->loadGameData) 
+            if (gameData->loadGameData ()) 
                 logMsg (stderr, ERROR, GAME, "Failed to load game data!");
-                // FIXME: how do we want to handle this error?
-            }
-        }
+
         else logMsg (stdout, WARNING, GAME, "Game server doesn't have a reference to a game data!");
     }
 
@@ -1900,7 +1814,6 @@ u8 cerver_startServer (Server *server) {
     switch (server->protocol) {
         case IPPROTO_TCP: {
             // 28/10/2018 -- taking into account ibm poll example
-            // we expect the socket to be already in non blocking mode
             if (server->blocking == false) {
                 if (!listen (server->serverSock, server->connectionQueue)) {
                     // set up the initial listening socket     
@@ -1908,24 +1821,9 @@ u8 cerver_startServer (Server *server) {
                     server->fds[server->nfds].events = POLLIN;
                     server->nfds++;
 
-                    // server->hold_fds[server->hold_nfds].fd = server->serverSock;
-                    // server->hold_fds[server->hold_nfds].events = POLLIN;
-
                     server->isRunning = true;
 
-                    // 04//11/2018 - start separate on hold poll loop from the server th pool
-                    // if (server->authRequired) 
-                    //     thpool_add_work (server->thpool, (void *) handleOnHoldClients, server);
-
-                    // pthread_t t;
-                    // if (pthread_create (&t, NULL, (void *) handleOnHoldClients, server) != 0)
-                    //     fprintf (stderr, "Error creating poll thread!\n");
-
-                    // handleOnHoldClients (server);
-
-                    // 04/11/2018 -- keep in mind this is intended for one server at a time,
-                    // with a load balancer or diffrent physical servers, it must be different...
-                    // main thread handles main poll function
+                    if (server->authRequired) server->holdingClients = false;
 
                     server_poll (server);
 

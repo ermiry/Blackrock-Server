@@ -1085,8 +1085,9 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tries to join the same lobby he is in.");
         #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, 
-            "You can't join the same lobby you are in!");
+        // FIXME:
+        // sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, 
+        //     "You can't join the same lobby you are in!");
         return 1;
     }
 
@@ -1095,7 +1096,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join a lobby that is in game.");
         #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "A game is in progress in the lobby!");
+        // FIXME:
+        // sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "A game is in progress in the lobby!");
         return 1;
     }
 
@@ -1104,7 +1106,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join a full lobby.");
         #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "The lobby is already full!");
+        // FIXME:
+        // sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "The lobby is already full!");
         return 1;
     }
 
@@ -1826,11 +1829,12 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
             #endif
-            if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
-                #ifdef DEBUG
-                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
-                #endif
-            }
+            // FIXME:
+            // if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+            //     #ifdef DEBUG
+            //     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+            //     #endif
+            // }
             return;
         }
 
@@ -1851,8 +1855,9 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
             logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
 
             // send feedback to the player
-            sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, 
-                "Game server failed to create new lobby!");
+            // FIXME:
+            // sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, 
+            //     "Game server failed to create new lobby!");
         }
     }
 
@@ -1882,11 +1887,12 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to join a new lobby.");
             #endif
-            if (sendErrorPacket (server, player->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+            // FIXME:
+            /* if (sendErrorPacket (server, player->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
                 #ifdef DEBUG
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
-            }
+            } */
             return;
         }
 
@@ -1928,11 +1934,12 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
                 #ifdef DEBUG
                 logMsg (stdout, DEBUG_MSG, GAME, "There was a problem with a player leaving a lobby!");
                 #endif
-                if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Problem with player leaving the lobby!")) {
+                // FIXME:
+                /* if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Problem with player leaving the lobby!")) {
                     #ifdef DEBUG
                     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                     #endif
-                }
+                } */
             }
         }
 
@@ -1940,11 +1947,12 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player tries to leave a lobby but he is not inside one!");
             #endif
-            if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Player is not inside a lobby!")) {
+            // FIXME:
+            /* if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Player is not inside a lobby!")) {
                 #ifdef DEBUG
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
-            }
+            } */
         }
     }
 
@@ -1985,12 +1993,13 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
                     #ifdef DEBUG
                     logMsg (stdout, WARNING, GAME, "Need more players to start the game.");
                     #endif
-                    if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                    // FIXME: select client socket!!
+                    /* if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
                         "We need more players to start the game!")) {
                         #ifdef DEBUG
                         logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                         #endif
-                    }
+                    } */
                 }
             }
 
@@ -1998,12 +2007,13 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
                 #ifdef DEBUG
                 logMsg (stdout, WARNING, GAME, "Player is not the lobby owner.");
                 #endif
-                if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                // FIXME:
+                /* if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
                     "Player is not the lobby owner!")) {
                     #ifdef DEBUG
                     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                     #endif
-                }
+                } */
             }
         }
 
@@ -2011,12 +2021,13 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
             #ifdef DEBUG
             logMsg (stdout, WARNING, GAME, "Player must be inside a lobby and be the owner to start a game.");
             #endif
-            if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+            // FIXME:
+            /* if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
                 "The player is not inside a lobby!")) {
                 #ifdef DEBUG
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
-            }
+            } */
         }
     }
 
