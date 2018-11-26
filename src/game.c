@@ -306,17 +306,18 @@ void deletePlayer (void *data) {
 
 }
 
+// FIXME: we cant compare client sockets any more!!
 // comparator for players's avl tree
 int playerComparator (const void *a, const void *b) {
 
-    if (a && b) {
+    /* if (a && b) {
         Player *player_a = (Player *) a;
         Player *player_b = (Player *) b;
 
         if (player_a->client->clientSock > player_b->client->clientSock) return 1;
         else if (player_a->client->clientSock == player_b->client->clientSock) return 0;
         else return -1;
-    }
+    } */
 
 }
 
@@ -358,6 +359,7 @@ u8 game_initPlayers (GameServerData *gameData, u8 n_players) {
 
 }
 
+// FIXME:
 // adds a player to the server's players struct (avl) and also add the player
 // client to the main server poll
 void player_registerToServer (Server *server, Player *player) {
@@ -368,7 +370,7 @@ void player_registerToServer (Server *server, Player *player) {
             if (gameData->players) avl_insertNode (gameData->players, player);
 
             // add the player client to the server poll
-            Client *c = getClientBySock (server->clients, player->client->clientSock);
+            Client *c; // = getClientBySock (server->clients, player->client->clientSock);
             if (!c) client_registerToServer (server, player->client);
         }
 
@@ -382,6 +384,7 @@ void player_registerToServer (Server *server, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // removes a player from the server's players struct (avl) and also removes the player
 // client from the main server poll
 void player_unregisterFromServer (Server *server, Player *player) {
@@ -391,7 +394,7 @@ void player_unregisterFromServer (Server *server, Player *player) {
             GameServerData *gameData = (GameServerData *) server->serverData;
             if (gameData) {
                 // remove the player client from the main server poll
-                Client *c = getClientBySock (server->clients, player->client->clientSock);
+                Client *c; // = getClientBySock (server->clients, player->client->clientSock);
                 if (c) client_unregisterFromServer (server, player->client);
 
                 // remove the player from the servers players
@@ -402,20 +405,22 @@ void player_unregisterFromServer (Server *server, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // make sure that the player is inside the lobby
 bool player_isInLobby (Player *player, Lobby *lobby) {
 
-    if (player && lobby) {
+    /* if (player && lobby) {
         for (u8 i = 0; i < lobby->players_nfds; i++) 
             if (lobby->players_fds[i].fd == player->client->clientSock)
                 return true;
 
-    }
+    } */
 
     return false;
 
 }
 
+// FIXME: client socket!!
 // TODO: do we also need to check if the lobby is already full?
 // TODO: log a time stamp?
 // add a player to the lobby structures
@@ -427,11 +432,11 @@ u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
             if (gameData) {
                 if (!player_isInLobby (player, lobby)) {
                     // create a new player and add it to the server's players
-                    Player *p = newPlayer (gameData->playersPool, NULL, player);
+                    /* Player *p = newPlayer (gameData->playersPool, NULL, player);
                     avl_insertNode (lobby->players, p);
                     lobby->players_fds[lobby->players_nfds].fd = player->client->clientSock;
                     lobby->players_fds[lobby->players_nfds].events = POLLIN;
-                    lobby->players_nfds++;
+                    lobby->players_nfds++; */
 
                     player->inLobby = true;
 
@@ -447,6 +452,7 @@ u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // removes a player from the lobby's players structures and sends it to the game server's players
 u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
@@ -461,12 +467,12 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
                     // remove from the poll fds
                     for (u8 i = 0; i < lobby->players_nfds; i++) {
-                        if (lobby->players_fds[i].fd == player->client->clientSock) {
+                        /* if (lobby->players_fds[i].fd == player->client->clientSock) {
                             lobby->players_fds[i].fd = -1;
                             lobby->players_nfds--;
                             lobby->compress_players = true;
                             break;
-                        }
+                        } */
                     }
 
                     // delete the player from the lobby
@@ -486,13 +492,14 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // search a player in the lobbys players avl by his sock's fd
 Player *getPlayerBySock (AVLTree *players, i32 fd) {
 
     if (players) {
         Player *temp = (Player *) malloc (sizeof (Player));
         temp->client = (Client *) malloc (sizeof (Client));
-        temp->client->clientSock = fd;
+        // temp->client->clientSock = fd;
 
         void *data = avl_getNodeData (players, temp);
 
@@ -513,6 +520,7 @@ Player *getPlayerBySock (AVLTree *players, i32 fd) {
 
 }
 
+// FIXME: client socket!!
 // broadcast a packet/msg to all clients inside an avl structure
 void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
@@ -522,10 +530,10 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
         // send packet to curent player
         if (node->id) {
             Player *player = (Player *) node->id;
-            if (player) 
-                server->protocol == IPPROTO_TCP ?
-                tcp_sendPacket (player->client->clientSock, packet, packetSize, 0) :
-                udp_sendPacket (server, packet, packetSize, player->client->address);
+            // if (player) 
+                // server->protocol == IPPROTO_TCP ?
+                // tcp_sendPacket (player->client->clientSock, packet, packetSize, 0) :
+                // udp_sendPacket (server, packet, packetSize, player->client->address);
         }
 
         broadcastToAllPlayers (node->left, server, packet, packetSize);
@@ -1114,6 +1122,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: client socket!!
+// FIXME: send packet!
 // TODO: add a timestamp when the player leaves
 // called when a player requests to leave the lobby
 u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
@@ -1125,8 +1135,8 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         // check to see if the player is the owner of the lobby
         bool wasOwner = false;
         // TODO: we should be checking for the player's id instead
-        if (lobby->owner->client->clientSock == player->client->clientSock) 
-            wasOwner = true;
+        // if (lobby->owner->client->clientSock == player->client->clientSock) 
+        //     wasOwner = true;
 
         if (player_removeFromLobby (server, lobby, player)) return 1;
 
@@ -1148,9 +1158,9 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
                             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
                             void *packet = generatePacket (GAME_PACKET, packetSize);
                             if (packet) {
-                                server->protocol == IPPROTO_TCP ?
-                                tcp_sendPacket (temp->client->clientSock, packet, packetSize, 0) :
-                                udp_sendPacket (server, packet, packetSize, temp->client->address);
+                                // server->protocol == IPPROTO_TCP ?
+                                // tcp_sendPacket (temp->client->clientSock, packet, packetSize, 0) :
+                                // udp_sendPacket (server, packet, packetSize, temp->client->address);
                                 free (packet);
                             }
                         }
@@ -1789,6 +1799,8 @@ void handleGamePacket (void *data) {
 
 /*** FROM OUTSIDE A LOBBY ***/
 
+// FIXME: get players by session or socket!!!
+
 // request from a from client to create a new lobby 
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
 
@@ -1800,7 +1812,8 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         // check if the client is associated with a player
-        Player *owner = getPlayerBySock (gameData->players, client->clientSock);
+        // Player *owner = getPlayerBySock (gameData->players, client->clientSock);
+        Player *owner;
 
         // create new player data for the client
         if (!owner) {
@@ -1855,7 +1868,8 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         // check if the client is associated with a player
-        Player *player = getPlayerBySock (gameData->players, client->clientSock);
+        // Player *player = getPlayerBySock (gameData->players, client->clientSock);
+        Player *player;
 
         // create new player data for the client
         if (!player) {

@@ -71,8 +71,8 @@ struct _Server;
 // anyone that connects to the server
 struct _Client {
 
-    i32 clientID;
-    i32 clientSock;
+    // 25/11/2018 - 16:00 - using connection values as the client id
+    char *clientID;
     struct sockaddr_storage address;
 
     u8 authTries;           // remaining attemps to authenticate
