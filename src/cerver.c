@@ -1075,6 +1075,10 @@ void handleOnHoldPacket (void *data) {
 
                 case TEST_PACKET: 
                     logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                    long long x = 0;
+                    sleep (10);
+                    for (long int i = 0; i < 64000000; i ++) x += i;
+                    printf ("\n%li\n", x);
                     // send a test packet back to the client
                     if (!sendTestPacket (pack_info->server, pack_info->clientSock, pack_info->client->address))
                         logMsg (stdout, TEST, PACKET, "Success answering the test packet.");
@@ -1210,14 +1214,21 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
                         getClientBySocket (server->clients->root, fd),
                         fd, packet_data, packet_size);
 
-                thpool_add_work (server->thpool, onHold ?
-                    (void *) handleOnHoldPacket : (void *) handlePacket, info);
+                // thpool_add_work (server->thpool, onHold ?
+                //     (void *) handleOnHoldPacket : (void *) handlePacket, info);
+
+                pthread_t test_thread;
+                if (pthread_create (&test_thread, NULL, (void *) handleOnHoldPacket, info))
+                    printf ("Failed to create thread!\n");
 
                 #ifdef CERVER_DEBUG
                 logMsg (stdout, DEBUG_MSG, SERVER, 
                     createString ("Server active thpool threads: %i", 
                     thpool_num_threads_working (server->thpool)));
                 #endif
+
+                if (pthread_join (test_thread, NULL))
+                    printf ("Failed to join thread!\n");
 
                 end += packet_size;
             }
