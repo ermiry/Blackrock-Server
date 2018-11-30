@@ -1075,10 +1075,10 @@ void handleOnHoldPacket (void *data) {
 
                 case TEST_PACKET: 
                     logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
-                    long long x = 0;
-                    sleep (10);
-                    for (long int i = 0; i < 64000000; i ++) x += i;
-                    printf ("\n%li\n", x);
+                    // long long x = 0;
+                    // sleep (10);
+                    // for (long int i = 0; i < 64000000; i ++) x += i;
+                    // printf ("\n%li\n", x);
                     // send a test packet back to the client
                     if (!sendTestPacket (pack_info->server, pack_info->clientSock, pack_info->client->address))
                         logMsg (stdout, TEST, PACKET, "Success answering the test packet.");
@@ -1214,10 +1214,10 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
                         getClientBySocket (server->clients->root, fd),
                         fd, packet_data, packet_size);
 
-                // thpool_add_work (server->thpool, onHold ?
-                //     (void *) handleOnHoldPacket : (void *) handlePacket, info);
+                thpool_add_work (server->thpool, onHold ?
+                    (void *) handleOnHoldPacket : (void *) handlePacket, info);
 
-                pthread_t test_thread;
+                /*pthread_t test_thread;
                 if (pthread_create (&test_thread, NULL, (void *) handleOnHoldPacket, info))
                     printf ("Failed to create thread!\n");
 
@@ -1228,7 +1228,7 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
                 #endif
 
                 if (pthread_join (test_thread, NULL))
-                    printf ("Failed to join thread!\n");
+                    printf ("Failed to join thread!\n"); */
 
                 end += packet_size;
             }
@@ -1554,7 +1554,7 @@ void initServerValues (Server *server, ServerType type) {
             GameServerData *data = (GameServerData *) server->serverData;
 
             // get game modes info from a config file
-            data->gameSettingsConfig = parseConfigFile ("./config/gameSettings.cfg");
+            data->gameSettingsConfig = parseConfigFile ("Blackrock-Server/config/gameSettings.cfg");
             if (!data->gameSettingsConfig) 
                 logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
 
@@ -1849,7 +1849,7 @@ Server *cerver_createServer (Server *server, ServerType type) {
 
     // create the server from the default config file
     else {
-        Config *serverConfig = parseConfigFile ("./config/server.cfg");
+        Config *serverConfig = parseConfigFile ("./Blackrock-Server/config/server.cfg");
         if (!serverConfig) {
             logMsg (stderr, ERROR, NO_TYPE, "Problems loading server config!\n");
             return NULL;

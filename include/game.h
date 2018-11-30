@@ -49,6 +49,11 @@ struct _PacketInfo;
 #define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
 #define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
 
+
+
+#define GS_GAME_SETTINGS_CFG_MAKE		"./config/gameSettings.cfg"
+#define GS_GAME_SETTINGS_CFG_BIN		"../config/gameSettings.cfg"
+
 struct _GameServerData {
 
     Config *gameSettingsConfig;     // stores game modes info

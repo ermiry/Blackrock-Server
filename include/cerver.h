@@ -100,6 +100,9 @@ extern void client_unregisterFromServer (struct _Server *server, Client *client)
 
 #pragma region SERVER
 
+#define SERVER_CFG_MAKEFILE     "./config/server.cfg"
+#define SERVER_CFG_BIN          "../config/server.cfg"
+
 typedef enum ServerType {
 
     FILE_SERVER = 1,

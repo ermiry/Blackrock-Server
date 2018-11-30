@@ -39,6 +39,11 @@ int main (void) {
    // FIXME: add a function to set server auth
 
     gameServer = cerver_createServer (NULL, GAME_SERVER);
+
+    // Server test_server = {};
+
+    // gameServer = cerver_createServer (, NULL);
+
     if (gameServer) {
         // set our own functions to load and delete global game data
         gs_set_loadGameData (gameServer, blackrock_loadGameData);
