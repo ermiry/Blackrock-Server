@@ -10,9 +10,6 @@
 #include "utils/config.h"
 #include "utils/objectPool.h"
 
-// #include "utils/myTime.h"
-// #include "utils/vector.h"
-
 /*** CERVER TYPES ***/
 
 // 11/11/2018 -- added this types defs here to prevent compiler erros
@@ -49,10 +46,15 @@ struct _PacketInfo;
 #define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
 #define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
 
+#ifdef RUN_FROM_MAKE
+    #define GS_GAME_SETTINGS_CFG         "./config/gameSettings.cfg"
 
+#elif RUN_FROM_BIN
+    #define GS_GAME_SETTINGS_CFG         "../config/gameSettings.cfg"
 
-#define GS_GAME_SETTINGS_CFG_MAKE		"./config/gameSettings.cfg"
-#define GS_GAME_SETTINGS_CFG_BIN		"../config/gameSettings.cfg"
+#else
+    #define GS_GAME_SETTINGS_CFG          ""
+#endif  
 
 struct _GameServerData {
 

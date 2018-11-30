@@ -1554,7 +1554,7 @@ void initServerValues (Server *server, ServerType type) {
             GameServerData *data = (GameServerData *) server->serverData;
 
             // get game modes info from a config file
-            data->gameSettingsConfig = parseConfigFile ("Blackrock-Server/config/gameSettings.cfg");
+            data->gameSettingsConfig = parseConfigFile (GS_GAME_SETTINGS_CFG);
             if (!data->gameSettingsConfig) 
                 logMsg (stderr, ERROR, GAME, "Problems loading game settings config!");
 
@@ -1849,7 +1849,7 @@ Server *cerver_createServer (Server *server, ServerType type) {
 
     // create the server from the default config file
     else {
-        Config *serverConfig = parseConfigFile ("./Blackrock-Server/config/server.cfg");
+        Config *serverConfig = parseConfigFile (SERVER_CFG);
         if (!serverConfig) {
             logMsg (stderr, ERROR, NO_TYPE, "Problems loading server config!\n");
             return NULL;

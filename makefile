@@ -1,17 +1,28 @@
-CC = gcc
-CFLAGS = -I $(IDIR) -l pthread -l sqlite3 -D CERVER_DEBUG -D DEBUG -g
+src = 	$(wildcard src/*.c) \
+		$(wildcard src/blackrock/*.c) \
+		$(wildcard src/utils/*.c)
+
+objs = $(src:.c=.o)
 
 IDIR = ./include/
-SRCDIR = ./src/
 
-SOURCES = $(SRCDIR)*.c \
-		  $(SRCDIR)blackrock/*.c \
-		  $(SRCDIR)utils/*.c
+CC = gcc
+CFLAGS = -I $(IDIR) -l pthread -l sqlite3 $(DEFINES) $(RUN_MAKE) $(DEBUG) 
 
-all: server #run #clean
+# for debugging...
+DEBUG = -g
 
-server: $(SOURCES)
-	$(CC) $(SOURCES) $(CFLAGS) -o ./bin/server
+# print additional information
+DEFINES = -D CERVER_DEBUG -D DEBUG
+
+# run from parent folder
+RUN_BIN = -D RUN_FROM_BIN
+
+# run from bin folder
+RUN_MAKE = -D RUN_FROM_MAKE
+
+server: $(objs)
+	$(CC) $^ $(CFLAGS) -o ./bin/server
 
 run:
 	./bin/server
