@@ -1,13 +1,20 @@
-src = 	$(wildcard src/*.c) \
-		$(wildcard src/blackrock/*.c) \
-		$(wildcard src/utils/*.c)
+SRCDIR = src
 
-objs = $(src:.c=.o)
+SOURCES = 	$(wildcard $(SRCDIR)/*.c) \
+			$(wildcard $(SRCDIR)/blackrock/*.c) \
+			$(wildcard $(SRCDIR)/utils/*.c)
+
+objs = $(SOURCES:.c=.o)
 
 IDIR = ./include/
 
 CC = gcc
-CFLAGS = -I $(IDIR) -l pthread -l sqlite3 $(DEFINES) $(RUN_MAKE) $(DEBUG) 
+CFLAGS = -I $(IDIR) $(DEPENDENCIES) $(DEFINES) $(RUN_MAKE) $(DEBUG) 
+
+SQLITE = -l sqlite3 
+PTHREAD = -l pthread
+
+DEPENDENCIES = $(SQLITE) $(PTHREAD)
 
 # for debugging...
 DEBUG = -g
@@ -21,8 +28,10 @@ RUN_BIN = -D RUN_FROM_BIN
 # run from bin folder
 RUN_MAKE = -D RUN_FROM_MAKE
 
+OUTPUT = -o ./bin/server
+
 server: $(objs)
-	$(CC) $^ $(CFLAGS) -o ./bin/server
+	$(CC) $^ $(CFLAGS) $(OUTPUT)
 
 run:
 	./bin/server
