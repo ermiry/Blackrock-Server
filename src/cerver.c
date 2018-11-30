@@ -721,7 +721,7 @@ void dropClient (Server *server, Client *client);
 // FIXME:!!!
 // TODO: hanlde a max number of clients connected to a server at the same time?
 // maybe this can be handled before this call by the load balancer
-void client_registerToServer (Server *server, Client *client) {
+void client_registerToServer (Server *server, Client *client, int newfd) {
 
     Client *c = client;
 
@@ -742,9 +742,9 @@ void client_registerToServer (Server *server, Client *client) {
     // send the client to the server's active clients structures
     
     // FIXME:
-    /* server->fds[c->clientID].fd = c->clientSock;
-    server->fds[c->clientID].events = POLLIN;
-    server->nfds++; */
+    server->fds[10].fd = newfd;
+    server->fds[10].events = POLLIN;
+    server->nfds++;
 
     avl_insertNode (server->clients, c);
 
@@ -1340,6 +1340,9 @@ i32 server_accept (Server *server) {
 
     // if we requiere authentication, we send the client to on hold structure
     if (server->authRequired) onHoldClient (server, client, newfd);
+
+    // else client_registerToServer (server, client, newfd);  
+
         // TODO: in client authentication!!!
         // success authentication
         // create a session id with the admin setup parameters
@@ -1386,7 +1389,7 @@ i32 server_accept (Server *server) {
 
     // if (server->type != WEB_SERVER) sendServerInfo (server, client);
 
-    if (connection_values) free (connection_values);
+    // if (connection_values) free (connection_values);
 
     #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
@@ -1433,8 +1436,12 @@ u8 server_poll (Server *server) {
             if (server->fds[i].revents != POLLIN) continue;
 
             // accept incoming connections that are queued
-            if (server->fds[i].fd == server->serverSock) 
-                server_accept (server);
+            if (server->fds[i].fd == server->serverSock) {
+                if (server_accept (server)) 
+                    logMsg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
+                else logMsg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+            }
+                
 
             // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable

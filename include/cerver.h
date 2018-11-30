@@ -91,7 +91,7 @@ typedef struct _Client Client;
 extern Client *getClientBySocket (AVLNode *node, i32 socket_fd);
 extern Client *getClientBySession (AVLTree *clients, char *sessionID);
 
-extern void client_registerToServer (struct _Server *server, Client *client);
+extern void client_registerToServer (struct _Server *server, Client *client, int);
 extern void client_unregisterFromServer (struct _Server *server, Client *client);
 
 #pragma endregion
