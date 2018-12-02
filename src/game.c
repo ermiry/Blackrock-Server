@@ -371,7 +371,7 @@ void player_registerToServer (Server *server, Player *player) {
 
             // add the player client to the server poll
             Client *c; // = getClientBySock (server->clients, player->client->clientSock);
-            if (!c) client_registerToServer (server, player->client);
+            // if (!c) client_registerToServer (server, player->client);
         }
 
         else {
