@@ -61,6 +61,7 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     if (connection_values) {
         if (client->clientID) free (client->clientID);
         client->clientID = createString ("%s", connection_values);
+        free (connection_values);
     }
 
     if (server->authRequired) {
@@ -69,8 +70,8 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     } 
 
     client->n_active_cons = 0;
-    // if (client->active_connections) free (client->active_connections);
-    // client->active_connections = (i32 *) calloc (3, sizeof (i32));
+    if (client->active_connections) free (client->active_connections);
+    client->active_connections = (i32 *) calloc (DEFAULT_CLIENT_MAX_CONNECTS, sizeof (i32));
 
     // add the fd to the active connections
     if (client->active_connections) {
@@ -226,45 +227,49 @@ void client_unregisterConnection (Client *client, i32 socket_fd) {
 
 void dropClient (Server *server, Client *client);
 
-// 13/10/2018 - I think register a client only works for tcp? but i might be wrong...
-
-// FIXME:!!!
-// TODO: hanlde a max number of clients connected to a server at the same time?
-// maybe this can be handled before this call by the load balancer
+// FIXME: what is the max number of clients that a server can handle?
+// FIXME: use sessions -- also generate a session id for the client
+// registers a NEW client to the server
 void client_registerToServer (Server *server, Client *client, int newfd) {
 
-    Client *c = client;
+    if (server && client) {
+        Client *c = NULL;
 
-    // FIXME:
-    // at this point we assume the client was al ready authenticated
-    /* if (server->authRequired) {
-        // 02/11/2018 -- create a new client structure with the same values
-        c = newClient (server, client->clientSock, client->address, false);
+        // if the client was previously in the on hold structure...
+        if (server->authRequired) {
+            // FIXME:
+            // remove the client from the on hold structures
+        }
 
-        // remove the client from the on hold structure
-        dropClient (server, client);
-    } */
+        else c = client;
 
-    // else c = client;
+        // add the new sock fd to the server main poll
+        i32 idx = getFreePollSpot (server);
+        if (idx > 0) {
+            server->fds[idx].fd = newfd;
+            server->fds[idx].events = POLLIN;
+            server->nfds++;
 
-    // FIXME: clean up
-    // 10/11/2018 -- we use a free idx in the poll array as an unique client id
-    // send the client to the server's active clients structures
-    
-    // FIXME:
-    server->fds[10].fd = newfd;
-    server->fds[10].events = POLLIN;
-    server->nfds++;
+            // insert the new client into the server's clients
+            avl_insertNode (server->clients, c);
 
-    avl_insertNode (server->clients, c);
+            server->connectedClients++;
 
-    server->connectedClients++;
+            #ifdef CERVER_STATS
+                logMsg (stdout, SERVER, NO_TYPE, 
+                createString ("New client registered to server. Connected clients: %i.", 
+                server->connectedClients));
+            #endif
+        }
 
-    #ifdef CERVER_DEBUG
-    logMsg (stdout, DEBUG_MSG, SERVER, 
-        createString ("Registered a client to the server. Connected clients: %i.", 
-        server->connectedClients));
-    #endif
+        // TODO: how to better handle this error?
+        else {
+            logMsg (stderr, ERROR, SERVER, 
+                "Failed to get a free main poll idx. Is the server full?");
+            // just drop the client...
+            // FIXME:
+        } 
+    }
 
 }
 

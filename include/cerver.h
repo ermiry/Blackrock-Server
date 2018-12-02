@@ -79,12 +79,12 @@ struct _Server {
 
     i32 serverSock;         // server socket
     u8 useIpv6;  
-    u8 protocol;            // 12/10/2018 - we only support either tcp or udp
+    u8 protocol;            // we only support either tcp or udp
     u16 port; 
     u16 connectionQueue;    // each server can handle connection differently
 
-    bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
-    bool blocking;          // 29/10/2018 - sokcet fd is blocking?
+    bool isRunning;         // he server is recieving and/or sending packetss
+    bool blocking;          // sokcet fd is blocking?
 
     ServerType type;
     void *serverData;
@@ -317,6 +317,14 @@ struct _GameSettings;
 struct _Lobby;
 
 extern u16 nextPlayerId;
+
+#pragma endregion
+
+/*** MISC SERVER FUNCS ***/
+
+#pragma region MISC
+
+extern i32 getFreePollSpot (Server *server);
 
 #pragma endregion
 
