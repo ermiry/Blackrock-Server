@@ -31,6 +31,8 @@
 #define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
 #define DEFAULT_AUTH_CODE               7
 
+#define DEFAULT_USE_SESSIONS            0   // by default, a server does not support client sessions
+
 #define DEFAULT_TH_POOL_INIT            4
 
 #define MAX_PORT_NUM            65535

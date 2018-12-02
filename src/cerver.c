@@ -786,11 +786,6 @@ void handleOnHoldPacket (void *data) {
 
                 case TEST_PACKET: 
                     logMsg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
-                    // long long x = 0;
-                    // sleep (10);
-                    // for (long int i = 0; i < 64000000; i ++) x += i;
-                    // printf ("\n%li\n", x);
-                    // send a test packet back to the client
                     if (!sendTestPacket (pack_info->server, pack_info->clientSock, pack_info->client->address))
                         logMsg (stdout, TEST, PACKET, "Success answering the test packet.");
 
@@ -1284,6 +1279,8 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         server->useIpv6 = atoi (ipv6);
         // if we have got an invalid value, the default is not to use ipv6
         if (server->useIpv6 != 0 || server->useIpv6 != 1) server->useIpv6 = 0;
+
+        free (ipv6);
     } 
     // if we do not have a value, use the default
     else server->useIpv6 = DEFAULT_USE_IPV6;
@@ -1302,6 +1299,8 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
 
         if (usetcp) server->protocol = IPPROTO_TCP;
         else server->protocol = IPPROTO_UDP;
+
+        free (tcp);
 
     }
     // set to default (tcp) if we don't found a value
@@ -1323,6 +1322,7 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, createString ("Listening on port: %i", server->port));
         #endif
+        free (port);
     }
     // set to default port
     else {
@@ -1335,26 +1335,32 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
     if (queue) {
         server->connectionQueue = atoi (queue);
         #ifdef CERVER_DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, createString ("Connection queue: %i", server->connectionQueue));
+        logMsg (stdout, DEBUG_MSG, SERVER, 
+            createString ("Connection queue: %i", server->connectionQueue));
         #endif
+        free (queue);
     } 
     else {
         server->connectionQueue = DEFAULT_CONNECTION_QUEUE;
         logMsg (stdout, WARNING, SERVER, 
-            createString ("Connection queue no specified. Setting it to default: %i", DEFAULT_CONNECTION_QUEUE));
+            createString ("Connection queue no specified. Setting it to default: %i", 
+                DEFAULT_CONNECTION_QUEUE));
     }
 
     char *timeout = getEntityValue (cfgEntity, "timeout");
     if (timeout) {
         server->pollTimeout = atoi (timeout);
         #ifdef CERVER_DEBUG
-        logMsg (stdout, DEBUG_MSG, SERVER, createString ("Server poll timeout: %i", server->pollTimeout));
+        logMsg (stdout, DEBUG_MSG, SERVER, 
+            createString ("Server poll timeout: %i", server->pollTimeout));
         #endif
+        free (timeout);
     }
     else {
         server->pollTimeout = DEFAULT_POLL_TIMEOUT;
         logMsg (stdout, WARNING, SERVER, 
-            createString ("Poll timeout no specified. Setting it to default: %i", DEFAULT_POLL_TIMEOUT));
+            createString ("Poll timeout no specified. Setting it to default: %i", 
+                DEFAULT_POLL_TIMEOUT));
     }
 
     char *auth = getEntityValue (cfgEntity, "authentication");
@@ -1364,10 +1370,12 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired == 1 ? 
             "Server requires client authentication" : "Server does not requires client authentication");
         #endif
+        free (auth);
     }
     else {
         server->authRequired = DEFAULT_REQUIRE_AUTH;
-        logMsg (stdout, WARNING, SERVER, "No auth option found. No authentication required by default.");
+        logMsg (stdout, WARNING, SERVER, 
+            "No auth option found. No authentication required by default.");
     }
 
     if (server->authRequired) {
@@ -1375,13 +1383,31 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         if (tries) {
             server->auth.maxAuthTries = atoi (tries);
             #ifdef CERVER_DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, createString ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+            logMsg (stdout, DEBUG_MSG, SERVER, 
+                createString ("Max auth tries set to: %i.", server->auth.maxAuthTries));
             #endif
+            free (tries);
         }
         else {
             server->auth.maxAuthTries = DEFAULT_AUTH_TRIES;
-            logMsg (stdout, WARNING, SERVER, createString ("Max auth tries set to default: %i.", DEFAULT_AUTH_TRIES));
+            logMsg (stdout, WARNING, SERVER, 
+                createString ("Max auth tries set to default: %i.", DEFAULT_AUTH_TRIES));
         }
+    }
+
+    char *sessions = getEntityValue (cfgEntity, "sessions");
+    if (sessions) {
+        server->useSessions = atoi (sessions);
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, server->useSessions == 1 ? 
+            "Server supports client sessions." : "Server does not support client sessions.");
+        #endif
+        free (sessions);
+    }
+    else {
+        server->useSessions = DEFAULT_USE_SESSIONS;
+        logMsg (stdout, WARNING, SERVER, 
+            "No sessions option found. No support for client sessions by default.");
     }
 
     return 0;
@@ -1425,9 +1451,11 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
         logMsg (stdout, DEBUG_MSG, SERVER, createString ("Server poll timeout: %i", server->pollTimeout));
         logMsg (stdout, DEBUG_MSG, SERVER, server->authRequired == 1 ? 
             "Server requires client authentication" : "Server does not requires client authentication");
-
         if (server->authRequired) 
-            logMsg (stdout, DEBUG_MSG, SERVER, createString ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+            logMsg (stdout, DEBUG_MSG, SERVER, 
+            createString ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+        logMsg (stdout, DEBUG_MSG, SERVER, server->useSessions == 1 ? 
+            "Server supports client sessions." : "Server does not support client sessions.");
         #endif
     }
 
@@ -1452,16 +1480,12 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
     logMsg (stdout, DEBUG_MSG, SERVER, "Created server socket");
     #endif
 
-    // 29/10/2018 -- we do this to allow polling
     // set the socket to non blocking mode
     if (!sock_setBlocking (server->serverSock, server->blocking)) {
         logMsg (stderr, ERROR, SERVER, "Failed to set server socket to non blocking mode!");
-        // perror ("Error");
         close (server->serverSock);
         return 1;
     }
-
-    // TODO: how to check that the socket is actually non blocking?
 
     else {
         server->blocking = false;
@@ -1528,8 +1552,8 @@ Server *newServer (Server *server) {
     // by default the socket is assumed to be a blocking socket
     new->blocking = true;
 
-    // by default the server does not require authentication
-    new->authRequired = false;
+    new->authRequired = DEFAULT_REQUIRE_AUTH;
+    new->useSessions = DEFAULT_USE_SESSIONS;
     
     new->isRunning = false;
 
@@ -1582,7 +1606,6 @@ Server *cerver_createServer (Server *server, ServerType type) {
 
 }
 
-// FIXME: make sure to destroy our previos poll structure and create a new one -> reset respective values
 // teardowns the server and creates a fresh new one with the same parameters
 Server *cerver_restartServer (Server *server) {
 
@@ -1592,7 +1615,8 @@ Server *cerver_restartServer (Server *server) {
         Server temp = { 
             .useIpv6 = server->useIpv6, .protocol = server->protocol, .port = server->port,
             .connectionQueue = server->connectionQueue, .type = server->type,
-            .pollTimeout = server->pollTimeout, .authRequired = server->authRequired };
+            .pollTimeout = server->pollTimeout, .authRequired = server->authRequired,
+            .useSessions = server->useSessions };
 
         if (!cerver_teardown (server)) logMsg (stdout, SUCCESS, SERVER, "Done with server teardown");
         else logMsg (stderr, ERROR, SERVER, "Failed to teardown the server!");
@@ -1603,16 +1627,13 @@ Server *cerver_restartServer (Server *server) {
             logMsg (stdout, SUCCESS, SERVER, "Server has restarted!");
             return retServer;
         }
-        else {
-            logMsg (stderr, ERROR, SERVER, "Unable to retstart the server!");
-            return NULL;
-        }
+
+        else logMsg (stderr, ERROR, SERVER, "Unable to retstart the server!");
     }
 
-    else {
-        logMsg (stdout, WARNING, SERVER, "Can't restart a NULL server!");
-        return NULL;
-    }
+    else logMsg (stdout, WARNING, SERVER, "Can't restart a NULL server!");
+    
+    return NULL;
 
 }
 
@@ -1641,7 +1662,6 @@ u8 cerver_startServer (Server *server) {
     u8 retval = 1;
     switch (server->protocol) {
         case IPPROTO_TCP: {
-            // 28/10/2018 -- taking into account ibm poll example
             if (server->blocking == false) {
                 if (!listen (server->serverSock, server->connectionQueue)) {
                     // set up the initial listening socket     
@@ -1787,28 +1807,16 @@ u8 cerver_teardown (Server *server) {
         logMsg (stdout, SUCCESS, SERVER, "Server has been shutted down.");
 
     else logMsg (stderr, ERROR, SERVER, "Failed to shutdown server!");
+    
+    if (server->thpool) {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, 
+            createString ("Server active thpool threads: %i", 
+            thpool_num_threads_working (server->thpool)));
+        #endif
 
-    // FIXME:
-    // TODO: does this work as intended? -> stops any job?
-    // stop any ongoing job
-    /* if (server->thpool) {
-        if (thpool_num_threads_working (server->thpool) > 0) {
-            thpool_pause (server->thpool);
-            thpool_destroy (server->thpool);
-        }
-
-        else {
-            // free(thpool_p->threads);
-	        free (server->thpool);
-        }
-    } */
-
-    #ifdef CERVER_DEBUG
-    logMsg (stdout, DEBUG_MSG, SERVER, 
-        createString ("Server active thpool threads: %i", 
-        thpool_num_threads_working (server->thpool)));
-    #endif
-    free (server->thpool);
+        thpool_destroy (server->thpool);
+    } 
 
     // destroy any other server data
     if (server->packetPool) pool_clear (server->packetPool);
@@ -1818,7 +1826,7 @@ u8 cerver_teardown (Server *server) {
 
     logMsg (stdout, SUCCESS, NO_TYPE, "Server teardown was successfull!");
 
-    return 0;   // teardown was successfull
+    return 0;
 
 }
 
