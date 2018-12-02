@@ -97,22 +97,24 @@ void s_array_init (void *array, void *begin, size_t n_elems) {
 PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
     char *packetData, size_t packetSize) {
 
-    PacketInfo *p = NULL;
+    PacketInfo *p = (PacketInfo *) malloc (sizeof (PacketInfo));
 
-    if (server->packetPool) {
-        if (POOL_SIZE (server->packetPool) > 0) {
-            p = pool_pop (server->packetPool);
-            if (!p) p = (PacketInfo *) malloc (sizeof (PacketInfo));
-            else if (p->packetData) free (p->packetData);
-        }
-    }
+    // if (server->packetPool) {
+    //     if (POOL_SIZE (server->packetPool) > 0) {
+    //         p = pool_pop (server->packetPool);
+    //         if (!p) p = (PacketInfo *) malloc (sizeof (PacketInfo));
+    //         else if (p->packetData) free (p->packetData);
+    //     }
+    // }
 
-    else {
-        p = (PacketInfo *) malloc (sizeof (PacketInfo));
-        p->packetData = NULL;
-    } 
+    // else {
+    //     p = (PacketInfo *) malloc (sizeof (PacketInfo));
+    //     p->packetData = NULL;
+    // } 
 
     if (p) {
+        p->packetData = NULL;
+
         p->server = server;
         p->client = client;
         p->clientSock = clientSock;
@@ -465,6 +467,8 @@ void sendServerInfo (Server *server, Client *client) {
 
 /*** SESSIONS ***/
 
+// TODO: 1/12/2018 -- set sessions in the config file
+
 #pragma region SESSIONS
 
 // create a unique session id for each client based on connection values
@@ -553,6 +557,8 @@ u8 handleOnHoldClients (void *data) {
         logMsg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
     #endif
 
+    bool stop = false;
+
     int poll_retval;    // ret val from poll function
     while (server->holdingClients) {
         poll_retval = poll (server->hold_fds, poll_n_fds, server->pollTimeout);
@@ -561,7 +567,7 @@ u8 handleOnHoldClients (void *data) {
         if (poll_retval < 0) {
             logMsg (stderr, ERROR, SERVER, "On hold poll failed!");
             perror ("Error");
-            server->isRunning = false;
+            // server->isRunning = false;
             break;
         }
 
@@ -649,6 +655,8 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
             client_unregisterConnection (client, socket_fd);
 
             if (client->n_active_cons <= 0) dropClient (server, client);
+
+            server->n_hold_clients--;
         }
 
         else {
@@ -663,6 +671,10 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
         // if we don't have on hold clients, end on hold tread
         if (server->n_hold_clients <= 0) 
             server->holdingClients = false;
+
+        // TODO: statistics!!!
+        printf ("server->n_hold_clients: %i\n", server->n_hold_clients);
+            
     }
 
 }
@@ -913,31 +925,17 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
                         getClientBySocket (server->clients->root, fd),
                         fd, packet_data, packet_size);
 
+                // FIXME:
+                if (!info) printf ("No packet info!\n");
+
                 thpool_add_work (server->thpool, onHold ?
                     (void *) handleOnHoldPacket : (void *) handlePacket, info);
-
-                /*pthread_t test_thread;
-                if (pthread_create (&test_thread, NULL, (void *) handleOnHoldPacket, info))
-                    printf ("Failed to create thread!\n");
-
-                #ifdef CERVER_DEBUG
-                logMsg (stdout, DEBUG_MSG, SERVER, 
-                    createString ("Server active thpool threads: %i", 
-                    thpool_num_threads_working (server->thpool)));
-                #endif
-
-                if (pthread_join (test_thread, NULL))
-                    printf ("Failed to join thread!\n"); */
 
                 end += packet_size;
             }
 
             else break;
         }
-
-        // #ifdef CERVER_DEBUG
-        //     logMsg (stdout, DEBUG_MSG, PACKET, "Done splitting recv buffer!");
-        // #endif
     }
 
 }
@@ -959,16 +957,18 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
         
         if (rc < 0) {
             if (errno != EWOULDBLOCK) {     // no more data to read 
-                // logMsg (stderr, ERROR, SERVER, "Recv failed!");
-                // perror ("Error:");
+                // as of 02/11/2018 -- we juts close the socket and if the client is hanging
+                // it will be removed with the client timeout function 
+                // this is to prevent an extra server->n_hold_clients--
+
                 logMsg (stdout, DEBUG_MSG, CLIENT, 
-                    "Ending client connection - server_recieve () - rc < 0");
+                    "server_recieve () - rc < 0");
 
                 close (socket_fd);  // close the client socket
 
-                if (onHold) 
-                    removeOnHoldClient (server, 
-                        getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);
+                // if (onHold) 
+                //     removeOnHoldClient (server, 
+                //         getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);
 
                 // FIXME: add logic for regular clients
             }
@@ -979,14 +979,15 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
         else if (rc == 0) {
             // man recv -> steam socket perfomed an orderly shutdown
             // but in dgram it might mean something?
+            perror ("Error:");
             logMsg (stdout, DEBUG_MSG, CLIENT, 
                     "Ending client connection - server_recieve () - rc == 0");
 
             close (socket_fd);  // close the client socket
 
             if (onHold) 
-                removeOnHoldClient (server, 
-                    getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);
+                 removeOnHoldClient (server, 
+                    getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);  
 
             // FIXME: add logic for regular clients
 
@@ -1029,7 +1030,7 @@ i32 server_accept (Server *server) {
     // get client values to use as default id in avls
     char *connection_values = client_getConnectionValues (newfd, clientAddress);
     if (!connection_values) {
-        // TODO: error and drop connection
+        // FIXME: error and drop connection
     }
 
     // FIXME: where do we want to put this?

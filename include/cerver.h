@@ -106,7 +106,7 @@ struct _Server {
     // TODO: option to make this dynamic
     struct pollfd hold_fds[poll_n_fds];
     u16 hold_nfds;
-    u16 n_hold_clients;
+    u32 n_hold_clients;
     bool compress_hold_clients;              // compress the hold fds array?
     bool holdingClients;
 

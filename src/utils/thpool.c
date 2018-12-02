@@ -367,30 +367,16 @@ static void* thread_do(struct thread* thread_p){
 				free(job_p);
 			}
 
-			// pthread_mutex_lock(&thpool_p->thcount_lock);
-
-			// printf ("pthread_mutex_lock(&thpool_p->thcount_lock)\n");
+			pthread_mutex_lock(&thpool_p->thcount_lock);
 
 			thpool_p->num_threads_working--;
 
-			printf ("thpool_p->num_threads_working--\n");
+			if (!thpool_p->num_threads_working) 
+				pthread_cond_signal(&thpool_p->threads_all_idle);
 
-			// if (!thpool_p->num_threads_working) {
-			// 	pthread_cond_signal(&thpool_p->threads_all_idle);
-			// 	printf ("pthread_cond_signal(&thpool_p->threads_all_idle)");
-			// }
-
-			// pthread_mutex_unlock(&thpool_p->thcount_lock);
-
-			printf ("pthread_mutex_unlock(&thpool_p->thcount_lock)");
-
+			pthread_mutex_unlock(&thpool_p->thcount_lock);
 		}
-
-		else printf ("threads_keepalive == false");
-
 	}
-
-	printf ("while(threads_keepalive)");
 
 	pthread_mutex_lock(&thpool_p->thcount_lock);
 	thpool_p->num_threads_alive --;

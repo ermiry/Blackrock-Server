@@ -44,13 +44,18 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
     Client *client = NULL;
 
-    if (server->clientsPool) client = pool_pop (server->clientsPool);
+    client = (Client *) malloc (sizeof (Client));
+    client->clientID = NULL;
+    client->sessionID = NULL;
+    // client->active_connections = NULL;
 
-    if (!client) {
-        client = (Client *) malloc (sizeof (Client));
-        client->sessionID = NULL;
-        client->active_connections = NULL;
-    } 
+    // if (server->clientsPool) client = pool_pop (server->clientsPool);
+
+    // if (!client) {
+    //     client = (Client *) malloc (sizeof (Client));
+    //     client->sessionID = NULL;
+    //     client->active_connections = NULL;
+    // } 
 
     // 25/11/2018 - 16:00 - using connection values as the client id
     if (connection_values) {
@@ -64,8 +69,8 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     } 
 
     client->n_active_cons = 0;
-    if (client->active_connections) free (client->active_connections);
-    client->active_connections = (i32 *) malloc (sizeof (i32));
+    // if (client->active_connections) free (client->active_connections);
+    // client->active_connections = (i32 *) calloc (3, sizeof (i32));
 
     // add the fd to the active connections
     if (client->active_connections) {
@@ -173,18 +178,21 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
 
 }
 
+// FIXME:
 // the client made a new connection to the server
 void client_registerNewConnection (Client *client, i32 socket_fd) {
 
     if (client) {
-        if (client->active_connections) {
-            client->n_active_cons++;
-            client->active_connections = (i32 *) realloc (client->active_connections, 
-                client->n_active_cons * sizeof (i32));
+        // if (client->active_connections) {
+        //     client->n_active_cons++;
+        //     client->active_connections = (i32 *) realloc (client->active_connections, 
+        //         client->n_active_cons * sizeof (i32));
 
-            // add the connection at the end
-            client->active_connections[client->n_active_cons - 1] = socket_fd;
-        }
+        //     // add the connection at the end
+        //     client->active_connections[client->n_active_cons - 1] = socket_fd;
+        // }
+
+        client->active_connections[client->n_active_cons] = socket_fd;
     }
 
 }
@@ -193,25 +201,25 @@ void client_registerNewConnection (Client *client, i32 socket_fd) {
 void client_unregisterConnection (Client *client, i32 socket_fd) {
 
     if (client) {
-        if (client->active_connections) {
-            if (client->active_connections > 0) {
-                // search the socket fd
-                u8 i = 0;
-                for (; i < client->n_active_cons; i++)
-                    if (client->active_connections[i] == socket_fd)
-                        break;
+        // if (client->active_connections) {
+        //     if (client->active_connections > 0) {
+        //         // search the socket fd
+        //         u8 i = 0;
+        //         for (; i < client->n_active_cons; i++)
+        //             if (client->active_connections[i] == socket_fd)
+        //                 break;
 
-                // found
-                if (i < client->n_active_cons) {
-                    client->n_active_cons--;
+        //         // found
+        //         if (i < client->n_active_cons) {
+        //             client->n_active_cons--;
 
-                    if (client->active_connections > 0 ) {
-                        client->active_connections = (i32 *) realloc (client->active_connections, 
-                        client->n_active_cons * sizeof (i32));
-                    }
-                }
-            }
-        }
+        //             if (client->active_connections > 0 ) {
+        //                 client->active_connections = (i32 *) realloc (client->active_connections, 
+        //                 client->n_active_cons * sizeof (i32));
+        //             }
+        //         }
+        //     }
+        // }
     }
 
 }
@@ -275,6 +283,7 @@ void client_unregisterFromServer (Server *server, Client *client)  {
 
 }
 
+// FIXME:
 // disconnect a client from the server and take it out from the server's clients and 
 void client_closeConnection (Server *server, Client *client) {
 
@@ -285,7 +294,7 @@ void client_closeConnection (Server *server, Client *client) {
                 close (client->active_connections[i]);
 
             free (client->active_connections);
-            client->active_connections = NULL;
+            // client->active_connections = NULL;
         }
 
         // remove it from the server structures
