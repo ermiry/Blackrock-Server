@@ -7,22 +7,24 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <poll.h>
+#include <errno.h>
+
 #include <stdarg.h>
+
+#include "myTypes.h"
 
 #include "blackrock/blackrock.h" 
 #include "game.h"
 
-#include "utils/myUtils.h"
-#include "utils/list.h"
 #include "utils/objectPool.h"
+#include "utils/list.h"
+#include "utils/avl.h"
+#include "utils/htab.h"
+
+#include "utils/myUtils.h"
 #include "utils/config.h"
 #include "utils/log.h"
-
-#include <poll.h>
-#include <errno.h>
-#include "utils/avl.h"
-
-#include "utils/htab.h"
 
 GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize);

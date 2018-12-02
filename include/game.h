@@ -3,33 +3,14 @@
 
 #include <poll.h>
 
+#include "myTypes.h"
+
 #include "cerver.h"
 
 #include "utils/list.h"
 #include "utils/avl.h"
 #include "utils/config.h"
 #include "utils/objectPool.h"
-
-/*** CERVER TYPES ***/
-
-// 11/11/2018 -- added this types defs here to prevent compiler erros
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
-// takes no argument and returns a value (int)
-typedef u8 (*Func)(void);
-// takes an argument and does not return a value
-typedef void (*Action)(void *);
-// takes an argument and returns a value (int)
-typedef u8 (*delegate)(void *);
 
 struct _Server;
 struct _GameServerData;

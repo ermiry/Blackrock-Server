@@ -7,6 +7,8 @@
 
 /*** SOCKETS ***/  
 
+#pragma region SOCKETS
+
 // enable/disable blocking on a socket
 // true on success, false if there was an eroror
 bool sock_setBlocking (int32_t fd, bool isBlocking) {
@@ -20,13 +22,6 @@ bool sock_setBlocking (int32_t fd, bool isBlocking) {
     return (fcntl (fd, F_SETFL, flags) == 0) ? true : false;
 
 }
-
-/* bool sock_setNonBlocking (int32_t server) {
-
-    int non_blocking = 1;
-	return fcntl (server, F_SETFL, O_NONBLOCK, non_blocking) != -1;
-
-} */
 
 char *sock_ip_to_string ( const struct sockaddr *address) {
 
@@ -85,3 +80,5 @@ in_port_t sock_ip_port (const struct sockaddr *address) {
 	}
 
 }
+
+#pragma endregion
