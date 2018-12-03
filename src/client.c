@@ -70,9 +70,13 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     } 
 
     client->n_active_cons = 0;
-    if (client->active_connections) free (client->active_connections);
-    client->active_connections = (i32 *) calloc (DEFAULT_CLIENT_MAX_CONNECTS, sizeof (i32));
-
+    if (client->active_connections) 
+        memset (client->active_connections, 0, sizeof (client->active_connections));
+    else {
+        client->active_connections = (i32 *) calloc (DEFAULT_CLIENT_MAX_CONNECTS, sizeof (i32));
+        memset (client->active_connections, 0, sizeof (client->active_connections));
+    }
+    
     // add the fd to the active connections
     if (client->active_connections) {
         client->active_connections[client->n_active_cons] = clientSock;
@@ -85,7 +89,7 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
 }
 
-// FIXME: unregister connections!!
+// FIXME: what happens with the idx in the poll structure?
 // deletes a client forever
 void destroyClient (void *data) {
 
@@ -266,8 +270,11 @@ void client_registerToServer (Server *server, Client *client, int newfd) {
         else {
             logMsg (stderr, ERROR, SERVER, 
                 "Failed to get a free main poll idx. Is the server full?");
-            // just drop the client...
-            // FIXME:
+            // just drop the client connection
+            close (newfd);
+
+            // if it was the only client connection, drop it
+            if (client->n_active_cons <= 1) client_closeConnection (server, client);
         } 
     }
 
@@ -284,11 +291,12 @@ void client_unregisterFromServer (Server *server, Client *client)  {
         #ifdef CERVER_DEBUG
             logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
         #endif
+
+        server->connectedClients--;
     }
 
 }
 
-// FIXME:
 // disconnect a client from the server and take it out from the server's clients and 
 void client_closeConnection (Server *server, Client *client) {
 
@@ -299,13 +307,11 @@ void client_closeConnection (Server *server, Client *client) {
                 close (client->active_connections[i]);
 
             free (client->active_connections);
-            // client->active_connections = NULL;
+            client->active_connections = NULL;
         }
 
         // remove it from the server structures
         client_unregisterFromServer (server, client);
-
-        server->connectedClients--;
 
         #ifdef CERVER_DEBUG
             logMsg (stdout, DEBUG_MSG, CLIENT, 

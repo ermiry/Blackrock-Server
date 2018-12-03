@@ -40,8 +40,6 @@
 
 #define poll_n_fds      100           // n of fds for the pollfd array
 
-struct _Server;
-
 /*** SEVER ***/
 
 #pragma region SERVER
@@ -95,12 +93,12 @@ struct _Server {
     Pool *clientsPool;       
 
     // TODO: option to make this dynamic
-    struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
+    struct pollfd fds[poll_n_fds];
     u16 nfds;                           // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
     u32 pollTimeout;           
 
-    bool authRequired;      // 02/11/2018 - authentication required by the server
+    bool authRequired;      // does the server requires authentication?
     Auth auth;              // server auth info
 
     // on hold clients         
@@ -108,27 +106,24 @@ struct _Server {
     // TODO: option to make this dynamic
     struct pollfd hold_fds[poll_n_fds];
     u16 hold_nfds;
-    u32 n_hold_clients;
     bool compress_hold_clients;              // compress the hold fds array?
     bool holdingClients;
 
-    Pool *packetPool;       // 02/11/2018 - packet info
+    Pool *packetPool;
 
-    // 04/11/2018 -- 23:04 -- including a th pool inside each server
     threadpool thpool;
 
-    // 17/11/2018 -- useful info that we can send to clients
-    void *serverInfo;   
+    void *serverInfo;           // useful info that we can send to clients                      
 
-    // 25/11/2018 -- 00:15 -- sessions
-    // only allow the clients to use sessions (have multiple connections)
-    // if we have this flag on
+    // allow the clients to use sessions (have multiple connections)
     bool useSessions;  
     // admin defined function to generate session ids bassed on usernames, etc             
     Action generateSessionID; 
 
-    // 21/11/2018 - 9:18 - statistics
+    // server info/stats
+    char *server_name;      // TODO:
     u32 connectedClients;
+    u32 n_hold_clients;
 
 };
 

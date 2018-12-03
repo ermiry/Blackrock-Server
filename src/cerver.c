@@ -94,6 +94,7 @@ void s_array_init (void *array, void *begin, size_t n_elems) {
 
 #pragma region PACKETS
 
+// FIXME: object pool!!
 PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
     char *packetData, size_t packetSize) {
 
@@ -352,7 +353,6 @@ u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage address
     void *errpacket = generateErrorPacket (type, msg);
 
     if (errpacket) {
-        // send the packet to the client
         server_sendPacket (server, sock_fd, address, errpacket, packetSize);
 
         free (errpacket);
@@ -392,17 +392,20 @@ void *createClientAuthReqPacket (void) {
 
 }
 
-// FIXME: to which client active connection do we send the packet??!!
 // broadcast a packet/msg to all clients inside a client's tree
 void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
     if (node && server && packet && (packetSize > 0)) {
         broadcastToAllClients (node->right, server, packet, packetSize);
 
-        // send packet to current node
+        // send packet to current client
         if (node->id) {
             Client *client = (Client *) node->id;
-            // if (client) FIXME:
+
+            // 02/12/2018 -- send packet to the first active connection
+            if (client) 
+                server_sendPacket (server, client->active_connections[0], client->address,
+                    packet, packetSize);
         }
 
         broadcastToAllClients (node->left, server, packet, packetSize);
@@ -438,20 +441,18 @@ void *generateServerInfoPacket (Server *server) {
 
 }
 
-// FIXME: to which client active connection do we send the packet??!!
-// 17/11/2018 - send useful server info to the client
-void sendServerInfo (Server *server, Client *client) {
+// send useful server info to the client
+void sendServerInfo (Server *server, i32 sock_fd, struct sockaddr_storage address) {
 
-    if (server && client) {
+    if (server) {
         if (server->serverInfo) {
             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
 
-            // FIXME:
-            /* if (!server_sendPacket (server, )) {
+            if (!server_sendPacket (server, sock_fd, address, server->serverInfo, packetSize)) {
                 #ifdef CERVER_DEBUG
                     logMsg (stdout, DEBUG_MSG, SERVER, "Sent server info packet.");
                 #endif
-            } */
+            }
         }
 
         else {
@@ -466,8 +467,6 @@ void sendServerInfo (Server *server, Client *client) {
 #pragma endregion
 
 /*** SESSIONS ***/
-
-// TODO: 1/12/2018 -- set sessions in the config file
 
 #pragma region SESSIONS
 
@@ -585,12 +584,10 @@ u8 handleOnHoldClients (void *data) {
             // TODO: maybe later add this directly to the thread pool
             server_recieve (server, server->hold_fds[i].fd, true);
         }
-
-        // if (server->compress_hold_clients) compressHoldClients (server);
     } 
 
     #ifdef CERVER_DEBUG
-        logMsg (stdout, SERVER, NO_TYPE, "Servr on hold poll has stopped!");
+        logMsg (stdout, SERVER, NO_TYPE, "Server on hold poll has stopped!");
     #endif
 
 }
@@ -673,36 +670,38 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
 
         #ifdef CERVER_STATS
             logMsg (stdout, SERVER, NO_TYPE, 
-            createString ("n hold clients: %i.", server->n_hold_clients));
+            createString ("On hold clients: %i.", server->n_hold_clients));
         #endif
     }
 
 }
 
+// FIXME:
 // cerver default client authentication method
 u8 defaultAuthMethod (void *data) {
 
     if (data) {
-        PacketInfo *packet = (PacketInfo *) data;
+        PacketInfo *pack_info = (PacketInfo *) data;
 
-        if (packet->client->authTries > 0) {
-            DefAuthData *authData = 
-                (DefAuthData *) packet->packetData + sizeof (PacketHeader) + sizeof (RequestData);
-        
-            // success authentication
-            if (authData->code == DEFAULT_AUTH_CODE) return 0;
-            else {
-                packet->client->authTries--;
-                if (packet->client->authTries <= 0) packet->client->dropClient = true;
-                return 1;
-            }
+        // TODO: use this here...
+        // client_set_sessionID (pack_info->client, dummy_session_ID);
+
+        //check if the server supports sessions
+        if (pack_info->server->useSessions) {
+            // if so, check if the client sent us a session token
+                // if so, verify the token and search for a client with the session ID
+                    // if we found a client, auth is success
+                    // if not, the session id is wrong, error!
+
+            // if not, check for client credentials, it might be a new client
+                // generate a token and send it to the client
         }
 
-        else {
-            packet->client->dropClient = true;
-            return 1;
-        }       
+        // if not, just check for client credentials
+
     }
+
+    return 1;
 
 }
 
@@ -716,16 +715,12 @@ void authenticateClient (void *data) {
         if (pack_info->server->auth.authenticate) {
             // we expect the function to return us a 0 on success
             if (!pack_info->server->auth.authenticate (pack_info)) {
-                // check if the server support sessions
                 if (pack_info->server->useSessions) {
-                    // if so, search for a client with a session id generated by the new credentials
-                    // FIXME: where do we get this??
-                    char *dummy_session_ID = NULL;  
-
-                    client_set_sessionID (pack_info->client, dummy_session_ID);
-
+                    // search for a client with a session id generated by the new credentials
+                    // TODO: 02/12/2018 - we might need a better way to store the session ID
+                    // TODO: also we need a way of keeping the session token
                     Client *found_client = getClientBySession (pack_info->server->clients, 
-                        dummy_session_ID);
+                        pack_info->client->sessionID);
 
                     // TODO: what happens with the on hold data of the packet client?
                     // if we found one, register the connection to him
@@ -974,7 +969,6 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
 
 }
 
-// FIXME: add logic for dropping regular clients
 // TODO: add support for handling large files transmissions
 // what happens if my buffer isn't enough, for example a larger file?
 // recive all incoming data from the socket
@@ -993,18 +987,10 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
             if (errno != EWOULDBLOCK) {     // no more data to read 
                 // as of 02/11/2018 -- we juts close the socket and if the client is hanging
                 // it will be removed with the client timeout function 
-                // this is to prevent an extra server->n_hold_clients--
-
-                logMsg (stdout, DEBUG_MSG, CLIENT, 
-                    "server_recieve () - rc < 0");
+                // this is to prevent an extra client_count -= 1
+                logMsg (stdout, DEBUG_MSG, CLIENT, "server_recieve () - rc < 0");
 
                 close (socket_fd);  // close the client socket
-
-                // if (onHold) 
-                //     removeOnHoldClient (server, 
-                //         getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);
-
-                // FIXME: add logic for regular clients
             }
 
             // break;
@@ -1023,7 +1009,20 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
                  removeOnHoldClient (server, 
                     getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);  
 
-            // FIXME: add logic for regular clients
+            else {
+                Client *c = getClientBySocket (server->clients->root, socket_fd);
+                if (c) {
+                    if (c->n_active_cons <= 1) 
+                        client_closeConnection (server, c);
+                }
+
+                else {
+                    #ifdef CERVER_DEBUG
+                    logMsg (stderr, ERROR, CLIENT, 
+                        "Couldn't find an active client with the requested socket!");
+                    #endif
+                }
+            }
 
             // break;
         }
@@ -1075,7 +1074,7 @@ i32 server_accept (Server *server) {
     // if not, just register to the server as new client
     else client_registerToServer (server, client, newfd);
 
-    if (server->type != WEB_SERVER) sendServerInfo (server, client);
+    if (server->type != WEB_SERVER) sendServerInfo (server, newfd, clientAddress);
    
     #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
@@ -1123,18 +1122,24 @@ u8 server_poll (Server *server) {
 
             // accept incoming connections that are queued
             if (server->fds[i].fd == server->serverSock) {
-                if (server_accept (server)) 
+                if (server_accept (server)) {
+                    #ifdef CERVER_DEBUG
                     logMsg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
-                else logMsg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                    #endif
+                }
+                else {
+                    #ifdef CERVER_DEBUG
+                    logMsg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                    #endif
+                } 
             }
-                
 
             // TODO: maybe later add this directly to the thread pool
             // not the server socket, so a connection fd must be readable
             else server_recieve (server, server->fds[i].fd, false);
         }
 
-        if (server->compress_clients) compressClients (server);
+        // if (server->compress_clients) compressClients (server);
     }
 
     #ifdef CERVER_DEBUG
