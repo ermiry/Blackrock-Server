@@ -36,13 +36,7 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
-   // FIXME: add a function to set server auth
-
-    gameServer = cerver_createServer (NULL, GAME_SERVER);
-
-    // Server test_server = {};
-
-    // gameServer = cerver_createServer (, NULL);
+    gameServer = cerver_createServer (NULL, GAME_SERVER, "Black-Game-Server");
 
     if (gameServer) {
         // set our own functions to load and delete global game data

@@ -229,8 +229,6 @@ void client_unregisterConnection (Client *client, i32 socket_fd) {
 
 }
 
-void dropClient (Server *server, Client *client);
-
 // FIXME: what is the max number of clients that a server can handle?
 // FIXME: use sessions -- also generate a session id for the client
 // registers a NEW client to the server

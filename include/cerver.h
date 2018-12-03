@@ -29,7 +29,7 @@
 
 #define DEFAULT_REQUIRE_AUTH            0   // by default, a server does not requires authentication
 #define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
-#define DEFAULT_AUTH_CODE               7
+#define DEFAULT_AUTH_CODE               0x4CA140FF
 
 #define DEFAULT_USE_SESSIONS            0   // by default, a server does not support client sessions
 
@@ -121,7 +121,8 @@ struct _Server {
     Action generateSessionID; 
 
     // server info/stats
-    char *server_name;      // TODO:
+    // TODO: use this in the thpool names
+    char *name;
     u32 connectedClients;
     u32 n_hold_clients;
 
@@ -129,7 +130,7 @@ struct _Server {
 
 typedef struct _Server Server;
 
-extern Server *cerver_createServer (Server *, ServerType);
+extern Server *cerver_createServer (Server *, ServerType, char *name);
 
 extern u8 cerver_startServer (Server *);
 
@@ -160,9 +161,6 @@ typedef struct LoadBalancer {
 
     Pool *clientPool;       // does the load balancer handles clients directly??
 
-    // 20/10/2018 -- i dont like this...
-    // Vector holdClients;     // hold on the clients until they authenticate
-
     void (*destroyLoadBalancer) (void *data);   // ptr to a custom functipn to destroy the lb?
 
     // TODO: 14/10/2018 - maybe we can have listen and handle connections as generic functions, also a generic function
@@ -176,14 +174,13 @@ typedef struct LoadBalancer {
 
 #pragma region PACKETS
 
-// 01/11/2018 - info from a recieved packet to be handle
+// info from a recieved packet to be handle
 struct _PacketInfo {
 
     Server *server;
     Client *client;
     i32 clientSock; 
     char *packetData;
-    // char *packetData;
     size_t packetSize;
 
 };
@@ -202,7 +199,7 @@ typedef struct Version {
 extern ProtocolId PROTOCOL_ID;
 extern Version PROTOCOL_VERSION;
 
-// 01/11/2018 -- this indicates what type of packet we are sending/recieving
+// this indicates what type of packet we are sending/recieving
 typedef enum PacketType {
 
     SERVER_PACKET = 0,
@@ -226,7 +223,7 @@ typedef struct PacketHeader {
 
 } PacketHeader;
 
-// 01/11/2018 -- this indicates the data and more info about the packet type
+// this indicates the data and more info about the packet type
 typedef enum RequestType {
 
     SERVER_INFO = 0,
@@ -254,7 +251,7 @@ typedef enum RequestType {
     GAME_SEND_MSG,
 
 } RequestType;
-
+ 
 // here we can add things like file names or game types
 typedef struct RequestData {
 
@@ -262,7 +259,6 @@ typedef struct RequestData {
 
 } RequestData;
 
-// 23/10/2018 -- lests test how this goes...
 typedef enum ErrorType {
 
     ERR_SERVER_ERROR = 0,   // internal server error, like no memory
@@ -321,6 +317,8 @@ extern u16 nextPlayerId;
 
 extern i32 getFreePollSpot (Server *server);
 
+extern void dropClient (Server *server, Client *client);
+
 #pragma endregion
 
 /*** SERIALIZATION ***/
@@ -342,7 +340,7 @@ typedef struct SServer {
 
 } SServer;
 
-// 03/11/2018 -> default auth data to use by default auth function
+// default auth data to use by default auth function
 typedef struct DefAuthData {
 
     u32 code;
@@ -359,6 +357,13 @@ struct _SArray {
 };
 
 typedef struct _SArray SArray;
+
+// 02/11/2018 -- session token
+typedef struct Token {
+
+    char token[128];
+
+} Token;
 
 #pragma endregion
 

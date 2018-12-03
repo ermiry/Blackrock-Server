@@ -676,29 +676,69 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
 
 }
 
-// FIXME:
 // cerver default client authentication method
+// the session id is the same as the token that we requiere to access it
 u8 defaultAuthMethod (void *data) {
 
     if (data) {
         PacketInfo *pack_info = (PacketInfo *) data;
 
-        // TODO: use this here...
-        // client_set_sessionID (pack_info->client, dummy_session_ID);
+        RequestData *reqdata = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
 
         //check if the server supports sessions
         if (pack_info->server->useSessions) {
-            // if so, check if the client sent us a session token
-                // if so, verify the token and search for a client with the session ID
-                    // if we found a client, auth is success
-                    // if not, the session id is wrong, error!
+            // check if we recieve a token or auth values
+            bool isToken;
 
-            // if not, check for client credentials, it might be a new client
-                // generate a token and send it to the client
+            if (pack_info->packetSize > 
+                (sizeof (PacketHeader) + sizeof (RequestData) + sizeof (DefAuthData)))
+                    isToken = true;
+
+            if (isToken) {
+                // if so, check if the client sent us a session token
+                Token *tokenData = (Token *) (pack_info->packetData + 
+                    sizeof (PacketHeader) + sizeof (RequestData));
+
+                // verify the token and search for a client with the session ID
+                Client *c = getClientBySession (pack_info->server->clients, tokenData->token);
+                // if we found a client, auth is success
+                if (c) {
+                    client_set_sessionID (pack_info->client, 
+                        createString ("%s", tokenData->token));
+                    return 0;
+                } 
+
+                else return 1;      // the session id is wrong -> error!
+            }
+
+            // we recieve auth values, so validate the credentials
+            else {
+                DefAuthData *authData = (DefAuthData *) (pack_info->packetData + 
+                    sizeof (PacketHeader) + sizeof (RequestData));
+                
+                // credentials are good
+                if (authData->code == DEFAULT_AUTH_CODE) {
+                    char *sessionID = session_default_generate_id (pack_info->clientSock,
+                        pack_info->client->address);
+
+                    client_set_sessionID (pack_info->client, sessionID);
+
+                    return 0;
+                }
+
+                else return 1;      // wrong credentials
+            }
         }
 
         // if not, just check for client credentials
-
+        else {
+            DefAuthData *authData = (DefAuthData *) (pack_info->packetData + 
+                sizeof (PacketHeader) + sizeof (RequestData));
+            
+            // credentials are good
+            if (authData->code == DEFAULT_AUTH_CODE) return 0;
+            else return 1;      // wrong credentials
+        }
     }
 
     return 1;
@@ -722,18 +762,34 @@ void authenticateClient (void *data) {
                     Client *found_client = getClientBySession (pack_info->server->clients, 
                         pack_info->client->sessionID);
 
-                    // TODO: what happens with the on hold data of the packet client?
+                    // FIXME: what happens with the on hold data of the packet client?
                     // if we found one, register the connection to him
                     if (found_client) 
                         client_registerNewConnection (found_client, pack_info->clientSock);
 
-                    // else we have a new client
+                    // we have a new client
                     else {
                         client_registerToServer (pack_info->server, pack_info->client, 
                             pack_info->clientSock);
 
-                        // FIXME: we need to send back the session id so that the client can use it
-                        // as a token and no autenticate it self every time!!!
+                        // send back the session id to the client
+                        size_t packet_size = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (Token);
+                        void *session_packet = generatePacket (AUTHENTICATION, packet_size);
+                        if (session_packet) {
+                            char *end = session_packet;
+                            RequestData *reqdata = (RequestData *) (end + sizeof (PacketHeader));
+                            reqdata->type = CLIENT_AUTH_DATA;
+
+                            Token *tokenData = (Token *) (end + sizeof (RequestData));
+                            strcpy (tokenData->token, pack_info->client->sessionID);
+
+                            if (server_sendPacket (pack_info->server, 
+                                pack_info->clientSock, pack_info->client->address,
+                                session_packet, packet_size))
+                                    logMsg (stderr, ERROR, PACKET, "Failed to send session token!");
+
+                            free (session_packet);
+                        }
                     } 
                 }
 
@@ -1243,6 +1299,9 @@ void initServerValues (Server *server, ServerType type) {
         server->auth.authPacketSize = 0;
     }
 
+    if (server->useSessions) 
+        server->generateSessionID = (void *) session_default_generate_id;
+
     server->serverInfo = generateServerInfoPacket (server);
 
     switch (type) {
@@ -1263,7 +1322,6 @@ void initServerValues (Server *server, ServerType type) {
         default: break;
     }
 
-    // 21/11/2018 - 9:18 - statistics
     server->connectedClients = 0;
 
 }
@@ -1557,13 +1615,14 @@ Server *newServer (Server *server) {
 
 }
 
-Server *cerver_createServer (Server *server, ServerType type) {
+Server *cerver_createServer (Server *server, ServerType type, char *name) {
 
     // create a server with the requested parameters
     if (server) {
         Server *s = newServer (server);
         if (!initServer (s, NULL, type)) {
-            logMsg (stdout, SUCCESS, SERVER, "Created a new server!");
+            if (name) server->name = createString ("%s", name);
+            log_newServer (server);
             return s;
         }
 
@@ -1585,8 +1644,8 @@ Server *cerver_createServer (Server *server, ServerType type) {
         else {
             Server *s = newServer (NULL);
             if (!initServer (s, serverConfig, type)) {
+                if (name) server->name = createString ("%s", name);
                 log_newServer (server);
-                // we don't need the server config anymore
                 clearConfig (serverConfig);
                 return s;
             }
@@ -1594,7 +1653,7 @@ Server *cerver_createServer (Server *server, ServerType type) {
             else {
                 logMsg (stderr, ERROR, SERVER, "Failed to init the server!");
                 clearConfig (serverConfig);
-                free (s);   // delete the failed server...
+                free (s); 
                 return NULL;
             }
         }
@@ -1613,6 +1672,8 @@ Server *cerver_restartServer (Server *server) {
             .connectionQueue = server->connectionQueue, .type = server->type,
             .pollTimeout = server->pollTimeout, .authRequired = server->authRequired,
             .useSessions = server->useSessions };
+
+        temp.name = createString ("%s", server->name);
 
         if (!cerver_teardown (server)) logMsg (stdout, SUCCESS, SERVER, "Done with server teardown");
         else logMsg (stderr, ERROR, SERVER, "Failed to teardown the server!");
@@ -1817,6 +1878,8 @@ u8 cerver_teardown (Server *server) {
     // destroy any other server data
     if (server->packetPool) pool_clear (server->packetPool);
     if (server->serverInfo) free (server->serverInfo);
+
+    if (server->name) free (server->name);
 
     free (server);
 
