@@ -164,13 +164,14 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
         return 1;
     }
 
-    Version version = header->protocolVersion;
-    if (version.major != PROTOCOL_VERSION.major) {
-        #ifdef CERVER_DEBUG
-        logMsg (stdout, WARNING, PACKET, "Packet with incompatible version.");
-        #endif
-        return 1;
-    }
+    // FIXME: error when sending auth packet from client!
+    // Version version = header->protocolVersion;
+    // if (version.major != PROTOCOL_VERSION.major) {
+    //     #ifdef CERVER_DEBUG
+    //     logMsg (stdout, WARNING, PACKET, "Packet with incompatible version.");
+    //     #endif
+    //     return 1;
+    // }
 
     // compare the size we got from recv () against what is the expected packet size
     // that the client created 
@@ -624,6 +625,7 @@ void onHoldClient (Server *server, Client *client, i32 fd) {
 
 }
 
+// FIXME: when do we want to use this?
 // FIXME: make available the on hold idx!!
 // drops a client from the on hold structure because he was unable to authenticate
 void dropClient (Server *server, Client *client) {
@@ -647,10 +649,15 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
 
     if (server) {
         if (client) {
-            // unregister the connection from the client
-            client_unregisterConnection (client, socket_fd);
+            // remove the sock fd from the on hold structure
+            for (u16 i = 0; i < poll_n_fds; i++) {
+                if (server->hold_fds[i].fd == socket_fd) {
+                    server->hold_fds[i].fd == -1;
+                    server->hold_nfds--;
+                }
+            }
 
-            if (client->n_active_cons <= 0) dropClient (server, client);
+            avl_removeNode (server->onHoldClients, client);
 
             server->n_hold_clients--;
         }
@@ -660,13 +667,12 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
                 logMsg (stderr, ERROR, CLIENT, "Could not find client associated with socket!");
             #endif
 
-            // we probabbly registered the client, unusual error
+            // this migth be an unusual error
             server->n_hold_clients--;
         }
 
         // if we don't have on hold clients, end on hold tread
-        if (server->n_hold_clients <= 0) 
-            server->holdingClients = false;
+        if (server->n_hold_clients <= 0) server->holdingClients = false;
 
         #ifdef CERVER_STATS
             logMsg (stdout, SERVER, NO_TYPE, 
@@ -682,8 +688,6 @@ u8 defaultAuthMethod (void *data) {
 
     if (data) {
         PacketInfo *pack_info = (PacketInfo *) data;
-
-        RequestData *reqdata = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
 
         //check if the server supports sessions
         if (pack_info->server->useSessions) {
@@ -713,20 +717,38 @@ u8 defaultAuthMethod (void *data) {
 
             // we recieve auth values, so validate the credentials
             else {
-                DefAuthData *authData = (DefAuthData *) (pack_info->packetData + 
+                char *end = pack_info->packetData;
+                DefAuthData *authData = (DefAuthData *) (end + 
                     sizeof (PacketHeader) + sizeof (RequestData));
                 
+                logMsg (stdout, DEBUG_MSG, NO_TYPE, 
+                        createString ("Default auth: client provided code: %i.", authData->code));
+
+                // authData->code = 7;
+
+                printf ("packdata: %s\n", end);
+
                 // credentials are good
                 if (authData->code == DEFAULT_AUTH_CODE) {
+                    #ifdef CERVER_DEBUG
+                    logMsg (stdout, DEBUG_MSG, NO_TYPE, 
+                        createString ("Default auth: client provided code: %i.", authData->code));
+                    #endif
+
                     char *sessionID = session_default_generate_id (pack_info->clientSock,
                         pack_info->client->address);
-
                     client_set_sessionID (pack_info->client, sessionID);
 
                     return 0;
-                }
-
-                else return 1;      // wrong credentials
+                } 
+                // wrong credentials
+                else {
+                    #ifdef CERVER_DEBUG
+                    logMsg (stderr, ERROR, NO_TYPE, 
+                        createString ("Default auth: %i is a wrong autentication code!", 
+                        authData->code));
+                    #endif
+                }     
             }
         }
 
@@ -736,8 +758,21 @@ u8 defaultAuthMethod (void *data) {
                 sizeof (PacketHeader) + sizeof (RequestData));
             
             // credentials are good
-            if (authData->code == DEFAULT_AUTH_CODE) return 0;
-            else return 1;      // wrong credentials
+            if (authData->code == DEFAULT_AUTH_CODE) {
+                #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, NO_TYPE, 
+                    createString ("Default auth: client provided code: %i.", authData->code));
+                #endif
+                return 0;
+            } 
+            // wrong credentials
+            else {
+                #ifdef CERVER_DEBUG
+                logMsg (stderr, ERROR, NO_TYPE, 
+                    createString ("Default auth: %i is a wrong autentication code!", 
+                    authData->code));
+                #endif
+            }     
         }
     }
 
@@ -762,13 +797,21 @@ void authenticateClient (void *data) {
                     Client *found_client = getClientBySession (pack_info->server->clients, 
                         pack_info->client->sessionID);
 
-                    // FIXME: what happens with the on hold data of the packet client?
                     // if we found one, register the connection to him
-                    if (found_client) 
+                    if (found_client) {
                         client_registerNewConnection (found_client, pack_info->clientSock);
+
+                        // remove the sock fd from the on hold structures
+                        removeOnHoldClient (pack_info->server, 
+                            pack_info->client, pack_info->clientSock);
+                    }
 
                     // we have a new client
                     else {
+                        // FIXME: we need to remove the client from the on hold structure!!!
+
+                        logMsg (stdout, SUCCESS, CLIENT, "Client authenticated successfully!");
+
                         client_registerToServer (pack_info->server, pack_info->client, 
                             pack_info->clientSock);
 
@@ -817,6 +860,10 @@ void authenticateClient (void *data) {
 
             // failed to authenticate
             else {
+                #ifdef CERVER_DEBUG
+                logMsg (stderr, ERROR, CLIENT, "Client failed to authenticate!");
+                #endif
+
                 sendErrorPacket (pack_info->server, pack_info->clientSock, 
                     pack_info->client->address, ERR_FAILED_AUTH, "Wrong credentials!");
 
@@ -831,6 +878,8 @@ void authenticateClient (void *data) {
         else {
             logMsg (stderr, ERROR, SERVER, "Server doesn't have an authenticate method!");
             logMsg (stderr, ERROR, SERVER, "Clients are unable to interact with the server!");
+
+            // FIXME:
             dropClient (pack_info->server, pack_info->client);
         }
     }
@@ -853,6 +902,11 @@ void handleOnHoldPacket (void *data) {
                 // a client is trying to authenticate himself
                 case AUTHENTICATION: {
                     RequestData *reqdata = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
+                    
+                    DefAuthData *authdata = (DefAuthData *) (pack_info->packetData + sizeof (PacketHeader) + sizeof (RequestData));
+                    printf ("code: %i\n", authdata->code);
+
+
                     switch (reqdata->type) {
                         case CLIENT_AUTH_DATA: authenticateClient (pack_info); break;
                         default: break;
@@ -989,6 +1043,9 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
 
         while (buffer_idx < total_size) {
             header = (PacketHeader *) end;
+
+            DefAuthData *authdata = (DefAuthData *) (end + sizeof (PacketHeader) + sizeof (RequestType));
+            printf ("auth code: %i\n", authdata->code); 
 
             // check the packet size
             packet_size = header->packetSize;
@@ -1292,6 +1349,8 @@ void initServerValues (Server *server, ServerType type) {
     if (server->authRequired) {
         server->auth.reqAuthPacket = createClientAuthReqPacket ();
         server->auth.authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
+
+        server->auth.authenticate = defaultAuthMethod;
     }
 
     else {
@@ -1621,7 +1680,7 @@ Server *cerver_createServer (Server *server, ServerType type, char *name) {
     if (server) {
         Server *s = newServer (server);
         if (!initServer (s, NULL, type)) {
-            if (name) server->name = createString ("%s", name);
+            if (name) s->name = createString ("%s", name);
             log_newServer (server);
             return s;
         }
@@ -1644,7 +1703,7 @@ Server *cerver_createServer (Server *server, ServerType type, char *name) {
         else {
             Server *s = newServer (NULL);
             if (!initServer (s, serverConfig, type)) {
-                if (name) server->name = createString ("%s", name);
+                if (name) s->name = createString ("%s", name);
                 log_newServer (server);
                 clearConfig (serverConfig);
                 return s;
@@ -1872,7 +1931,12 @@ u8 cerver_teardown (Server *server) {
             thpool_num_threads_working (server->thpool)));
         #endif
 
+        // FIXME: 04/12/2018 - 15:02 -- getting a segfault
         thpool_destroy (server->thpool);
+
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, SERVER, "Destroyed server thpool!");
+        #endif
     } 
 
     // destroy any other server data

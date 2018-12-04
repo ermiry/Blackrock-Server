@@ -98,8 +98,8 @@ void destroyClient (void *data) {
 
         if (client->active_connections) {
             // close all the client's active connections
-            for (u8 i = 0; i < client->n_active_cons; i++)
-                close (client->active_connections[i]);
+            // for (u8 i = 0; i < client->n_active_cons; i++)
+            //     close (client->active_connections[i]);
 
             free (client->active_connections);
         }
@@ -183,49 +183,61 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
 
 }
 
-// FIXME:
 // the client made a new connection to the server
-void client_registerNewConnection (Client *client, i32 socket_fd) {
+u8 client_registerNewConnection (Client *client, i32 socket_fd) {
 
     if (client) {
-        // if (client->active_connections) {
-        //     client->n_active_cons++;
-        //     client->active_connections = (i32 *) realloc (client->active_connections, 
-        //         client->n_active_cons * sizeof (i32));
+        if (client->active_connections) {
+            u8 new_active_cons = client->n_active_cons + 1;
 
-        //     // add the connection at the end
-        //     client->active_connections[client->n_active_cons - 1] = socket_fd;
-        // }
+            if (new_active_cons <= client->curr_max_cons) {
+                // search for a free spot
+                for (int i = 0; i < client->curr_max_cons; i++) {
+                    if (client->active_connections[i] == -1) {
+                        client->active_connections[i] = socket_fd;
+                        client->n_active_cons++;
+                        return 0;
+                    }
+                }
+            }
 
-        client->active_connections[client->n_active_cons] = socket_fd;
+            // we need to add more space
+            else {
+                client->active_connections = (i32 *) realloc (client->active_connections, 
+                    client->n_active_cons * sizeof (i32));
+
+                // add the connection at the end
+                client->active_connections[new_active_cons] = socket_fd;
+                client->n_active_cons++;
+                
+                return 0;
+            }
+        }
     }
+
+    return 1;
 
 }
 
-// FIXME: set to -1 the socket_fd place in the correct poll structure!!
-void client_unregisterConnection (Client *client, i32 socket_fd) {
+// removes an active connection from a client
+u8 client_unregisterConnection (Client *client, i32 socket_fd) {
 
     if (client) {
-        // if (client->active_connections) {
-        //     if (client->active_connections > 0) {
-        //         // search the socket fd
-        //         u8 i = 0;
-        //         for (; i < client->n_active_cons; i++)
-        //             if (client->active_connections[i] == socket_fd)
-        //                 break;
-
-        //         // found
-        //         if (i < client->n_active_cons) {
-        //             client->n_active_cons--;
-
-        //             if (client->active_connections > 0 ) {
-        //                 client->active_connections = (i32 *) realloc (client->active_connections, 
-        //                 client->n_active_cons * sizeof (i32));
-        //             }
-        //         }
-        //     }
-        // }
+        if (client->active_connections) {
+            if (client->active_connections > 0) {
+                // search the socket fd
+                for (u8 i = 0; i < client->n_active_cons; i++) {
+                    if (client->active_connections[i] == socket_fd) {
+                        client->active_connections[i] = -1;
+                        client->n_active_cons--;
+                        return 0;
+                    }
+                }
+            }
+        }
     }
+
+    return 1;
 
 }
 
@@ -235,16 +247,6 @@ void client_unregisterConnection (Client *client, i32 socket_fd) {
 void client_registerToServer (Server *server, Client *client, int newfd) {
 
     if (server && client) {
-        Client *c = NULL;
-
-        // if the client was previously in the on hold structure...
-        if (server->authRequired) {
-            // FIXME:
-            // remove the client from the on hold structures
-        }
-
-        else c = client;
-
         // add the new sock fd to the server main poll
         i32 idx = getFreePollSpot (server);
         if (idx > 0) {
@@ -253,7 +255,7 @@ void client_registerToServer (Server *server, Client *client, int newfd) {
             server->nfds++;
 
             // insert the new client into the server's clients
-            avl_insertNode (server->clients, c);
+            avl_insertNode (server->clients, client);
 
             server->connectedClients++;
 

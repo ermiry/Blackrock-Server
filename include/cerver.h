@@ -29,7 +29,7 @@
 
 #define DEFAULT_REQUIRE_AUTH            0   // by default, a server does not requires authentication
 #define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
-#define DEFAULT_AUTH_CODE               0x4CA140FF
+#define DEFAULT_AUTH_CODE               7
 
 #define DEFAULT_USE_SESSIONS            0   // by default, a server does not support client sessions
 
