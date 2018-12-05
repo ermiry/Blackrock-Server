@@ -369,4 +369,50 @@ void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, v
 
 }
 
+// void *avl_getNodeDataR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag);
+
+// void *avl_getNodeData (AVLTree *tree, void *data) {
+
+//     char flag = 0;
+
+//     return avl_getNodeDataR (tree, &tree->root, tree->comparator, data, &flag);
+
+// }
+
+// void *avl_getNodeDataR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag) {
+
+//     if (*parent != NULL) {
+//         switch (comparator ((*parent)->id, id)) {
+//             case 1:
+//                 void *data = avl_getNodeDataR (tree, &(*parent)->left, comparator, id, flag);
+//                 if (*flag == 1) avl_treatLeftReduction (&(*parent), flag);
+//                 break;
+//             case -1:
+//                 void *data = avl_getNodeDataR (tree, &(*parent)->right, comparator, id, flag);
+//                 if (*flag == 1) avl_treatRightReduction (&(*parent), flag);
+//                 break;
+//             case 0:
+//                 if ((*parent)->right != NULL && (*parent)->left != NULL) {
+//                     AVLNode *ptr = (*parent)->right, copy = *(*parent);
+
+//                     while (ptr->left != NULL) ptr = ptr->left;
+
+//                     (*parent)->id = ptr->id;
+//                     ptr->id = copy.id;
+
+//                     void *data = avl_getNodeDataR (tree, &(*parent)->right, comparator, id, flag);
+//                 }
+                
+//                 else {
+//                     return (*parent)->id;
+//                     *flag = 1;
+//                 }
+//                 break;
+
+//             default: break;
+//         }
+//     }
+
+// }
+
 #pragma endregion

@@ -117,9 +117,14 @@ PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
         p->packetData = NULL;
 
         p->server = server;
+
+        if (!client) printf ("pack info - got a NULL client!\n");
+
         p->client = client;
         p->clientSock = clientSock;
         p->packetSize = packetSize;
+
+        printf ("pack info - client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & p->client->address));
         
         // copy the contents from the entry buffer to the packet info
         if (!p->packetData)
@@ -475,6 +480,7 @@ void sendServerInfo (Server *server, i32 sock_fd, struct sockaddr_storage addres
 char *session_default_generate_id (i32 fd, const struct sockaddr_storage address) {
 
     char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
+    printf ("session - address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
     u16 port = sock_ip_port ((const struct sockaddr *) &address);
 
     if (ipstr && (port > 0)) {
@@ -486,9 +492,11 @@ char *session_default_generate_id (i32 fd, const struct sockaddr_storage address
 
         // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
         char *session_id = createString ("%s-%i", ipstr, port);
-        // printf ("New session id: %s\n", session_id);
+        printf ("New session id: %s\n", session_id);
         return session_id;
     }
+
+    else printf ("hola\n");
 
     return NULL;
 
@@ -693,14 +701,14 @@ u8 defaultAuthMethod (void *data) {
         if (pack_info->server->useSessions) {
             // check if we recieve a token or auth values
             bool isToken;
-
             if (pack_info->packetSize > 
                 (sizeof (PacketHeader) + sizeof (RequestData) + sizeof (DefAuthData)))
                     isToken = true;
 
             if (isToken) {
                 // if so, check if the client sent us a session token
-                Token *tokenData = (Token *) (pack_info->packetData + 
+                char *end = pack_info->packetData;
+                Token *tokenData = (Token *) (end + 
                     sizeof (PacketHeader) + sizeof (RequestData));
 
                 // verify the token and search for a client with the session ID
@@ -712,7 +720,12 @@ u8 defaultAuthMethod (void *data) {
                     return 0;
                 } 
 
-                else return 1;      // the session id is wrong -> error!
+                else {
+                    #ifdef CERVER_DEBUG
+                    logMsg (stderr, ERROR, CLIENT, "Wrong session id provided by client!");
+                    #endif
+                    return 1;      // the session id is wrong -> error!
+                } 
             }
 
             // we recieve auth values, so validate the credentials
@@ -720,13 +733,6 @@ u8 defaultAuthMethod (void *data) {
                 char *end = pack_info->packetData;
                 DefAuthData *authData = (DefAuthData *) (end + 
                     sizeof (PacketHeader) + sizeof (RequestData));
-                
-                logMsg (stdout, DEBUG_MSG, NO_TYPE, 
-                        createString ("Default auth: client provided code: %i.", authData->code));
-
-                // authData->code = 7;
-
-                printf ("packdata: %s\n", end);
 
                 // credentials are good
                 if (authData->code == DEFAULT_AUTH_CODE) {
@@ -748,6 +754,7 @@ u8 defaultAuthMethod (void *data) {
                         createString ("Default auth: %i is a wrong autentication code!", 
                         authData->code));
                     #endif
+                    return 1;
                 }     
             }
         }
@@ -1026,6 +1033,8 @@ void handlePacket (void *data) {
 
 }
 
+extern char *test_clientID;
+
 // TODO: 25/11/2018 -- 23:34 -- use the session id to handle the packets!!
 // TODO: take into account that we dont need to check the identity when recieving game packets!!!
 // split the entry buffer in packets of the correct size
@@ -1044,9 +1053,6 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
         while (buffer_idx < total_size) {
             header = (PacketHeader *) end;
 
-            DefAuthData *authdata = (DefAuthData *) (end + sizeof (PacketHeader) + sizeof (RequestType));
-            printf ("auth code: %i\n", authdata->code); 
-
             // check the packet size
             packet_size = header->packetSize;
             if (packet_size > 0) {
@@ -1057,10 +1063,13 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
 
                 // TODO: 25/11/2018 -- 23:34 -- use the session id!!!
 
-                info = newPacketInfo (server,
-                    onHold ? getClientBySocket (server->onHoldClients->root, fd) :
-                        getClientBySocket (server->clients->root, fd),
-                        fd, packet_data, packet_size);
+                // info = newPacketInfo (server,
+                //     onHold ? getClientBySocket (server->onHoldClients->root, fd) :
+                //         getClientBySocket (server->clients->root, fd),
+                //         fd, packet_data, packet_size);
+
+                info = newPacketInfo (server, (Client *) avl_getNodeData (server->onHoldClients, test_clientID), 
+                    fd, packet_data, packet_size);
 
                 if (info) {
                     thpool_add_work (server->thpool, onHold ?
@@ -1179,7 +1188,11 @@ i32 server_accept (Server *server) {
         return -1;
     }
 
+    else printf ("Connection values: %s\n", connection_values);
+
     client = newClient (server, newfd, clientAddress, connection_values);
+
+    printf ("accept - client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
 
     // if we requiere authentication, we send the client to on hold structure
     if (server->authRequired) onHoldClient (server, client, newfd);

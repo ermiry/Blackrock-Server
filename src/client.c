@@ -39,6 +39,8 @@ void client_set_sessionID (Client *client, char *sessionID) {
 
 }
 
+char *test_clientID = NULL;
+
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address,
     char *connection_values) {
 
@@ -57,12 +59,23 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     //     client->active_connections = NULL;
     // } 
 
+    // client->address = address;
+    memcpy (&client->address, &address, sizeof (struct sockaddr_storage));
+
+    printf ("address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
+    printf ("client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
+
     // 25/11/2018 - 16:00 - using connection values as the client id
     if (connection_values) {
         if (client->clientID) free (client->clientID);
+
+        test_clientID = createString ("%s", connection_values);
+
         client->clientID = createString ("%s", connection_values);
         free (connection_values);
     }
+
+    client->sessionID = NULL;
 
     if (server->authRequired) {
         client->authTries = server->auth.maxAuthTries;
@@ -82,8 +95,6 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
         client->active_connections[client->n_active_cons] = clientSock;
         client->n_active_cons++;
     } 
-
-    client->address = address;
 
     return client;
 
@@ -150,9 +161,14 @@ Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
                 client = (Client *) node->id;
                 
                 // search the socket fd in the clients active connections
-                for (int i = 0; i < client->n_active_cons; i++) 
-                    if (socket_fd == client->active_connections[i])
+                for (int i = 0; i < client->n_active_cons; i++) {
+                    if (socket_fd == client->active_connections[i]) {
+                        printf ("get client - ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
                         return client;
+                    }
+                }
+                    
+                        
             }
         }
 
@@ -167,7 +183,7 @@ Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
 
 Client *getClientBySession (AVLTree *clients, char *sessionID) {
 
-    if (clients) {
+    if (clients && sessionID) {
         Client temp;
         temp.sessionID = createString ("%s", sessionID);
         
