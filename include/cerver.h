@@ -358,10 +358,10 @@ struct _SArray {
 
 typedef struct _SArray SArray;
 
-// 02/11/2018 -- session token
+// session id - token
 typedef struct Token {
 
-    char token[128];
+    char token[65];
 
 } Token;
 

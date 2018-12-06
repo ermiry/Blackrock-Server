@@ -17,12 +17,14 @@
 #include "game.h"
 
 #include "utils/thpool.h"
-#include "utils/log.h"
+
 #include "utils/vector.h"
+#include "utils/avl.h" 
+
+#include "utils/log.h"
 #include "utils/config.h"
 #include "utils/myUtils.h"
-
-#include "utils/avl.h" 
+#include "utils/sha-256.h"
 
 /*** VALUES ***/
 
@@ -123,8 +125,6 @@ PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
         p->client = client;
         p->clientSock = clientSock;
         p->packetSize = packetSize;
-
-        printf ("pack info - client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & p->client->address));
         
         // copy the contents from the entry buffer to the packet info
         if (!p->packetData)
@@ -490,8 +490,17 @@ char *session_default_generate_id (i32 fd, const struct sockaddr_storage address
         #endif
 
         // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
-        char *session_id = createString ("%s-%i", ipstr, port);
-        return session_id;
+        char *connection_values = createString ("%s-%i", ipstr, port);
+
+        uint8_t hash[32];
+        char hash_string[65];
+
+        sha_256_calc (hash, connection_values, strlen (connection_values));
+        sha_256_hash_to_string (hash_string, hash);
+
+        char *retval = createString ("%s", hash_string);
+
+        return retval;
     }
 
     return NULL;
@@ -660,19 +669,21 @@ void dropClient (Server *server, Client *client) {
 
 }
 
-void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
+Client *removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
 
     if (server) {
+        Client *retval = NULL;
+
         if (client) {
             // remove the sock fd from the on hold structure
             for (u16 i = 0; i < poll_n_fds; i++) {
                 if (server->hold_fds[i].fd == socket_fd) {
-                    server->hold_fds[i].fd == -1;
+                    server->hold_fds[i].fd = -1;
                     server->hold_nfds--;
                 }
             }
 
-            avl_removeNode (server->onHoldClients, client);
+            retval = avl_removeNode (server->onHoldClients, client);
 
             server->n_hold_clients--;
         }
@@ -693,6 +704,8 @@ void removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
             logMsg (stdout, SERVER, NO_TYPE, 
             createString ("On hold clients: %i.", server->n_hold_clients));
         #endif
+
+        return retval;
     }
 
 }
@@ -825,8 +838,10 @@ void authenticateClient (void *data) {
                     if (found_client) {
                         client_registerNewConnection (found_client, pack_info->clientSock);
 
-                        removeOnHoldClient (pack_info->server, 
+                        Client *c = removeOnHoldClient (pack_info->server, 
                             pack_info->client, pack_info->clientSock);
+                        // FIXME: create a separte function for deleting client data!
+                        if (c) free (c);
 
                         #ifdef CERVER_DEBUG
                         logMsg (stdout, DEBUG_MSG, CLIENT, 
@@ -837,8 +852,9 @@ void authenticateClient (void *data) {
 
                     // we have a new client
                     else {
-                        Client *got_client = (Client *) avl_removeNode (pack_info->server->onHoldClients, pack_info->client);
-                        
+                        Client *got_client = removeOnHoldClient (pack_info->server, 
+                            pack_info->client, pack_info->clientSock);
+
                         // FIXME: better handle this error!
                         if (!got_client) {
                             logMsg (stderr, ERROR, SERVER, "Failed to get client avl node data!");
@@ -941,10 +957,6 @@ void handleOnHoldPacket (void *data) {
                 // a client is trying to authenticate himself
                 case AUTHENTICATION: {
                     RequestData *reqdata = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
-                    
-                    DefAuthData *authdata = (DefAuthData *) (pack_info->packetData + sizeof (PacketHeader) + sizeof (RequestData));
-                    printf ("code: %i\n", authdata->code);
-
 
                     switch (reqdata->type) {
                         case CLIENT_AUTH_DATA: authenticateClient (pack_info); break;
@@ -1126,6 +1138,7 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
 void server_recieve (Server *server, i32 socket_fd, bool onHold) {
 
     if (onHold) logMsg (stdout, SUCCESS, PACKET, "server_recieve () - on hold client!");
+    else logMsg (stdout, SUCCESS, PACKET, "server_recieve () - normal client!");
 
     ssize_t rc;
     char packetBuffer[MAX_UDP_PACKET_SIZE];
@@ -1301,7 +1314,7 @@ u8 server_poll (Server *server) {
     }
 
     #ifdef CERVER_DEBUG
-        logMsg (stdout, SERVER, NO_TYPE, "Servr main poll has stopped!");
+        logMsg (stdout, SERVER, NO_TYPE, "Server main poll has stopped!");
     #endif
 
 }
