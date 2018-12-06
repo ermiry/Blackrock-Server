@@ -859,10 +859,10 @@ void authenticateClient (void *data) {
                         void *session_packet = generatePacket (AUTHENTICATION, packet_size);
                         if (session_packet) {
                             char *end = session_packet;
-                            RequestData *reqdata = (RequestData *) (end + sizeof (PacketHeader));
+                            RequestData *reqdata = (RequestData *) (end += sizeof (PacketHeader));
                             reqdata->type = CLIENT_AUTH_DATA;
 
-                            Token *tokenData = (Token *) (end + sizeof (RequestData));
+                            Token *tokenData = (Token *) (end += sizeof (RequestData));
                             strcpy (tokenData->token, pack_info->client->sessionID);
 
                             if (server_sendPacket (pack_info->server, 
