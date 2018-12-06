@@ -66,14 +66,14 @@ void avl_insertNode (AVLTree *tree, void *data) {
 
 }
 
-void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag);
+void *avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag);
 
 // user function to remove a node
-void avl_removeNode (AVLTree *tree, void *data) {
+void *avl_removeNode (AVLTree *tree, void *data) {
 
     char flag = 0;
 
-    avl_removeNodeR (tree, &tree->root, tree->comparator, data, &flag);
+    return avl_removeNodeR (tree, &tree->root, tree->comparator, data, &flag);
 
 }
 
@@ -314,19 +314,21 @@ void avl_insertNodeR (AVLNode **parent, CompPointer comparator, void *id, char *
 }
 
 // recursive function to remove a node from the tree
-void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag) {
+void *avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, void *id, char *flag) {
 
     //Wrong way
     if (*parent != NULL) {
         switch (comparator ((*parent)->id, id)) {
-            case 1:
-                avl_removeNodeR (tree, &(*parent)->left, comparator, id, flag);
+            case 1: {
+                void *data = avl_removeNodeR (tree, &(*parent)->left, comparator, id, flag);
                 if (*flag == 1) avl_treatLeftReduction (&(*parent), flag);
-                break;
-            case -1:
-                avl_removeNodeR (tree, &(*parent)->right, comparator, id, flag);
+                return data;
+            }   
+            case -1: {
+                void *data = avl_removeNodeR (tree, &(*parent)->right, comparator, id, flag);
                 if (*flag == 1) avl_treatRightReduction (&(*parent), flag);
-                break;
+                return data;
+            }
             case 0:
                 if ((*parent)->right != NULL && (*parent)->left != NULL) {
                     AVLNode *ptr = (*parent)->right, copy = *(*parent);
@@ -336,10 +338,12 @@ void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, v
                     (*parent)->id = ptr->id;
                     ptr->id = copy.id;
 
-                    avl_removeNodeR (tree, &(*parent)->right, comparator, id, flag);
+                    return avl_removeNodeR (tree, &(*parent)->right, comparator, id, flag);
                 }
                 
                 else {
+                    void *data = NULL;
+
                     if ((*parent)->left != NULL) {
                         AVLNode *p = (*parent)->left;
                         *(*parent) = *(*parent)->left;
@@ -354,12 +358,14 @@ void avl_removeNodeR (AVLTree *tree, AVLNode **parent, CompPointer comparator, v
                     } 
                     
                     else {
-                        if (tree->destroy) tree->destroy ((*parent)->id);
-                        else free ((*parent)->id);
+                        // if (tree->destroy) tree->destroy ((*parent)->id);
+                        // else free ((*parent)->id);
+                        data = (*parent)->id;
                         free (*parent);
                         *parent = NULL;
                     }
                     *flag = 1;
+                    return data;
                 }
                 break;
 

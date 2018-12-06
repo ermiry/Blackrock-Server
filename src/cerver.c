@@ -837,12 +837,22 @@ void authenticateClient (void *data) {
 
                     // we have a new client
                     else {
-                        // FIXME: we need to remove the client from the on hold structure!!!
-
+                        Client *got_client = (Client *) avl_removeNode (pack_info->server->onHoldClients, pack_info->client);
                         
+                        // FIXME: better handle this error!
+                        if (!got_client) {
+                            logMsg (stderr, ERROR, SERVER, "Failed to get client avl node data!");
+                            return;
+                        }
 
-                        client_registerToServer (pack_info->server, pack_info->client, 
-                            pack_info->clientSock);
+                        else {
+                            #ifdef CERVER_DEBUG
+                            logMsg (stdout, DEBUG_MSG, SERVER, 
+                                "Got client data when removing an on hold avl node!");
+                            #endif
+                        }
+
+                        client_registerToServer (pack_info->server, got_client, pack_info->clientSock);
 
                         // send back the session id to the client
                         size_t packet_size = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (Token);
@@ -908,7 +918,7 @@ void authenticateClient (void *data) {
             logMsg (stderr, ERROR, SERVER, "Server doesn't have an authenticate method!");
             logMsg (stderr, ERROR, SERVER, "Clients are unable to interact with the server!");
 
-            // FIXME:
+            // FIXME: correctly drop client and send error packet to the client!
             dropClient (pack_info->server, pack_info->client);
         }
     }
