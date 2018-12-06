@@ -181,7 +181,7 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
         void *data = avl_getNodeData (clients, &temp);
         if (data) return (Client *) data;
         else 
-            logMsg (stderr, ERROR, SERVER, 
+            logMsg (stderr, WARNING, SERVER, 
                 createString ("Couldn't find a client associated with the session ID: %s.", 
                 sessionID));
     }
@@ -249,7 +249,6 @@ u8 client_unregisterConnection (Client *client, i32 socket_fd) {
 }
 
 // FIXME: what is the max number of clients that a server can handle?
-// FIXME: use sessions -- also generate a session id for the client
 // registers a NEW client to the server
 void client_registerToServer (Server *server, Client *client, int newfd) {
 
