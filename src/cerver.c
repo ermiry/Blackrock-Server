@@ -1063,13 +1063,10 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
 
                 // TODO: 25/11/2018 -- 23:34 -- use the session id!!!
 
-                // info = newPacketInfo (server,
-                //     onHold ? getClientBySocket (server->onHoldClients->root, fd) :
-                //         getClientBySocket (server->clients->root, fd),
-                //         fd, packet_data, packet_size);
-
-                info = newPacketInfo (server, (Client *) avl_getNodeData (server->onHoldClients, test_clientID), 
-                    fd, packet_data, packet_size);
+                info = newPacketInfo (server,
+                    onHold ? getClientBySocket (server->onHoldClients->root, fd) :
+                        getClientBySocket (server->clients->root, fd),
+                        fd, packet_data, packet_size);
 
                 if (info) {
                     thpool_add_work (server->thpool, onHold ?
@@ -1188,11 +1185,14 @@ i32 server_accept (Server *server) {
         return -1;
     }
 
-    else printf ("Connection values: %s\n", connection_values);
+    else {
+        #ifdef CERVER_DEBUG
+        logMsg (stdout, DEBUG_MSG, CLIENT,
+            createString ("Connection values: %s", connection_values));
+        #endif
+    } 
 
     client = newClient (server, newfd, clientAddress, connection_values);
-
-    printf ("accept - client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
 
     // if we requiere authentication, we send the client to on hold structure
     if (server->authRequired) onHoldClient (server, client, newfd);

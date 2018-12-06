@@ -39,8 +39,6 @@ void client_set_sessionID (Client *client, char *sessionID) {
 
 }
 
-char *test_clientID = NULL;
-
 Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage address,
     char *connection_values) {
 
@@ -68,8 +66,6 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     // 25/11/2018 - 16:00 - using connection values as the client id
     if (connection_values) {
         if (client->clientID) free (client->clientID);
-
-        test_clientID = createString ("%s", connection_values);
 
         client->clientID = createString ("%s", connection_values);
         free (connection_values);
@@ -147,7 +143,6 @@ int client_comparator_sessionID (const void *a, const void *b) {
 
 }
 
-// TODO: we can make this more efficient...
 // recursively get the client associated with the socket
 Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
 
@@ -161,14 +156,10 @@ Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
                 client = (Client *) node->id;
                 
                 // search the socket fd in the clients active connections
-                for (int i = 0; i < client->n_active_cons; i++) {
-                    if (socket_fd == client->active_connections[i]) {
-                        printf ("get client - ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
+                for (int i = 0; i < client->n_active_cons; i++)
+                    if (socket_fd == client->active_connections[i])
                         return client;
-                    }
-                }
-                    
-                        
+
             }
         }
 
