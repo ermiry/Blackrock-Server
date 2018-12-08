@@ -5,45 +5,21 @@
     #define _GNU_SOURCE
 #endif
 
-#include <stdio.h>
-#include <stdint.h>
+#include <poll.h>
+
+#include "myTypes.h"
 
 #include "network.h"
-#include "game.h"       // game server
+#include "client.h"
+#include "game.h"
 
 #include "utils/list.h"
-#include "utils/config.h"
 #include "utils/objectPool.h"
-// #include "utils/vector.h"
+#include "utils/avl.h"
 
-#include <poll.h>
-#include "utils/avl.h"      // 02/11/2018 -- using an avl tree to handle clients
+#include "utils/config.h"
 
-// 04/11/2018 -- 23:04 -- including a th pool inside each server
 #include "utils/thpool.h"
-
-#define EXIT_FAILURE    1
-
-#define THREAD_OK       0
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
-typedef unsigned char asciiChar;
-
-// takes no argument and returns a value (int)
-typedef u8 (*Func)(void);
-// takes an argument and does not return a value
-typedef void (*Action)(void *);
-// takes an argument and returns a value (int)
-typedef u8 (*delegate)(void *);
 
 #define DEFAULT_USE_IPV6                0
 #define DEFAULT_PROTOCOL                IPPROTO_TCP
@@ -53,7 +29,9 @@ typedef u8 (*delegate)(void *);
 
 #define DEFAULT_REQUIRE_AUTH            0   // by default, a server does not requires authentication
 #define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
-#define DEFAULT_AUTH_CODE               7
+#define DEFAULT_AUTH_CODE               0x4CA140FF
+
+#define DEFAULT_USE_SESSIONS            0   // by default, a server does not support client sessions
 
 #define DEFAULT_TH_POOL_INIT            4
 
@@ -62,35 +40,19 @@ typedef u8 (*delegate)(void *);
 
 #define poll_n_fds      100           // n of fds for the pollfd array
 
-struct _Server;
-
-/*** CLIENT ***/
-
-#pragma region CLIENT
-
-// anyone that connects to the server
-struct _Client {
-
-    i32 clientID;
-    i32 clientSock;
-    struct sockaddr_storage address;
-
-    u8 authTries;           // remaining attemps to authenticate
-    bool dropClient;        // client failed to authenticate
-
-};
-
-typedef struct _Client Client;
-
-extern Client *getClientBySock (AVLTree *clients, i32 fd);
-extern void client_registerToServer (struct _Server *server, Client *client);
-extern void client_unregisterFromServer (struct _Server *server, Client *client);
-
-#pragma endregion
-
 /*** SEVER ***/
 
 #pragma region SERVER
+
+#ifdef RUN_FROM_MAKE
+    #define SERVER_CFG          "./config/server.cfg"
+
+#elif RUN_FROM_BIN
+    #define SERVER_CFG          "../config/server.cfg" 
+
+#else
+    #define SERVER_CFG          ""
+#endif  
 
 typedef enum ServerType {
 
@@ -115,59 +77,68 @@ struct _Server {
 
     i32 serverSock;         // server socket
     u8 useIpv6;  
-    u8 protocol;            // 12/10/2018 - we only support either tcp or udp
+    u8 protocol;            // we only support either tcp or udp
     u16 port; 
     u16 connectionQueue;    // each server can handle connection differently
 
-    bool isRunning;         // 19/10/2018 - the server is recieving and/or sending packetss
-    bool blocking;          // 29/10/2018 - sokcet fd is blocking?
+    bool isRunning;         // he server is recieving and/or sending packetss
+    bool blocking;          // sokcet fd is blocking?
 
     ServerType type;
     void *serverData;
     Action destroyServerData;
 
-    // 01/11/2018 - lets try this
     // do web servers need this?
-    AVLTree *clients;                   // 02/11/2018 -- connected clients with avl tree
+    AVLTree *clients;                   // connected clients
     Pool *clientsPool;       
 
-    // 28/10/2018 -- poll test
-    struct pollfd fds[poll_n_fds];      // TODO: add the n_fds option in the cfg file
+    // TODO: option to make this dynamic
+    struct pollfd fds[poll_n_fds];
     u16 nfds;                           // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
     u32 pollTimeout;           
 
-    bool authRequired;      // 02/11/2018 - authentication required by the server
+    bool authRequired;      // does the server requires authentication?
     Auth auth;              // server auth info
 
-    // 02/11/2018 -- 21:51 -- on hold clients         
+    // on hold clients         
     AVLTree *onHoldClients;                 // hold on the clients until they authenticate
+    // TODO: option to make this dynamic
     struct pollfd hold_fds[poll_n_fds];
     u16 hold_nfds;
     bool compress_hold_clients;              // compress the hold fds array?
+    bool holdingClients;
 
-    Pool *packetPool;       // 02/11/2018 - packet info
+    Pool *packetPool;
 
-    // 04/11/2018 -- 23:04 -- including a th pool inside each server
     threadpool thpool;
 
-    // 17/11/2018 -- useful info that we can send to clients
-    void *serverInfo;   
+    void *serverInfo;           // useful info that we can send to clients                      
 
-    // 21/11/2018 - 9:18 - statistics
+    // allow the clients to use sessions (have multiple connections)
+    bool useSessions;  
+    // admin defined function to generate session ids bassed on usernames, etc             
+    Action generateSessionID; 
+
+    // server info/stats
+    // TODO: use this in the thpool names
+    char *name;
     u32 connectedClients;
+    u32 n_hold_clients;
 
 };
 
 typedef struct _Server Server;
 
-extern Server *cerver_createServer (Server *, ServerType);
+extern Server *cerver_createServer (Server *, ServerType, char *name);
 
 extern u8 cerver_startServer (Server *);
 
 extern u8 cerver_shutdownServer (Server *);
 extern u8 cerver_teardown (Server *);
 extern Server *cerver_restartServer (Server *);
+
+extern void session_setIDGenerator (Server *server, Action idGenerator);
 
 #pragma endregion
 
@@ -190,9 +161,6 @@ typedef struct LoadBalancer {
 
     Pool *clientPool;       // does the load balancer handles clients directly??
 
-    // 20/10/2018 -- i dont like this...
-    // Vector holdClients;     // hold on the clients until they authenticate
-
     void (*destroyLoadBalancer) (void *data);   // ptr to a custom functipn to destroy the lb?
 
     // TODO: 14/10/2018 - maybe we can have listen and handle connections as generic functions, also a generic function
@@ -206,13 +174,13 @@ typedef struct LoadBalancer {
 
 #pragma region PACKETS
 
-// 01/11/2018 - info from a recieved packet to be handle
+// info from a recieved packet to be handle
 struct _PacketInfo {
 
     Server *server;
     Client *client;
+    i32 clientSock; 
     char *packetData;
-    // char *packetData;
     size_t packetSize;
 
 };
@@ -231,7 +199,7 @@ typedef struct Version {
 extern ProtocolId PROTOCOL_ID;
 extern Version PROTOCOL_VERSION;
 
-// 01/11/2018 -- this indicates what type of packet we are sending/recieving
+// this indicates what type of packet we are sending/recieving
 typedef enum PacketType {
 
     SERVER_PACKET = 0,
@@ -255,10 +223,10 @@ typedef struct PacketHeader {
 
 } PacketHeader;
 
-// 01/11/2018 -- this indicates the data and more info about the packet type
+// this indicates the data and more info about the packet type
 typedef enum RequestType {
 
-    SERVER_INFO,
+    SERVER_INFO = 0,
     SERVER_TEARDOWN,
 
     CLIENT_DISCONNET,
@@ -267,6 +235,7 @@ typedef enum RequestType {
     POST_SEND_FILE,
     
     REQ_AUTH_CLIENT,
+    CLIENT_AUTH_DATA,
     SUCCESS_AUTH,
 
     LOBBY_CREATE,
@@ -282,7 +251,7 @@ typedef enum RequestType {
     GAME_SEND_MSG,
 
 } RequestType;
-
+ 
 // here we can add things like file names or game types
 typedef struct RequestData {
 
@@ -290,7 +259,6 @@ typedef struct RequestData {
 
 } RequestData;
 
-// 23/10/2018 -- lests test how this goes...
 typedef enum ErrorType {
 
     ERR_SERVER_ERROR = 0,   // internal server error, like no memory
@@ -317,14 +285,18 @@ extern void initPacketHeader (void *header, PacketType type, u32 packetSize);
 extern void *generatePacket (PacketType packetType, size_t packetSize);
 extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType);
 
-extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
+// FIXME:
+// extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
 
 extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
 extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 
     const struct sockaddr_storage address);
+extern u8 server_sendPacket (Server *server, i32 socket_fd, struct sockaddr_storage address, 
+    const void *packet, size_t packetSize);
 
-extern void *generateErrorPacket (ErrorType type, char *msg);
-extern u8 sendErrorPacket (Server *server, Client *client, ErrorType type, char *msg);
+extern void *generateErrorPacket (ErrorType type, const char *msg);
+extern u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage address,
+    ErrorType type, const char *msg);
 
 #pragma endregion
 
@@ -336,6 +308,16 @@ struct _GameSettings;
 struct _Lobby;
 
 extern u16 nextPlayerId;
+
+#pragma endregion
+
+/*** MISC SERVER FUNCS ***/
+
+#pragma region MISC
+
+extern i32 getFreePollSpot (Server *server);
+
+extern void dropClient (Server *server, Client *client);
 
 #pragma endregion
 
@@ -358,7 +340,7 @@ typedef struct SServer {
 
 } SServer;
 
-// 03/11/2018 -> default auth data to use by default auth function
+// default auth data to use by default auth function
 typedef struct DefAuthData {
 
     u32 code;
@@ -375,6 +357,13 @@ struct _SArray {
 };
 
 typedef struct _SArray SArray;
+
+// session id - token
+typedef struct Token {
+
+    char token[65];
+
+} Token;
 
 #pragma endregion
 

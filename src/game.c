@@ -7,22 +7,24 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include <poll.h>
+#include <errno.h>
+
 #include <stdarg.h>
+
+#include "myTypes.h"
 
 #include "blackrock/blackrock.h" 
 #include "game.h"
 
-#include "utils/myUtils.h"
-#include "utils/list.h"
 #include "utils/objectPool.h"
+#include "utils/list.h"
+#include "utils/avl.h"
+#include "utils/htab.h"
+
+#include "utils/myUtils.h"
 #include "utils/config.h"
 #include "utils/log.h"
-
-#include <poll.h>
-#include <errno.h>
-#include "utils/avl.h"
-
-#include "utils/htab.h"
 
 GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize);
@@ -306,17 +308,18 @@ void deletePlayer (void *data) {
 
 }
 
+// FIXME: we cant compare client sockets any more!!
 // comparator for players's avl tree
 int playerComparator (const void *a, const void *b) {
 
-    if (a && b) {
+    /* if (a && b) {
         Player *player_a = (Player *) a;
         Player *player_b = (Player *) b;
 
         if (player_a->client->clientSock > player_b->client->clientSock) return 1;
         else if (player_a->client->clientSock == player_b->client->clientSock) return 0;
         else return -1;
-    }
+    } */
 
 }
 
@@ -358,6 +361,7 @@ u8 game_initPlayers (GameServerData *gameData, u8 n_players) {
 
 }
 
+// FIXME:
 // adds a player to the server's players struct (avl) and also add the player
 // client to the main server poll
 void player_registerToServer (Server *server, Player *player) {
@@ -368,8 +372,8 @@ void player_registerToServer (Server *server, Player *player) {
             if (gameData->players) avl_insertNode (gameData->players, player);
 
             // add the player client to the server poll
-            Client *c = getClientBySock (server->clients, player->client->clientSock);
-            if (!c) client_registerToServer (server, player->client);
+            Client *c; // = getClientBySock (server->clients, player->client->clientSock);
+            // if (!c) client_registerToServer (server, player->client);
         }
 
         else {
@@ -382,6 +386,7 @@ void player_registerToServer (Server *server, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // removes a player from the server's players struct (avl) and also removes the player
 // client from the main server poll
 void player_unregisterFromServer (Server *server, Player *player) {
@@ -391,7 +396,7 @@ void player_unregisterFromServer (Server *server, Player *player) {
             GameServerData *gameData = (GameServerData *) server->serverData;
             if (gameData) {
                 // remove the player client from the main server poll
-                Client *c = getClientBySock (server->clients, player->client->clientSock);
+                Client *c; // = getClientBySock (server->clients, player->client->clientSock);
                 if (c) client_unregisterFromServer (server, player->client);
 
                 // remove the player from the servers players
@@ -402,20 +407,22 @@ void player_unregisterFromServer (Server *server, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // make sure that the player is inside the lobby
 bool player_isInLobby (Player *player, Lobby *lobby) {
 
-    if (player && lobby) {
+    /* if (player && lobby) {
         for (u8 i = 0; i < lobby->players_nfds; i++) 
             if (lobby->players_fds[i].fd == player->client->clientSock)
                 return true;
 
-    }
+    } */
 
     return false;
 
 }
 
+// FIXME: client socket!!
 // TODO: do we also need to check if the lobby is already full?
 // TODO: log a time stamp?
 // add a player to the lobby structures
@@ -427,11 +434,11 @@ u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
             if (gameData) {
                 if (!player_isInLobby (player, lobby)) {
                     // create a new player and add it to the server's players
-                    Player *p = newPlayer (gameData->playersPool, NULL, player);
+                    /* Player *p = newPlayer (gameData->playersPool, NULL, player);
                     avl_insertNode (lobby->players, p);
                     lobby->players_fds[lobby->players_nfds].fd = player->client->clientSock;
                     lobby->players_fds[lobby->players_nfds].events = POLLIN;
-                    lobby->players_nfds++;
+                    lobby->players_nfds++; */
 
                     player->inLobby = true;
 
@@ -447,6 +454,7 @@ u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // removes a player from the lobby's players structures and sends it to the game server's players
 u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
@@ -461,12 +469,12 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
                     // remove from the poll fds
                     for (u8 i = 0; i < lobby->players_nfds; i++) {
-                        if (lobby->players_fds[i].fd == player->client->clientSock) {
+                        /* if (lobby->players_fds[i].fd == player->client->clientSock) {
                             lobby->players_fds[i].fd = -1;
                             lobby->players_nfds--;
                             lobby->compress_players = true;
                             break;
-                        }
+                        } */
                     }
 
                     // delete the player from the lobby
@@ -486,13 +494,14 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: client socket!!
 // search a player in the lobbys players avl by his sock's fd
 Player *getPlayerBySock (AVLTree *players, i32 fd) {
 
     if (players) {
         Player *temp = (Player *) malloc (sizeof (Player));
         temp->client = (Client *) malloc (sizeof (Client));
-        temp->client->clientSock = fd;
+        // temp->client->clientSock = fd;
 
         void *data = avl_getNodeData (players, temp);
 
@@ -513,6 +522,7 @@ Player *getPlayerBySock (AVLTree *players, i32 fd) {
 
 }
 
+// FIXME: client socket!!
 // broadcast a packet/msg to all clients inside an avl structure
 void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
@@ -522,10 +532,10 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
         // send packet to curent player
         if (node->id) {
             Player *player = (Player *) node->id;
-            if (player) 
-                server->protocol == IPPROTO_TCP ?
-                tcp_sendPacket (player->client->clientSock, packet, packetSize, 0) :
-                udp_sendPacket (server, packet, packetSize, player->client->address);
+            // if (player) 
+                // server->protocol == IPPROTO_TCP ?
+                // tcp_sendPacket (player->client->clientSock, packet, packetSize, 0) :
+                // udp_sendPacket (server, packet, packetSize, player->client->address);
         }
 
         broadcastToAllPlayers (node->left, server, packet, packetSize);
@@ -568,10 +578,10 @@ void udpAddPlayer () {}
 void addPlayer (struct sockaddr_storage address) {
 
     // TODO: handle ipv6 ips
-    char addrStr[IP_TO_STR_LEN];
+    /* char addrStr[IP_TO_STR_LEN];
     sock_ip_to_string ((struct sockaddr *) &address, addrStr, sizeof (addrStr));
     logMsg (stdout, SERVER, PLAYER, createString ("New player connected from ip: %s @ port: %d.\n", 
-        addrStr, sock_ip_port ((struct sockaddr *) &address)));
+        addrStr, sock_ip_port ((struct sockaddr *) &address))); */
 
     // TODO: init other necessarry game values
     // add the new player to the game
@@ -1077,8 +1087,9 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tries to join the same lobby he is in.");
         #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, 
-            "You can't join the same lobby you are in!");
+        // FIXME:
+        // sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, 
+        //     "You can't join the same lobby you are in!");
         return 1;
     }
 
@@ -1087,7 +1098,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join a lobby that is in game.");
         #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "A game is in progress in the lobby!");
+        // FIXME:
+        // sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "A game is in progress in the lobby!");
         return 1;
     }
 
@@ -1096,7 +1108,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
         #ifdef DEBUG
         logMsg (stdout, DEBUG_MSG, GAME, "A player tried to join a full lobby.");
         #endif
-        sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "The lobby is already full!");
+        // FIXME:
+        // sendErrorPacket (server, player->client, ERR_JOIN_LOBBY, "The lobby is already full!");
         return 1;
     }
 
@@ -1114,6 +1127,8 @@ u8 joinLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: client socket!!
+// FIXME: send packet!
 // TODO: add a timestamp when the player leaves
 // called when a player requests to leave the lobby
 u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
@@ -1125,8 +1140,8 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         // check to see if the player is the owner of the lobby
         bool wasOwner = false;
         // TODO: we should be checking for the player's id instead
-        if (lobby->owner->client->clientSock == player->client->clientSock) 
-            wasOwner = true;
+        // if (lobby->owner->client->clientSock == player->client->clientSock) 
+        //     wasOwner = true;
 
         if (player_removeFromLobby (server, lobby, player)) return 1;
 
@@ -1148,9 +1163,9 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
                             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
                             void *packet = generatePacket (GAME_PACKET, packetSize);
                             if (packet) {
-                                server->protocol == IPPROTO_TCP ?
-                                tcp_sendPacket (temp->client->clientSock, packet, packetSize, 0) :
-                                udp_sendPacket (server, packet, packetSize, temp->client->address);
+                                // server->protocol == IPPROTO_TCP ?
+                                // tcp_sendPacket (temp->client->clientSock, packet, packetSize, 0) :
+                                // udp_sendPacket (server, packet, packetSize, temp->client->address);
                                 free (packet);
                             }
                         }
@@ -1789,6 +1804,8 @@ void handleGamePacket (void *data) {
 
 /*** FROM OUTSIDE A LOBBY ***/
 
+// FIXME: get players by session or socket!!!
+
 // request from a from client to create a new lobby 
 void gs_createLobby (Server *server, Client *client, GameType gameType) {
 
@@ -1800,7 +1817,8 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         // check if the client is associated with a player
-        Player *owner = getPlayerBySock (gameData->players, client->clientSock);
+        // Player *owner = getPlayerBySock (gameData->players, client->clientSock);
+        Player *owner;
 
         // create new player data for the client
         if (!owner) {
@@ -1813,11 +1831,12 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
             #endif
-            if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
-                #ifdef DEBUG
-                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
-                #endif
-            }
+            // FIXME:
+            // if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+            //     #ifdef DEBUG
+            //     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+            //     #endif
+            // }
             return;
         }
 
@@ -1838,8 +1857,9 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
             logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
 
             // send feedback to the player
-            sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, 
-                "Game server failed to create new lobby!");
+            // FIXME:
+            // sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, 
+            //     "Game server failed to create new lobby!");
         }
     }
 
@@ -1855,7 +1875,8 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         // check if the client is associated with a player
-        Player *player = getPlayerBySock (gameData->players, client->clientSock);
+        // Player *player = getPlayerBySock (gameData->players, client->clientSock);
+        Player *player;
 
         // create new player data for the client
         if (!player) {
@@ -1868,11 +1889,12 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to join a new lobby.");
             #endif
-            if (sendErrorPacket (server, player->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+            // FIXME:
+            /* if (sendErrorPacket (server, player->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
                 #ifdef DEBUG
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
-            }
+            } */
             return;
         }
 
@@ -1914,11 +1936,12 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
                 #ifdef DEBUG
                 logMsg (stdout, DEBUG_MSG, GAME, "There was a problem with a player leaving a lobby!");
                 #endif
-                if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Problem with player leaving the lobby!")) {
+                // FIXME:
+                /* if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Problem with player leaving the lobby!")) {
                     #ifdef DEBUG
                     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                     #endif
-                }
+                } */
             }
         }
 
@@ -1926,11 +1949,12 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player tries to leave a lobby but he is not inside one!");
             #endif
-            if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Player is not inside a lobby!")) {
+            // FIXME:
+            /* if (sendErrorPacket (server, player->client, ERR_LEAVE_LOBBY, "Player is not inside a lobby!")) {
                 #ifdef DEBUG
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
-            }
+            } */
         }
     }
 
@@ -1971,12 +1995,13 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
                     #ifdef DEBUG
                     logMsg (stdout, WARNING, GAME, "Need more players to start the game.");
                     #endif
-                    if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                    // FIXME: select client socket!!
+                    /* if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
                         "We need more players to start the game!")) {
                         #ifdef DEBUG
                         logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                         #endif
-                    }
+                    } */
                 }
             }
 
@@ -1984,12 +2009,13 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
                 #ifdef DEBUG
                 logMsg (stdout, WARNING, GAME, "Player is not the lobby owner.");
                 #endif
-                if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+                // FIXME:
+                /* if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
                     "Player is not the lobby owner!")) {
                     #ifdef DEBUG
                     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                     #endif
-                }
+                } */
             }
         }
 
@@ -1997,12 +2023,13 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
             #ifdef DEBUG
             logMsg (stdout, WARNING, GAME, "Player must be inside a lobby and be the owner to start a game.");
             #endif
-            if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
+            // FIXME:
+            /* if (sendErrorPacket (server, player->client, ERR_GAME_INIT, 
                 "The player is not inside a lobby!")) {
                 #ifdef DEBUG
                 logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
                 #endif
-            }
+            } */
         }
     }
 

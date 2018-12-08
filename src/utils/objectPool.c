@@ -44,7 +44,7 @@ void pool_push (Pool *pool, void *data) {
 
 void *pool_pop (Pool *pool) {
 
-    if (pool) {
+    if (pool && (pool->size > 0)) {
         PoolMember *top = POOL_TOP (pool);
 
         void *data = top->data;
@@ -56,6 +56,8 @@ void *pool_pop (Pool *pool) {
 
         return data;
     }
+
+    return NULL;
 
 }
 

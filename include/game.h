@@ -3,36 +3,14 @@
 
 #include <poll.h>
 
+#include "myTypes.h"
+
 #include "cerver.h"
 
 #include "utils/list.h"
 #include "utils/avl.h"
 #include "utils/config.h"
 #include "utils/objectPool.h"
-
-// #include "utils/myTime.h"
-// #include "utils/vector.h"
-
-/*** CERVER TYPES ***/
-
-// 11/11/2018 -- added this types defs here to prevent compiler erros
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-
-// takes no argument and returns a value (int)
-typedef u8 (*Func)(void);
-// takes an argument and does not return a value
-typedef void (*Action)(void *);
-// takes an argument and returns a value (int)
-typedef u8 (*delegate)(void *);
 
 struct _Server;
 struct _GameServerData;
@@ -48,6 +26,16 @@ struct _PacketInfo;
 
 #define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
 #define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
+
+#ifdef RUN_FROM_MAKE
+    #define GS_GAME_SETTINGS_CFG         "./config/gameSettings.cfg"
+
+#elif RUN_FROM_BIN
+    #define GS_GAME_SETTINGS_CFG         "../config/gameSettings.cfg"
+
+#else
+    #define GS_GAME_SETTINGS_CFG          ""
+#endif  
 
 struct _GameServerData {
 

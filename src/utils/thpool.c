@@ -368,14 +368,16 @@ static void* thread_do(struct thread* thread_p){
 			}
 
 			pthread_mutex_lock(&thpool_p->thcount_lock);
-			thpool_p->num_threads_working--;
-			if (!thpool_p->num_threads_working) {
-				pthread_cond_signal(&thpool_p->threads_all_idle);
-			}
-			pthread_mutex_unlock(&thpool_p->thcount_lock);
 
+			thpool_p->num_threads_working--;
+
+			if (!thpool_p->num_threads_working) 
+				pthread_cond_signal(&thpool_p->threads_all_idle);
+
+			pthread_mutex_unlock(&thpool_p->thcount_lock);
 		}
 	}
+
 	pthread_mutex_lock(&thpool_p->thcount_lock);
 	thpool_p->num_threads_alive --;
 	pthread_mutex_unlock(&thpool_p->thcount_lock);
@@ -456,11 +458,6 @@ static void jobqueue_push(jobqueue* jobqueue_p, struct job* newjob){
 
 
 /* Get first job from queue(removes it from queue)
-<<<<<<< HEAD
- *
- * Notice: Caller MUST hold a mutex
-=======
->>>>>>> da2c0fe45e43ce0937f272c8cd2704bdc0afb490
  */
 static struct job* jobqueue_pull(jobqueue* jobqueue_p){
 

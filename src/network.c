@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include <fcntl.h>
@@ -5,6 +6,8 @@
 #include "network.h"
 
 /*** SOCKETS ***/  
+
+#pragma region SOCKETS
 
 // enable/disable blocking on a socket
 // true on success, false if there was an eroror
@@ -20,30 +23,24 @@ bool sock_setBlocking (int32_t fd, bool isBlocking) {
 
 }
 
-/* bool sock_setNonBlocking (int32_t server) {
+char *sock_ip_to_string ( const struct sockaddr *address) {
 
-    int non_blocking = 1;
-	return fcntl (server, F_SETFL, O_NONBLOCK, non_blocking) != -1;
+    char *ipstr = (char *) calloc (INET6_ADDRSTRLEN, sizeof (char));
 
-} */
-
-const char *sock_ip_to_string (const struct sockaddr *address, char *string, size_t string_size) {
-
-	switch(address->sa_family) {
+	switch (address->sa_family) {
         case AF_INET:
-            return inet_ntop(AF_INET,
-                            &((struct sockaddr_in *) address)->sin_addr,
-                            string, string_size);
+            inet_ntop (AF_INET, &((struct sockaddr_in *) address)->sin_addr,
+                        ipstr, INET6_ADDRSTRLEN);
             break;
         case AF_INET6:
-            return inet_ntop(AF_INET6,
-                            &((struct sockaddr_in6 *) address)->sin6_addr,
-                            string, string_size);
+            inet_ntop(AF_INET6, &((struct sockaddr_in6 *) address)->sin6_addr,
+                        ipstr, INET6_ADDRSTRLEN);
             break;
-        default:
-            strncpy(string, "[Unknown AF!]", string_size);
-            return NULL;
+
+        default: return NULL;
 	}
+
+    return ipstr;
 
 }
 
@@ -83,3 +80,5 @@ in_port_t sock_ip_port (const struct sockaddr *address) {
 	}
 
 }
+
+#pragma endregion

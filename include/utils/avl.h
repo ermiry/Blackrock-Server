@@ -28,7 +28,7 @@ extern void avl_clearTree (AVLNode **node, void (*destroy)(void *data));
 extern bool avl_isEmpty (AVLTree *tree);
 extern void *avl_getNodeData (AVLTree *tree, void *id);
 extern void avl_insertNode (AVLTree *tree, void *data);
-extern void avl_removeNode (AVLTree *tree, void *data);
+extern void *avl_removeNode (AVLTree *tree, void *data);
 extern bool avl_nodeInTree (AVLTree *tree, void *id);
 
 #endif

@@ -17,7 +17,7 @@
 extern bool sock_setBlocking (int32_t fd, bool blocking);
 // extern bool sock_setNonBlocking (int32_t);
 
-extern const char *sock_ip_to_string (const struct sockaddr *address, char *string, size_t string_size);
+extern char *sock_ip_to_string ( const struct sockaddr *address) ;
 extern bool sock_ip_equal (const struct sockaddr *a, const struct sockaddr *b);
 
 extern in_port_t sock_ip_port (const struct sockaddr *address);
