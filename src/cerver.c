@@ -726,7 +726,6 @@ u8 defaultAuthMethod (void *data) {
                     isToken = true;
 
             if (isToken) {
-                // if so, check if the client sent us a session token
                 char *end = pack_info->packetData;
                 Token *tokenData = (Token *) (end + 
                     sizeof (PacketHeader) + sizeof (RequestData));

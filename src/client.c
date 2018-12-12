@@ -303,6 +303,7 @@ void client_unregisterFromServer (Server *server, Client *client)  {
 
 }
 
+// FIXME: we need to update the server main poll structures!!!
 // disconnect a client from the server and take it out from the server's clients and 
 void client_closeConnection (Server *server, Client *client) {
 
