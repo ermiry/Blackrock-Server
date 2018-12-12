@@ -1709,6 +1709,8 @@ void gs_sendMsg (Server *, Player *, Lobby *, char *msg);
 // this is called from the main poll in a new thread
 void gs_handlePacket (PacketInfo *packetInfo) {
 
+    logMsg (stdout, DEBUG_MSG, GAME, "gs_handlePacket ()");
+
     RequestData *reqData = (RequestData *) (packetInfo->packetData + sizeof (PacketHeader));
     switch (reqData->type) {
         // TODO: get the correct game type from the packet

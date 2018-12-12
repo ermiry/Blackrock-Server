@@ -835,18 +835,36 @@ void authenticateClient (void *data) {
 
                     // if we found one, register the new connection to him
                     if (found_client) {
-                        client_registerNewConnection (found_client, pack_info->clientSock);
+                        if (client_registerNewConnection (found_client, pack_info->clientSock))
+                            logMsg (stderr, ERROR, CLIENT, "Failed to register new connection to client!");
+
+                        i32 idx = getFreePollSpot (pack_info->server);
+                        if (idx > 0) {
+                            printf ("new main poll idx: %i\n", idx);
+                            pack_info->server->fds[idx].fd = pack_info->clientSock;
+                            pack_info->server->fds[idx].events = POLLIN;
+                            pack_info->server->nfds++;
+                        }
 
                         Client *c = removeOnHoldClient (pack_info->server, 
                             pack_info->client, pack_info->clientSock);
                         // FIXME: create a separte function for deleting client data!
-                        if (c) free (c);
+                        // if (c) free (c);
 
                         #ifdef CERVER_DEBUG
                         logMsg (stdout, DEBUG_MSG, CLIENT, 
                             createString ("Registered a new connection to client with session id: %s",
                             pack_info->client->sessionID));
                         #endif
+
+                        // size_t success_packet_size = sizeof (PacketHeader) + sizeof (RequestData);
+                        // void *success_packet = generatePacket (AUTHENTICATION, success_packet_size);
+                        // if (success_packet) {
+                        //     char *end = success_packet;
+                        //     RequestData *reqdata = (RequestData *) (success_packet + sizeof (PacketHeader));
+                        //     reqdata->type = SUCCESS_AUTH;
+
+                        // }
                     }
 
                     // we have a new client
@@ -1076,12 +1094,12 @@ void handlePacket (void *data) {
 
 }
 
-extern char *test_clientID;
-
 // TODO: 25/11/2018 -- 23:34 -- use the session id to handle the packets!!
 // TODO: take into account that we dont need to check the identity when recieving game packets!!!
 // split the entry buffer in packets of the correct size
 void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, bool onHold) {
+
+    printf ("handleRecvBuffer ()\n");
 
     if (buffer && (total_size > 0)) {
         u32 buffer_idx = 0;
@@ -1104,16 +1122,28 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
-                // TODO: 25/11/2018 -- 23:34 -- use the session id!!!
+                // info = newPacketInfo (server,
+                //     onHold ? getClientBySocket (server->onHoldClients->root, fd) :
+                //         getClientBySocket (server->clients->root, fd),
+                //         fd, packet_data, packet_size);
 
-                info = newPacketInfo (server,
-                    onHold ? getClientBySocket (server->onHoldClients->root, fd) :
-                        getClientBySocket (server->clients->root, fd),
-                        fd, packet_data, packet_size);
+                Client *c = NULL;
+                if (onHold) c = getClientBySocket (server->onHoldClients->root, fd);
+                else c = getClientBySocket (server->clients->root, fd);
+
+                if (!c) logMsg (stderr, ERROR, CLIENT, "Failed to get client by socket!");
+
+                info = newPacketInfo (server, c, fd, packet_data, packet_size);
 
                 if (info) {
-                    thpool_add_work (server->thpool, onHold ?
-                    (void *) handleOnHoldPacket : (void *) handlePacket, info);
+                    if (info->client) printf ("got client by socket! client: %s\n", info->client->clientID);
+                    else printf ("failed to get client!\n");
+
+                    if (onHold) thpool_add_work (server->thpool, (void *) handleOnHoldPacket, info);
+                    else thpool_add_work (server->thpool, (void *) handlePacket, info);
+
+                    // thpool_add_work (server->thpool, onHold ?
+                    // (void *) handleOnHoldPacket : (void *) handlePacket, info);
                 }
 
                 else {

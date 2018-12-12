@@ -60,8 +60,8 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     // client->address = address;
     memcpy (&client->address, &address, sizeof (struct sockaddr_storage));
 
-    printf ("address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
-    printf ("client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
+    // printf ("address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
+    // printf ("client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
 
     // 25/11/2018 - 16:00 - using connection values as the client id
     if (connection_values) {
@@ -80,10 +80,14 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
 
     client->n_active_cons = 0;
     if (client->active_connections) 
-        memset (client->active_connections, 0, sizeof (client->active_connections));
+        for (u8 i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++)
+            client->active_connections[i] = -1;
+        // memset (client->active_connections, 0, sizeof (client->active_connections));
     else {
         client->active_connections = (i32 *) calloc (DEFAULT_CLIENT_MAX_CONNECTS, sizeof (i32));
-        memset (client->active_connections, 0, sizeof (client->active_connections));
+        for (u8 i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++)
+            client->active_connections[i] = -1;
+        // memset (client->active_connections, 0, sizeof (client->active_connections));
     }
     
     // add the fd to the active connections
@@ -197,12 +201,13 @@ u8 client_registerNewConnection (Client *client, i32 socket_fd) {
         if (client->active_connections) {
             u8 new_active_cons = client->n_active_cons + 1;
 
-            if (new_active_cons <= client->curr_max_cons) {
+            if (new_active_cons <= DEFAULT_CLIENT_MAX_CONNECTS) {
                 // search for a free spot
-                for (int i = 0; i < client->curr_max_cons; i++) {
+                for (int i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++) {
                     if (client->active_connections[i] == -1) {
                         client->active_connections[i] = socket_fd;
                         client->n_active_cons++;
+                        printf ("client->n_active_cons: %i\n", client->n_active_cons);
                         return 0;
                     }
                 }
