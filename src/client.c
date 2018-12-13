@@ -11,8 +11,6 @@
 
 /*** CLIENTS ***/
 
-// FIXME: return the data from the avl when we remove it!!!
-
 #pragma region CLIENTS
 
 // get from where the client is connecting
@@ -57,13 +55,11 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     //     client->active_connections = NULL;
     // } 
 
-    // client->address = address;
     memcpy (&client->address, &address, sizeof (struct sockaddr_storage));
 
     // printf ("address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
     // printf ("client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
 
-    // 25/11/2018 - 16:00 - using connection values as the client id
     if (connection_values) {
         if (client->clientID) free (client->clientID);
 
@@ -82,13 +78,14 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     if (client->active_connections) 
         for (u8 i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++)
             client->active_connections[i] = -1;
-        // memset (client->active_connections, 0, sizeof (client->active_connections));
+
     else {
         client->active_connections = (i32 *) calloc (DEFAULT_CLIENT_MAX_CONNECTS, sizeof (i32));
         for (u8 i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++)
             client->active_connections[i] = -1;
-        // memset (client->active_connections, 0, sizeof (client->active_connections));
     }
+
+    client->curr_max_cons = DEFAULT_CLIENT_MAX_CONNECTS;
     
     // add the fd to the active connections
     if (client->active_connections) {
@@ -119,6 +116,17 @@ void destroyClient (void *data) {
         if (client->sessionID) free (client->sessionID);
 
         free (client);
+    }
+
+}
+
+// destroy client without closing his connections
+void client_delete_data (Client *client) {
+    
+    if (client) {
+        if (client->clientID) free (client->clientID);
+        if (client->sessionID) free (client->sessionID);
+        if (client->active_connections) free (client->active_connections);
     }
 
 }
@@ -201,9 +209,9 @@ u8 client_registerNewConnection (Client *client, i32 socket_fd) {
         if (client->active_connections) {
             u8 new_active_cons = client->n_active_cons + 1;
 
-            if (new_active_cons <= DEFAULT_CLIENT_MAX_CONNECTS) {
+            if (new_active_cons <= client->curr_max_cons) {
                 // search for a free spot
-                for (int i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++) {
+                for (int i = 0; i < client->curr_max_cons; i++) {
                     if (client->active_connections[i] == -1) {
                         client->active_connections[i] = socket_fd;
                         client->n_active_cons++;
@@ -221,6 +229,8 @@ u8 client_registerNewConnection (Client *client, i32 socket_fd) {
                 // add the connection at the end
                 client->active_connections[new_active_cons] = socket_fd;
                 client->n_active_cons++;
+
+                client->curr_max_cons++;
                 
                 return 0;
             }

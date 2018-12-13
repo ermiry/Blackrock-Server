@@ -36,6 +36,7 @@ typedef struct _Client Client;
 extern Client *newClient (struct _Server *server, i32 clientSock, struct sockaddr_storage address,
     char *connection_values);
 extern void destroyClient (void *data);
+extern void client_delete_data (Client *client);
 
 extern int client_comparator_clientID (const void *a, const void *b);
 extern int client_comparator_sessionID (const void *a, const void *b);

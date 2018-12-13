@@ -840,31 +840,19 @@ void authenticateClient (void *data) {
 
                         i32 idx = getFreePollSpot (pack_info->server);
                         if (idx > 0) {
-                            printf ("new main poll idx: %i\n", idx);
                             pack_info->server->fds[idx].fd = pack_info->clientSock;
                             pack_info->server->fds[idx].events = POLLIN;
                             pack_info->server->nfds++;
                         }
 
-                        Client *c = removeOnHoldClient (pack_info->server, 
-                            pack_info->client, pack_info->clientSock);
-                        // FIXME: create a separte function for deleting client data!
-                        // if (c) free (c);
+                        client_delete_data (removeOnHoldClient (pack_info->server, 
+                            pack_info->client, pack_info->clientSock));
 
                         #ifdef CERVER_DEBUG
                         logMsg (stdout, DEBUG_MSG, CLIENT, 
                             createString ("Registered a new connection to client with session id: %s",
                             pack_info->client->sessionID));
                         #endif
-
-                        // size_t success_packet_size = sizeof (PacketHeader) + sizeof (RequestData);
-                        // void *success_packet = generatePacket (AUTHENTICATION, success_packet_size);
-                        // if (success_packet) {
-                        //     char *end = success_packet;
-                        //     RequestData *reqdata = (RequestData *) (success_packet + sizeof (PacketHeader));
-                        //     reqdata->type = SUCCESS_AUTH;
-
-                        // }
                     }
 
                     // we have a new client
@@ -1094,12 +1082,8 @@ void handlePacket (void *data) {
 
 }
 
-// TODO: 25/11/2018 -- 23:34 -- use the session id to handle the packets!!
-// TODO: take into account that we dont need to check the identity when recieving game packets!!!
 // split the entry buffer in packets of the correct size
-void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, bool onHold) {
-
-    printf ("handleRecvBuffer ()\n");
+void handleRecvBuffer (Server *server, i32 sock_fd, char *buffer, size_t total_size, bool onHold) {
 
     if (buffer && (total_size > 0)) {
         u32 buffer_idx = 0;
@@ -1122,29 +1106,19 @@ void handleRecvBuffer (Server *server, i32 fd, char *buffer, size_t total_size, 
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
-                // info = newPacketInfo (server,
-                //     onHold ? getClientBySocket (server->onHoldClients->root, fd) :
-                //         getClientBySocket (server->clients->root, fd),
-                //         fd, packet_data, packet_size);
+                Client *c = onHold ? getClientBySocket (server->onHoldClients->root, sock_fd) :
+                    getClientBySocket (server->clients->root, sock_fd);
 
-                Client *c = NULL;
-                if (onHold) c = getClientBySocket (server->onHoldClients->root, fd);
-                else c = getClientBySocket (server->clients->root, fd);
-
-                if (!c) logMsg (stderr, ERROR, CLIENT, "Failed to get client by socket!");
-
-                info = newPacketInfo (server, c, fd, packet_data, packet_size);
-
-                if (info) {
-                    if (info->client) printf ("got client by socket! client: %s\n", info->client->clientID);
-                    else printf ("failed to get client!\n");
-
-                    if (onHold) thpool_add_work (server->thpool, (void *) handleOnHoldPacket, info);
-                    else thpool_add_work (server->thpool, (void *) handlePacket, info);
-
-                    // thpool_add_work (server->thpool, onHold ?
-                    // (void *) handleOnHoldPacket : (void *) handlePacket, info);
+                if (!c) {
+                    logMsg (stderr, ERROR, CLIENT, "Failed to get client by socket!");
+                    return;
                 }
+
+                info = newPacketInfo (server, c, sock_fd, packet_data, packet_size);
+
+                if (info)
+                    thpool_add_work (server->thpool, onHold ?
+                        (void *) handleOnHoldPacket : (void *) handlePacket, info);
 
                 else {
                     #ifdef CERVER_DEBUG
@@ -1203,11 +1177,18 @@ void server_recieve (Server *server, i32 socket_fd, bool onHold) {
                     getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);  
 
             else {
+                // remove the socket from the main poll
+                for (u32 i = 0; i < poll_n_fds; i++) {
+                    if (server->fds[i].fd == socket_fd) {
+                        server->fds[i].fd = -1;
+                        server->fds[i].events = -1;
+                    }
+                } 
+
                 Client *c = getClientBySocket (server->clients->root, socket_fd);
-                if (c) {
+                if (c) 
                     if (c->n_active_cons <= 1) 
                         client_closeConnection (server, c);
-                }
 
                 else {
                     #ifdef CERVER_DEBUG
