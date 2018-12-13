@@ -70,7 +70,7 @@ typedef struct _GameServerData GameServerData;
 
 typedef enum GameType {
 
-	ARCADE = 0
+	ARCADE = 1
 
 } GameType;
 

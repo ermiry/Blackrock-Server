@@ -90,6 +90,7 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     // add the fd to the active connections
     if (client->active_connections) {
         client->active_connections[client->n_active_cons] = clientSock;
+        printf ("client->active_connections[%i] = %i\n", client->n_active_cons, clientSock);
         client->n_active_cons++;
     } 
 
@@ -122,7 +123,7 @@ void destroyClient (void *data) {
 
 // destroy client without closing his connections
 void client_delete_data (Client *client) {
-    
+
     if (client) {
         if (client->clientID) free (client->clientID);
         if (client->sessionID) free (client->sessionID);
@@ -214,6 +215,7 @@ u8 client_registerNewConnection (Client *client, i32 socket_fd) {
                 for (int i = 0; i < client->curr_max_cons; i++) {
                     if (client->active_connections[i] == -1) {
                         client->active_connections[i] = socket_fd;
+                        printf ("client->active_connections[%i] = %i\n", client->n_active_cons, socket_fd);
                         client->n_active_cons++;
                         printf ("client->n_active_cons: %i\n", client->n_active_cons);
                         return 0;
@@ -265,7 +267,7 @@ u8 client_unregisterConnection (Client *client, i32 socket_fd) {
 
 // FIXME: what is the max number of clients that a server can handle?
 // registers a NEW client to the server
-void client_registerToServer (Server *server, Client *client, int newfd) {
+void client_registerToServer (Server *server, Client *client, i32 newfd) {
 
     if (server && client) {
         // add the new sock fd to the server main poll
@@ -274,6 +276,8 @@ void client_registerToServer (Server *server, Client *client, int newfd) {
             server->fds[idx].fd = newfd;
             server->fds[idx].events = POLLIN;
             server->nfds++;
+
+            printf ("client_registerToServer () - idx: %i\n", idx);
 
             // insert the new client into the server's clients
             avl_insertNode (server->clients, client);
@@ -301,20 +305,34 @@ void client_registerToServer (Server *server, Client *client, int newfd) {
 
 }
 
-// FIXME:
 // removes a client form a server's main poll structures
-void client_unregisterFromServer (Server *server, Client *client)  {
+Client *client_unregisterFromServer (Server *server, Client *client) {
 
     if (server && client) {
-        // server->fds[client->clientID].fd = -1;
-        avl_removeNode (server->clients, client);
-    
-        #ifdef CERVER_DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
-        #endif
+        Client *c = avl_removeNode (server->clients, client);
+        if (c) {
+            for (u8 i = 0; i < client->n_active_cons; i++) {
+                for (u8 j = 0; j < poll_n_fds; j++) {
+                    if (server->fds[j].fd == client->active_connections[i]) {
+                        server->fds[j].fd = -1;
+                        server->fds[j].events = -1;
+                    }
+                }
+            }
 
-        server->connectedClients--;
+            #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
+            #endif
+
+            server->connectedClients--;
+
+            return c;
+        }
+
+        else logMsg (stdout, WARNING, CLIENT, "The client wasn't registered in the server.");
     }
+
+    return NULL;
 
 }
 

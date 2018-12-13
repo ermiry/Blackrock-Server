@@ -258,40 +258,29 @@ void serialize_lobby_players (AVLNode *node, SArray *sarray) {
 // TODO: maybe later the id can be how we store it inside our databse
 // FIXME: player ids, we cannot have infinite ids!!
 // constructor for a new player, option for an object pool
-Player *newPlayer (Pool *pool, Client *client, Player *player) {
+Player *newPlayer (Pool *pool, Client *client) {
 
-    Player *new = NULL;
+    Player *new_player = (Player *) malloc (sizeof (Player));
 
-    if (pool) {
-        if (POOL_SIZE (pool) > 0) {
-            new = pool_pop (pool);
-            if (!new) new = (Player *) malloc (sizeof (Player));
-        }
-    }
+    // if (pool) {
+    //     if (POOL_SIZE (pool) > 0) {
+    //         new_player = pool_pop (pool);
+    //         if (!new_player) new_player = (Player *) malloc (sizeof (Player));
+    //     }
+    // }
 
-    else new = (Player *) malloc (sizeof (Player));
+    // else new_player = (Player *) malloc (sizeof (Player));
 
-    // if we have initialization parameters...
-    if (client) new->client = client;
-    else new->client = NULL;
+    new_player->client = client;
+    new_player->alive = false;
+    new_player->inLobby = false;
 
-    if (player) {
-        new->client = player->client;
-        new->alive = player->alive;
-        new->inLobby = player->inLobby;
-    }
+    // FIXME: player ids and components!!
 
-    // default player values
-    else {
-        new->client = NULL;
-        new->alive = false;
-        new->inLobby = false;
-    } 
-
-    new->id = nextPlayerId;
+    new_player->id = nextPlayerId;
     nextPlayerId++;
 
-    return new;
+    return new_player;
 
 }
 
@@ -308,18 +297,15 @@ void deletePlayer (void *data) {
 
 }
 
-// FIXME: we cant compare client sockets any more!!
 // comparator for players's avl tree
-int playerComparator (const void *a, const void *b) {
+int player_comparator_client_id (const void *a, const void *b) {
 
-    /* if (a && b) {
+    if (a && b) {
         Player *player_a = (Player *) a;
         Player *player_b = (Player *) b;
 
-        if (player_a->client->clientSock > player_b->client->clientSock) return 1;
-        else if (player_a->client->clientSock == player_b->client->clientSock) return 0;
-        else return -1;
-    } */
+        return strcmp (player_a->client->clientID, player_b->client->clientID);
+    }
 
 }
 
@@ -334,7 +320,7 @@ u8 game_initPlayers (GameServerData *gameData, u8 n_players) {
     if (gameData->players)
         logMsg (stdout, WARNING, SERVER, "The server already has an avl of players!");
     else {
-        gameData->players = avl_init (playerComparator, deletePlayer);
+        gameData->players = avl_init (player_comparator_client_id, deletePlayer);
         if (!gameData->players) {
             logMsg (stderr, ERROR, NO_TYPE, "Failed to init server's players avl!");
             return 1;
@@ -361,9 +347,7 @@ u8 game_initPlayers (GameServerData *gameData, u8 n_players) {
 
 }
 
-// FIXME:
-// adds a player to the server's players struct (avl) and also add the player
-// client to the main server poll
+// adds a player to the game server data main structures
 void player_registerToServer (Server *server, Player *player) {
 
     if (server && player) {
@@ -371,9 +355,9 @@ void player_registerToServer (Server *server, Player *player) {
             GameServerData *gameData = (GameServerData *) server->serverData;
             if (gameData->players) avl_insertNode (gameData->players, player);
 
-            // add the player client to the server poll
-            Client *c; // = getClientBySock (server->clients, player->client->clientSock);
-            // if (!c) client_registerToServer (server, player->client);
+            #ifdef CERVER_DEBUG
+                logMsg (stdout, DEBUG_MSG, GAME, "Registered a player to the server.");
+            #endif
         }
 
         else {
@@ -391,19 +375,19 @@ void player_registerToServer (Server *server, Player *player) {
 // client from the main server poll
 void player_unregisterFromServer (Server *server, Player *player) {
 
-    if (server && player) {
-        if (server->type == GAME_SERVER) {
-            GameServerData *gameData = (GameServerData *) server->serverData;
-            if (gameData) {
-                // remove the player client from the main server poll
-                Client *c; // = getClientBySock (server->clients, player->client->clientSock);
-                if (c) client_unregisterFromServer (server, player->client);
+    // if (server && player) {
+    //     if (server->type == GAME_SERVER) {
+    //         GameServerData *gameData = (GameServerData *) server->serverData;
+    //         if (gameData) {
+    //             // remove the player client from the main server poll
+    //             Client *c; // = getClientBySock (server->clients, player->client->clientSock);
+    //             if (c) client_unregisterFromServer (server, player->client);
 
-                // remove the player from the servers players
-                avl_removeNode (gameData->players, player);
-            }
-        }
-    }
+    //             // remove the player from the servers players
+    //             avl_removeNode (gameData->players, player);
+    //         }
+    //     }
+    // }
 
 }
 
@@ -422,9 +406,7 @@ bool player_isInLobby (Player *player, Lobby *lobby) {
 
 }
 
-// FIXME: client socket!!
-// TODO: do we also need to check if the lobby is already full?
-// TODO: log a time stamp?
+// FIXME: 12/11/2018 -- for now close all the other client connections except their main connection
 // add a player to the lobby structures
 u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
 
@@ -433,18 +415,29 @@ u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
             GameServerData *gameData = (GameServerData *) server->serverData;
             if (gameData) {
                 if (!player_isInLobby (player, lobby)) {
-                    // create a new player and add it to the server's players
-                    /* Player *p = newPlayer (gameData->playersPool, NULL, player);
-                    avl_insertNode (lobby->players, p);
-                    lobby->players_fds[lobby->players_nfds].fd = player->client->clientSock;
-                    lobby->players_fds[lobby->players_nfds].events = POLLIN;
-                    lobby->players_nfds++; */
+                    Player *p = avl_removeNode (gameData->players, player);
+                    if (p) {
+                        i32 client_sock_fd = player->client->active_connections[0];
 
-                    player->inLobby = true;
+                        avl_insertNode (lobby->players, p);
 
-                    player_unregisterFromServer (server, player);
+                        for (u32 i = 0; i < poll_n_fds; i++) {
+                            if (server->fds[i].fd == client_sock_fd) {
+                                server->fds[i].fd = -1;
+                                server->fds[i].events = -1;
+                            }
+                        } 
 
-                    return 0;
+                        lobby->players_fds[lobby->players_nfds].fd = client_sock_fd;
+                        lobby->players_fds[lobby->players_nfds].events = POLLIN;
+                        lobby->players_nfds++;
+
+                        player->inLobby = true;
+
+                        return 0;
+                    }
+
+                    else logMsg (stderr, ERROR, GAME, "Failed to get player from avl!");
                 }
             }
         }
@@ -465,7 +458,7 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
                 // make sure that the player is inside the lobby...
                 if (player_isInLobby (player, lobby)) {
                     // create a new player and add it to the server's players
-                    Player *p = newPlayer (gameData->playersPool, NULL, player);
+                    // Player *p = newPlayer (gameData->playersPool, NULL, player);
 
                     // remove from the poll fds
                     for (u8 i = 0; i < lobby->players_nfds; i++) {
@@ -480,9 +473,9 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
                     // delete the player from the lobby
                     avl_removeNode (lobby->players, player);
 
-                    p->inLobby = false;
+                    // p->inLobby = false;
 
-                    player_registerToServer (server, p);
+                    // player_registerToServer (server, p);
 
                     return 0;
                 }
@@ -494,28 +487,29 @@ u8 player_removeFromLobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
-// FIXME: client socket!!
-// search a player in the lobbys players avl by his sock's fd
-Player *getPlayerBySock (AVLTree *players, i32 fd) {
+// recursively get the player associated with the socket
+Player *getPlayerBySock (AVLNode *node, i32 socket_fd) {
 
-    if (players) {
-        Player *temp = (Player *) malloc (sizeof (Player));
-        temp->client = (Client *) malloc (sizeof (Client));
-        // temp->client->clientSock = fd;
+    if (node) {
+        Player *player = NULL;
 
-        void *data = avl_getNodeData (players, temp);
+        player = getPlayerBySock (node->right, socket_fd);
 
-        free (temp->client);
-        free (temp);
+        if (!player) {
+            if (node->id) {
+                player = (Player *) node->id;
+                
+                // search the socket fd in the clients active connections
+                for (int i = 0; i < player->client->n_active_cons; i++)
+                    if (socket_fd == player->client->active_connections[i])
+                        return player;
 
-        if (data) return (Player *) data;
-        else {
-            #ifdef DEBUG
-                logMsg (stderr, ERROR, SERVER, 
-                    createString ("Couldn't find a player associated with the passed fd: %i.", fd));
-            #endif
-            return NULL;
-        } 
+            }
+        }
+
+        if (!player) player = getPlayerBySock (node->left, socket_fd);
+
+        return player;
     }
 
     return NULL;
@@ -532,10 +526,9 @@ void broadcastToAllPlayers (AVLNode *node, Server *server, void *packet, size_t 
         // send packet to curent player
         if (node->id) {
             Player *player = (Player *) node->id;
-            // if (player) 
-                // server->protocol == IPPROTO_TCP ?
-                // tcp_sendPacket (player->client->clientSock, packet, packetSize, 0) :
-                // udp_sendPacket (server, packet, packetSize, player->client->address);
+            if (player) 
+                server_sendPacket (server, player->client->active_connections[0],
+                    player->client->address, packet, packetSize);
         }
 
         broadcastToAllPlayers (node->left, server, packet, packetSize);
@@ -602,7 +595,7 @@ void addPlayer (struct sockaddr_storage address) {
 
 #pragma region LOBBY
 
-void *createLobbyPacket (PacketType packetType, struct _Lobby *lobby, size_t packetSize);
+void *createLobbyPacket (RequestType reqType, struct _Lobby *lobby, size_t packetSize);
 void sendLobbyPacket (Server *server, Lobby *lobby);
 
 // we remove any fd that was set to -1 for what ever reason
@@ -626,6 +619,7 @@ void compressPlayers (Lobby *lobby) {
 
 void handleGamePacket (void *);
 
+// FIXME: create a similar logic to on hold players!!!
 // recieves packages from players inside the lobby
 void handlePlayersInLobby (void *data) {
 
@@ -691,7 +685,7 @@ void handlePlayersInLobby (void *data) {
                 if (rc == 0) break;
 
                 info = newGamePacketInfo (server, lobby, 
-                    getPlayerBySock (lobby->players, lobby->players_fds[i].fd), packetBuffer, rc);
+                    getPlayerBySock (lobby->players->root, lobby->players_fds[i].fd), packetBuffer, rc);
 
                 thpool_add_work (server->thpool, (void *) handleGamePacket, info);
             } while (true);
@@ -723,7 +717,7 @@ Lobby *newLobby (Server *server) {
 
                 // one time init values
                 if (lobby) {
-                    lobby->players = avl_init (playerComparator, deletePlayer);
+                    lobby->players = avl_init (player_comparator_client_id, deletePlayer);
                     lobby->gamePacketsPool = pool_init (deleteGamePacketInfo);
 
                     // add some packets to the pool
@@ -837,7 +831,10 @@ GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
     GameSettings *settings = (GameSettings *) malloc (sizeof (GameSettings));
 
     char *playerTimeout = getEntityValue (cfgEntity, "playerTimeout");
-    if (playerTimeout) settings->playerTimeout = atoi (playerTimeout);
+    if (playerTimeout) {
+        settings->playerTimeout = atoi (playerTimeout);
+        free (playerTimeout);
+    } 
     else {
         logMsg (stdout, WARNING, GAME, "No player timeout found in cfg. Using default.");        
         settings->playerTimeout = DEFAULT_PLAYER_TIMEOUT;
@@ -848,7 +845,10 @@ GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
     #endif
 
     char *fps = getEntityValue (cfgEntity, "fps");
-    if (fps) settings->fps = atoi (fps);
+    if (fps) {
+        settings->fps = atoi (fps);
+        free (fps);
+    } 
     else {
         logMsg (stdout, WARNING, GAME, "No fps found in cfg. Using default.");        
         settings->fps = DEFAULT_FPS;
@@ -859,7 +859,10 @@ GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
     #endif
 
     char *minPlayers = getEntityValue (cfgEntity, "minPlayers");
-    if (minPlayers) settings->minPlayers = atoi (minPlayers);
+    if (minPlayers) {
+        settings->minPlayers = atoi (minPlayers);
+        free (minPlayers);
+    } 
     else {
         logMsg (stdout, WARNING, GAME, "No min players found in cfg. Using default.");        
         settings->minPlayers = DEFAULT_MIN_PLAYERS;
@@ -869,8 +872,11 @@ GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
     logMsg (stdout, DEBUG_MSG, GAME, createString ("Min players: %i", settings->minPlayers));
     #endif
 
-    char *maxPlayers = getEntityValue (cfgEntity, "minPlayers");
-    if (maxPlayers) settings->maxPlayers = atoi (minPlayers);
+    char *maxPlayers = getEntityValue (cfgEntity, "maxPlayers");
+    if (maxPlayers) {
+        settings->maxPlayers = atoi (maxPlayers);
+        free (maxPlayers);
+    } 
     else {
         logMsg (stdout, WARNING, GAME, "No max players found in cfg. Using default.");        
         settings->maxPlayers = DEFAULT_MIN_PLAYERS;
@@ -882,15 +888,11 @@ GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
 
     settings->gameType = gameType;
 
-    if (playerTimeout) free (playerTimeout);
-    if (fps) free (fps);
-    if (minPlayers) free (minPlayers);
-    if (maxPlayers) free (maxPlayers);
-
     return settings;
 
 }
 
+// FIXME: lobby thread with a bool
 // TODO: add a timestamp of the creation of the lobby
 // creates a new lobby and inits his values with an owner and a game type
 Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
@@ -920,7 +922,6 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
     Lobby *lobby = newLobby (server);
 
     lobby->owner = owner;
-    if (lobby->settings) free (lobby->settings);
     lobby->settings = getGameSettings (data->gameSettingsConfig, gameType);
     if (!lobby->settings) {
         logMsg (stderr, ERROR, GAME, "Failed to get the settings for the new lobby!");
@@ -932,7 +933,7 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
     } 
 
     // init the clients/players structures inside the lobby
-    lobby->players = avl_init (playerComparator, deletePlayer);
+    lobby->players = avl_init (player_comparator_client_id, deletePlayer);
     lobby->players_nfds = 0;
     lobby->compress_players = false;
     lobby->pollTimeout = server->pollTimeout;    // inherit the poll timeout from server
@@ -941,15 +942,17 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
 
     if (!player_addToLobby (server, lobby, owner)) {
         lobby->inGame = false;
-
         lobby->isRunning = true;
 
         // add the lobby the server active ones
         insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), lobby);
 
         // create a unique thread to handle this lobby
-        ServerLobby sl = { .server = server, .lobby = lobby };
-        thpool_add_work (server->thpool, (void *) handlePlayersInLobby, &sl);
+        ServerLobby *sl = (ServerLobby *) malloc (sizeof (ServerLobby));
+        sl->server = server;
+        sl->lobby = lobby;
+
+        thpool_add_work (server->thpool, (void *) handlePlayersInLobby, sl);
 
         return lobby;
     }
@@ -1157,7 +1160,7 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
                     Player *temp = NULL;
                     u8 i = 0;
                     do {
-                        temp = getPlayerBySock (lobby->players, lobby->players_fds[i].fd);
+                        temp = getPlayerBySock (lobby->players->root, lobby->players_fds[i].fd);
                         if (temp) {
                             lobby->owner = temp;
                             size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
@@ -1648,15 +1651,19 @@ void handlePlayerInput () {
 
 // FIXME: serialize players inside the lobby
 // creates a lobby packet with the passed lobby info
-void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize) {
+void *createLobbyPacket (RequestType reqType, Lobby *lobby, size_t packetSize) {
 
     void *packetBuffer = malloc (packetSize);
     void *begin = packetBuffer;
     char *end = begin; 
 
     PacketHeader *header = (PacketHeader *) end;
+    initPacketHeader (header, GAME_PACKET, packetSize); 
     end += sizeof (PacketHeader);
-    initPacketHeader (header, packetType, packetSize); 
+
+    RequestData *reqdata = (RequestData *) end;
+    reqdata->type = reqType;
+    end += sizeof (RequestType);
 
     // serialized lobby data
     SLobby *slobby = (SLobby *) end;
@@ -1681,7 +1688,8 @@ void *createLobbyPacket (PacketType packetType, Lobby *lobby, size_t packetSize)
 void sendLobbyPacket (Server *server, Lobby *lobby) {
 
     if (lobby) {
-        size_t packetSize = sizeof (PacketHeader) + sizeof (SLobby) + lobby->players_nfds * sizeof (SPlayer);
+        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) +
+            sizeof (SLobby) + lobby->players_nfds * sizeof (SPlayer);
         void *lobbyPacket = createLobbyPacket (LOBBY_UPDATE, lobby, packetSize);
         if (lobbyPacket) {
             broadcastToAllPlayers (lobby->players->root, server, lobbyPacket, packetSize);
@@ -1698,7 +1706,7 @@ void sendLobbyPacket (Server *server, Lobby *lobby) {
 // TODO: how do we want to handle the leaderboards?
 
 /*** reqs outside a lobby ***/
-void gs_createLobby (Server *, Client *, GameType);
+void gs_createLobby (Server *, Client *, i32, GameType);
 void gs_joinLobby (Server *, Client *, GameType);
 
 /*** reqs from inside a lobby ***/
@@ -1707,15 +1715,16 @@ void gs_initGame (Server *, Player *, Lobby *);
 void gs_sendMsg (Server *, Player *, Lobby *, char *msg);
 
 // this is called from the main poll in a new thread
-void gs_handlePacket (PacketInfo *packetInfo) {
+void gs_handlePacket (PacketInfo *pack_info) {
 
     logMsg (stdout, DEBUG_MSG, GAME, "gs_handlePacket ()");
 
-    RequestData *reqData = (RequestData *) (packetInfo->packetData + sizeof (PacketHeader));
+    RequestData *reqData = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
     switch (reqData->type) {
         // TODO: get the correct game type from the packet
-        case LOBBY_CREATE: gs_createLobby (packetInfo->server, packetInfo->client, 0); break;
-        case LOBBY_JOIN: gs_joinLobby (packetInfo->server, packetInfo->client, 0); break;
+        case LOBBY_CREATE: 
+            gs_createLobby (pack_info->server, pack_info->client, pack_info->clientSock, ARCADE); break;
+        case LOBBY_JOIN: gs_joinLobby (pack_info->server, pack_info->client, ARCADE); break;
         default: break;
     }
 
@@ -1806,10 +1815,8 @@ void handleGamePacket (void *data) {
 
 /*** FROM OUTSIDE A LOBBY ***/
 
-// FIXME: get players by session or socket!!!
-
 // request from a from client to create a new lobby 
-void gs_createLobby (Server *server, Client *client, GameType gameType) {
+void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameType) {
 
     if (server && client) {
         #ifdef CERVER_DEBUG
@@ -1819,13 +1826,15 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
         GameServerData *gameData = (GameServerData *) server->serverData;
 
         // check if the client is associated with a player
-        // Player *owner = getPlayerBySock (gameData->players, client->clientSock);
-        Player *owner;
+        Player *owner = getPlayerBySock (gameData->players->root, client->active_connections[0]);
 
         // create new player data for the client
         if (!owner) {
-            owner = newPlayer (gameData->playersPool, client, NULL);
+            owner = newPlayer (gameData->playersPool, client);
             player_registerToServer (server, owner);
+
+            printf ("sock with request - %i\n", sock_fd);
+            printf ("active_cons[0] - %i\n", owner->client->active_connections[0]);
         } 
 
         // check that the owner isn't already in a lobby or game
@@ -1833,23 +1842,35 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
             #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "A player inside a lobby wanted to create a new lobby.");
             #endif
-            // FIXME:
-            // if (sendErrorPacket (server, owner->client, ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
-            //     #ifdef DEBUG
-            //     logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
-            //     #endif
-            // }
+            if (sendErrorPacket (server, sock_fd, client->address, 
+                ERR_CREATE_LOBBY, "Player is already in a lobby!")) {
+                #ifdef DEBUG
+                logMsg (stderr, ERROR, PACKET, "Failed to create & send error packet to client!");
+                #endif
+            }
             return;
         }
 
         Lobby *lobby = createLobby (server, owner, gameType);
         if (lobby) {
             #ifdef DEBUG
-                logMsg (stdout, GAME, NO_TYPE, "New lobby created.");
+                logMsg (stdout, SUCCESS, GAME, "New lobby created!");
             #endif  
 
+            printf ("sock with request - %i\n", sock_fd);
+            printf ("active_cons[0] - %i\n", owner->client->active_connections[0]);
+
             // send the lobby info to the owner -- we only have one player inside the lobby
-            sendLobbyPacket (server, lobby);
+            size_t lobby_packet_size = sizeof (PacketHeader) + sizeof (RequestData) +
+                sizeof (SLobby) + lobby->players_nfds * sizeof (SPlayer);
+            void *lobby_packet = createLobbyPacket (LOBBY_UPDATE, lobby, lobby_packet_size);
+            if (lobby_packet) {
+                if (server_sendPacket (server, sock_fd, owner->client->address, 
+                    lobby_packet, lobby_packet_size))
+                    logMsg (stderr, ERROR, PACKET, "Failed to send back lobby packet to owner!");
+                else logMsg (stdout, SUCCESS, PACKET, "Sent lobby packet to owner!");
+                free (lobby_packet);
+            }
 
             // TODO: do we wait for an ack packet from the client?
         }
@@ -1857,11 +1878,9 @@ void gs_createLobby (Server *server, Client *client, GameType gameType) {
         // there was an error creating the lobby
         else {
             logMsg (stderr, ERROR, GAME, "Failed to create a new game lobby.");
-
             // send feedback to the player
-            // FIXME:
-            // sendErrorPacket (server, owner->client, ERR_SERVER_ERROR, 
-            //     "Game server failed to create new lobby!");
+            sendErrorPacket (server, sock_fd, client->address, ERR_SERVER_ERROR, 
+                "Game server failed to create new lobby!");
         }
     }
 
@@ -1882,7 +1901,7 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
 
         // create new player data for the client
         if (!player) {
-            player = newPlayer (gameData->playersPool, client, NULL);
+            player = newPlayer (gameData->playersPool, client);
             player_registerToServer (server, player);
         } 
 
@@ -1914,8 +1933,9 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
             // errors are handled inisde the join lobby function
         }
 
+        // FIXME:
         // failed to find a lobby, so create a new one
-        else gs_createLobby (server, client, gameType);
+        // else gs_createLobby (server, client, gameType);
     }
 
 }

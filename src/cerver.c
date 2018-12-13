@@ -840,9 +840,13 @@ void authenticateClient (void *data) {
 
                         i32 idx = getFreePollSpot (pack_info->server);
                         if (idx > 0) {
+                            pack_info->server->fds[1].fd = -1;
+
                             pack_info->server->fds[idx].fd = pack_info->clientSock;
                             pack_info->server->fds[idx].events = POLLIN;
                             pack_info->server->nfds++;
+
+                            printf ("client %i new connection - idx: %i\n", pack_info->clientSock, idx);
                         }
 
                         client_delete_data (removeOnHoldClient (pack_info->server, 
@@ -852,6 +856,7 @@ void authenticateClient (void *data) {
                         logMsg (stdout, DEBUG_MSG, CLIENT, 
                             createString ("Registered a new connection to client with session id: %s",
                             pack_info->client->sessionID));
+                        printf ("sessionId: %s\n", pack_info->client->sessionID);
                         #endif
                     }
 
@@ -1105,6 +1110,8 @@ void handleRecvBuffer (Server *server, i32 sock_fd, char *buffer, size_t total_s
                 packet_data = (char *) calloc (packet_size, sizeof (char));
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
+
+                printf ("sock_fd - %i\n", sock_fd);
 
                 Client *c = onHold ? getClientBySocket (server->onHoldClients->root, sock_fd) :
                     getClientBySocket (server->clients->root, sock_fd);
