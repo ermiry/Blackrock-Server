@@ -28,11 +28,11 @@ char *client_getConnectionValues (i32 fd, const struct sockaddr_storage address)
 
 }
 
-void client_set_sessionID (Client *client, char *sessionID) {
+void client_set_sessionID (Client *client, const char *sessionID) {
 
     if (client && sessionID) {
         if (client->sessionID) free (client->sessionID);
-        client->sessionID = sessionID;
+        client->sessionID = createString ("%s", sessionID);
     }
 
 }

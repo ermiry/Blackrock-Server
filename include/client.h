@@ -48,7 +48,7 @@ extern char *client_getConnectionValues (i32 fd, const struct sockaddr_storage a
 
 extern void client_closeConnection (struct _Server *server, Client *client);
 
-extern void client_set_sessionID (Client *client, char *sessionID);
+extern void client_set_sessionID (Client *client, const char *sessionID);
 
 extern Client *getClientBySocket (AVLNode *node, i32 socket_fd);
 extern Client *getClientBySession (AVLTree *clients, char *sessionID);

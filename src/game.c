@@ -406,7 +406,6 @@ bool player_isInLobby (Player *player, Lobby *lobby) {
 
 }
 
-// FIXME: 12/11/2018 -- for now close all the other client connections except their main connection
 // add a player to the lobby structures
 u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
 
@@ -421,12 +420,12 @@ u8 player_addToLobby (Server *server, Lobby *lobby, Player *player) {
 
                         avl_insertNode (lobby->players, p);
 
-                        for (u32 i = 0; i < poll_n_fds; i++) {
-                            if (server->fds[i].fd == client_sock_fd) {
-                                server->fds[i].fd = -1;
-                                server->fds[i].events = -1;
-                            }
-                        } 
+                        // for (u32 i = 0; i < poll_n_fds; i++) {
+                        //     if (server->fds[i].fd == client_sock_fd) {
+                        //         server->fds[i].fd = -1;
+                        //         server->fds[i].events = -1;
+                        //     }
+                        // } 
 
                         lobby->players_fds[lobby->players_nfds].fd = client_sock_fd;
                         lobby->players_fds[lobby->players_nfds].events = POLLIN;
@@ -952,7 +951,7 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
         sl->server = server;
         sl->lobby = lobby;
 
-        thpool_add_work (server->thpool, (void *) handlePlayersInLobby, sl);
+        // thpool_add_work (server->thpool, (void *) handlePlayersInLobby, sl);
 
         return lobby;
     }
@@ -964,7 +963,9 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
         pool_push (data->lobbyPool, lobby);      // dispose the lobby
 
         return NULL;
-    }
+    } 
+
+    return lobby;
 
 }
 
@@ -1835,6 +1836,9 @@ void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameT
 
             printf ("sock with request - %i\n", sock_fd);
             printf ("active_cons[0] - %i\n", owner->client->active_connections[0]);
+
+            for (int i = 0; i < 5; i++)
+                printf ("server->fds[%i] = %i\n", i, server->fds[i].fd);
         } 
 
         // check that the owner isn't already in a lobby or game
@@ -1859,6 +1863,9 @@ void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameT
 
             printf ("sock with request - %i\n", sock_fd);
             printf ("active_cons[0] - %i\n", owner->client->active_connections[0]);
+
+            for (int i = 0; i < 5; i++)
+                printf ("server->fds[%i] = %i\n", i, server->fds[i].fd);
 
             // send the lobby info to the owner -- we only have one player inside the lobby
             size_t lobby_packet_size = sizeof (PacketHeader) + sizeof (RequestData) +

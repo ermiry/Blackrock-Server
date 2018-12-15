@@ -734,8 +734,8 @@ u8 defaultAuthMethod (void *data) {
                 Client *c = getClientBySession (pack_info->server->clients, tokenData->token);
                 // if we found a client, auth is success
                 if (c) {
-                    client_set_sessionID (pack_info->client, 
-                        createString ("%s", tokenData->token));
+                    printf ("token data: %s\n", tokenData->token);
+                    client_set_sessionID (pack_info->client, tokenData->token);
                     return 0;
                 } 
 
@@ -840,11 +840,14 @@ void authenticateClient (void *data) {
 
                         i32 idx = getFreePollSpot (pack_info->server);
                         if (idx > 0) {
-                            pack_info->server->fds[1].fd = -1;
+                            // pack_info->server->fds[1].fd = -1;
 
                             pack_info->server->fds[idx].fd = pack_info->clientSock;
                             pack_info->server->fds[idx].events = POLLIN;
                             pack_info->server->nfds++;
+
+                            for (int i = 0; i < 5; i++)
+                                printf ("server->fds[%i] = %i\n", i, pack_info->server->fds[i].fd);
 
                             printf ("client %i new connection - idx: %i\n", pack_info->clientSock, idx);
                         }
@@ -1297,9 +1300,9 @@ u8 server_poll (Server *server) {
 
         // if poll has timed out, just continue to the next loop... 
         if (poll_retval == 0) {
-            #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
-            #endif
+            // #ifdef DEBUG
+            // logMsg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
+            // #endif
             continue;
         }
 
@@ -1974,16 +1977,17 @@ u8 cerver_teardown (Server *server) {
     // if the server admin added a destroy server data action...
     if (server->destroyServerData) server->destroyServerData (server);
     else {
+        // FIXME:
         // we use the default destroy server data function
-        switch (server->type) {
-            case GAME_SERVER: 
-                if (!destroyGameServer (server))
-                    logMsg (stdout, SUCCESS, SERVER, "Done clearing game server data!"); 
-                break;
-            case FILE_SERVER: break;
-            case WEB_SERVER: break;
-            default: break; 
-        }
+        // switch (server->type) {
+        //     case GAME_SERVER: 
+        //         if (!destroyGameServer (server))
+        //             logMsg (stdout, SUCCESS, SERVER, "Done clearing game server data!"); 
+        //         break;
+        //     case FILE_SERVER: break;
+        //     case WEB_SERVER: break;
+        //     default: break; 
+        // }
     }
 
     // clean common server structs
