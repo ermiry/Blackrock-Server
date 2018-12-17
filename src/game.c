@@ -1670,6 +1670,7 @@ void *createLobbyPacket (RequestType reqType, Lobby *lobby, size_t packetSize) {
     SLobby *slobby = (SLobby *) end;
     end += sizeof (SLobby);
 
+    slobby->settings.gameType = lobby->settings->gameType;
     slobby->settings.fps = lobby->settings->fps;
     slobby->settings.minPlayers = lobby->settings->minPlayers;
     slobby->settings.maxPlayers = lobby->settings->maxPlayers;
@@ -1703,8 +1704,6 @@ void sendLobbyPacket (Server *server, Lobby *lobby) {
 }
 
 /*** Prototypes of public game server functions ***/
-
-// TODO: how do we want to handle the leaderboards?
 
 /*** reqs outside a lobby ***/
 void gs_createLobby (Server *, Client *, i32, GameType);
@@ -1833,12 +1832,6 @@ void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameT
         if (!owner) {
             owner = newPlayer (gameData->playersPool, client);
             player_registerToServer (server, owner);
-
-            printf ("sock with request - %i\n", sock_fd);
-            printf ("active_cons[0] - %i\n", owner->client->active_connections[0]);
-
-            for (int i = 0; i < 5; i++)
-                printf ("server->fds[%i] = %i\n", i, server->fds[i].fd);
         } 
 
         // check that the owner isn't already in a lobby or game
@@ -1859,13 +1852,7 @@ void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameT
         if (lobby) {
             #ifdef DEBUG
                 logMsg (stdout, SUCCESS, GAME, "New lobby created!");
-            #endif  
-
-            printf ("sock with request - %i\n", sock_fd);
-            printf ("active_cons[0] - %i\n", owner->client->active_connections[0]);
-
-            for (int i = 0; i < 5; i++)
-                printf ("server->fds[%i] = %i\n", i, server->fds[i].fd);
+            #endif 
 
             // send the lobby info to the owner -- we only have one player inside the lobby
             size_t lobby_packet_size = sizeof (PacketHeader) + sizeof (RequestData) +

@@ -139,6 +139,7 @@ extern u8 cerver_teardown (Server *);
 extern Server *cerver_restartServer (Server *);
 
 extern void session_setIDGenerator (Server *server, Action idGenerator);
+extern char *session_default_generate_id (i32 fd, const struct sockaddr_storage address);
 
 #pragma endregion
 
@@ -285,8 +286,8 @@ extern void initPacketHeader (void *header, PacketType type, u32 packetSize);
 extern void *generatePacket (PacketType packetType, size_t packetSize);
 extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType);
 
-// FIXME:
-// extern PacketInfo *newPacketInfo (Server *server, Client *client, char *packetData, size_t packetSize);
+extern PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
+    char *packetData, size_t packetSize);
 
 extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
 extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 

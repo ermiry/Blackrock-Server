@@ -167,4 +167,12 @@ extern void deleteBrGameData (void *data);
 
 /*** BLACKROCK SERIALIZED DATA ***/
 
+typedef struct BlackCredentials {
+
+    bool login;
+    char username[64];
+    char password[64];
+
+} BlackCredentials;
+
 #endif

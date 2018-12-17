@@ -21,6 +21,136 @@
 #include "blackrock/blackrock.h"      // blackrock dependent types --> same as in the client
 #include "blackrock/map.h"
 
+#pragma region BLACKROCK PLAYER DATA
+
+const char *playersDBPath = "./data/players.db";
+sqlite3 *playersDB;
+
+// FIXME: create the players db
+
+// TODO: try loading the db from the backup sever if we don't find it
+u8 connectPlayersDB (void) {
+
+    if (sqlite3_open (playersDBPath, &playersDB) != SQLITE_OK) {
+        // TODO: try loading the file from a backup
+        return 1;
+    }
+
+    return 0;
+
+}
+
+// FIXME:
+u8 blackrock_check_credentials (BlackCredentials *black_credentials) {
+
+    if (black_credentials) {
+        // check for a user in our database based on the credentials
+        if (black_credentials->login) {
+
+        }
+
+        // we have a new user, so add it to the database
+        else {
+
+        }
+    }
+
+    return 1;
+
+}
+
+u8 blackrock_authMethod (void *data) {
+
+    if (data) {
+        PacketInfo *pack_info = (PacketInfo *) data;
+
+        // check if the server supports sessions
+        if (pack_info->server->useSessions) {
+            // check if we have recieved a token or auth credentials
+            bool isToken = false;
+            if (pack_info->packetSize < (sizeof (PacketHeader) + sizeof (RequestData) + 
+                sizeof (BlackCredentials)))
+                isToken = true;
+
+            if (isToken) {
+                char *end = pack_info->packetData;
+                Token *tokenData = (Token *) (end + sizeof (PacketHeader) + sizeof (RequestData));
+
+                // verify the token and search for a client with that session id
+                Client *c = getClientBySession (pack_info->server->clients, tokenData->token);
+                if (c) {
+                    client_set_sessionID (pack_info->client, tokenData->token);
+                    return 0;
+                }
+
+                else {
+                    #ifdef CERVER_DEBUG
+                    logMsg (stderr, ERROR, CLIENT, "Wrong session id provided by client!");
+                    #endif
+                    return 1;      // the session id is wrong -> error!
+                }
+            }
+
+            // we have recieved blackrock credentials, so validate them
+            else {
+                char *end = pack_info->packetData;
+                BlackCredentials *black_credentials = (BlackCredentials *) (end + sizeof (PacketHeader) +
+                    sizeof (RequestData));
+
+                if (!blackrock_check_credentials (black_credentials)) {
+                    char *sessionID = session_default_generate_id (pack_info->clientSock,
+                        pack_info->client->address);
+
+                    if (sessionID) {
+                        #ifdef CERVER_DEBUG
+                        logMsg (stdout, DEBUG_MSG, CLIENT, 
+                            createString ("Generated client session id: %s", sessionID));
+                        #endif
+
+                        client_set_sessionID (pack_info->client, sessionID);
+
+                        return 0;
+                    }
+
+                    else logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+                }
+
+                // FIXME: give more feedback
+                // wrong credentials
+                else {
+                    // FIXME:
+                    // #ifdef CERVER_DEBUG
+                    // logMsg (stderr, ERROR, NO_TYPE, 
+                    //     createString ("Default auth: %i is a wrong autentication code!", 
+                    //     authData->code));
+                    // #endif
+                    return 1;
+                }
+            }
+        }
+
+        // if not, just check for client credentials
+        else {
+            char *end = pack_info->packetData;
+            BlackCredentials *black_credentials = (BlackCredentials *) (end + sizeof (PacketHeader) +
+                sizeof (RequestData));
+
+            // FIXME: verify the credentials
+            // FIXME: check if they are signing in or they are a new user
+
+            bool success_auth = true;
+
+            if (success_auth) return 0;
+            else return 1;
+        }
+    }
+
+    return 1;
+
+}
+
+#pragma endregion
+
 #pragma region BLACKROCK INIT
 
 const char *itemsDBPath = "./data/items.db";
@@ -181,6 +311,13 @@ u8 connectEnemiesDB (void) {
 // we will handle it as an error!
 // we connect to our dbs and get any other data that we need
 u8 blackrock_loadGameData (void) {
+
+    // connect to the players db
+    if (!connectPlayersDB ()) {
+        #ifdef DEBUG
+            logMsg (stdout, DEBUG_MSG, GAME, "Connedted to the players db!");
+        #endif
+    }
 
     // connect to the items db
     if (sqlite3_open (itemsDBPath, &itemsDB) != SQLITE_OK) {

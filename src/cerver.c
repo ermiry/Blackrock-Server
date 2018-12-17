@@ -734,7 +734,6 @@ u8 defaultAuthMethod (void *data) {
                 Client *c = getClientBySession (pack_info->server->clients, tokenData->token);
                 // if we found a client, auth is success
                 if (c) {
-                    printf ("token data: %s\n", tokenData->token);
                     client_set_sessionID (pack_info->client, tokenData->token);
                     return 0;
                 } 
@@ -840,17 +839,13 @@ void authenticateClient (void *data) {
 
                         i32 idx = getFreePollSpot (pack_info->server);
                         if (idx > 0) {
-                            // pack_info->server->fds[1].fd = -1;
-
                             pack_info->server->fds[idx].fd = pack_info->clientSock;
                             pack_info->server->fds[idx].events = POLLIN;
                             pack_info->server->nfds++;
-
-                            for (int i = 0; i < 5; i++)
-                                printf ("server->fds[%i] = %i\n", i, pack_info->server->fds[i].fd);
-
-                            printf ("client %i new connection - idx: %i\n", pack_info->clientSock, idx);
                         }
+                        
+                        // FIXME: how to better handle this error?
+                        else logMsg (stderr, ERROR, NO_TYPE, "Failed to get new main poll idx!");
 
                         client_delete_data (removeOnHoldClient (pack_info->server, 
                             pack_info->client, pack_info->clientSock));
@@ -1113,8 +1108,6 @@ void handleRecvBuffer (Server *server, i32 sock_fd, char *buffer, size_t total_s
                 packet_data = (char *) calloc (packet_size, sizeof (char));
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
-
-                printf ("sock_fd - %i\n", sock_fd);
 
                 Client *c = onHold ? getClientBySocket (server->onHoldClients->root, sock_fd) :
                     getClientBySocket (server->clients->root, sock_fd);
@@ -1846,9 +1839,10 @@ u8 cerver_startServer (Server *server) {
     // if we have a game server, we might wanna load game data -> set by server admin
     if (server->type == GAME_SERVER) {
         GameServerData *gameData = (GameServerData *) server->serverData;
-        if (gameData && gameData->loadGameData) 
+        if (gameData && gameData->loadGameData) {
             if (gameData->loadGameData ()) 
                 logMsg (stderr, ERROR, GAME, "Failed to load game data!");
+        }
 
         else logMsg (stdout, WARNING, GAME, "Game server doesn't have a reference to a game data!");
     }
