@@ -138,6 +138,8 @@ extern u8 cerver_shutdownServer (Server *);
 extern u8 cerver_teardown (Server *);
 extern Server *cerver_restartServer (Server *);
 
+extern void cerver_set_auth_method (Server *server, delegate authMethod);
+
 extern void session_setIDGenerator (Server *server, Action idGenerator);
 extern char *session_default_generate_id (i32 fd, const struct sockaddr_storage address);
 

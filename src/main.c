@@ -39,6 +39,9 @@ int main (void) {
     gameServer = cerver_createServer (NULL, GAME_SERVER, "Black-Game-Server");
 
     if (gameServer) {
+        // set our own functions to authenticate our clients
+        cerver_set_auth_method (gameServer, blackrock_authMethod);
+
         // set our own functions to load and delete global game data
         gs_set_loadGameData (gameServer, blackrock_loadGameData);
         gs_set_deleteGameData (gameServer, blackrock_deleteGameData);

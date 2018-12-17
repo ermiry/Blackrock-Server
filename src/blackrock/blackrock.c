@@ -1,6 +1,10 @@
 // Here all goes the independent logic of the Blackrock game!
 // This is a sample file of how to use the framework with your own game functions
 
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -26,7 +30,25 @@
 const char *playersDBPath = "./data/players.db";
 sqlite3 *playersDB;
 
-// FIXME: create the players db
+// TODO: add friends and player stats!!
+// TODO: how do we want to manag profiles?
+// this is only used for development purposes
+void createPlayersDB (void) {
+
+    char *err_msg = 0;
+
+    char *sql = "DROP TABLE IF EXISTS Players;"
+                "CREATE TABLE Players(Id INT, Username TEXT, Password TEXT)";
+
+    if (sqlite3_exec (playersDB, sql, 0, 0, &err_msg) != SQLITE_OK) {
+        fprintf (stderr, "Error! Failed to create Players table!\n");
+        fprintf (stderr, "SQL error: %s\n", err_msg);
+        sqlite3_free (err_msg);
+    }
+
+    else logMsg (stdout, SUCCESS, NO_TYPE, "Created players db table!");
+
+}
 
 // TODO: try loading the db from the backup sever if we don't find it
 u8 connectPlayersDB (void) {
@@ -36,7 +58,173 @@ u8 connectPlayersDB (void) {
         return 1;
     }
 
+    createPlayersDB ();
+
     return 0;
+
+}
+
+// FIXME: we need to store the new value in a file!!!
+// FIXME: how do we want to mange unique ids?
+u32 player_profile_id = 0;
+
+u8 player_profile_add_to_db (BlackCredentials *black_credentials) {
+
+    if (black_credentials) {
+        if (black_credentials->username && black_credentials->password) {
+            char *err_msg = NULL;
+            char *query = NULL;
+
+            player_profile_id += 1;
+
+            // prepare the query
+            asprintf (&query, "insert into Players (id, username, password) values ('%d', '%s', '%s');", 
+                player_profile_id, black_credentials->username, black_credentials->password);
+            
+            // prepare the statement
+            sqlite3_stmt *stmt;
+            sqlite3_prepare_v2 (playersDB, query, strlen(query), &stmt, NULL);
+            
+            // execute the statement
+            int rc = sqlite3_step (stmt);
+            
+            if (rc != SQLITE_DONE) {
+                logMsg (stderr, ERROR, GAME, "Failed to insert new player into db!");
+                fprintf (stderr, "Error: %s\n", sqlite3_errmsg (playersDB));
+                free(query);
+                return 1;
+            }
+            
+            sqlite3_finalize(stmt);
+            free(query);
+
+            return 0;
+        }
+    }
+
+    return 1;
+
+}
+
+u8 player_profile_remove_from_db_by_id (const int id) {
+
+    char *err_msg = NULL;
+    char *query = NULL;
+
+    // prepare the query
+    asprintf (&query, "delete from Players where id = '%i';", id);
+    
+    // prepare the statement
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(playersDB, query, strlen(query), &stmt, NULL);
+    
+    // execute the statement
+    int rc = sqlite3_step (stmt);
+    
+    if (rc != SQLITE_DONE) {
+        logMsg (stderr, ERROR, GAME, "Failed to remove new player into db!");
+        fprintf (stderr, "Error: %s\n", sqlite3_errmsg (playersDB));
+        free(query);
+        return 1;
+    }
+    
+    sqlite3_finalize(stmt);
+    free(query);
+
+    return 0;
+
+}
+
+// TODO: add update password function!
+
+typedef struct PlayerProfile {
+
+    u32 profileID;
+    char *username;
+    char *password;
+
+} PlayerProfile;
+
+PlayerProfile *player_profile_get_from_db_by_id (const int id) {
+
+    // get the db data
+    sqlite3_stmt *stmt;
+    char *sql = "SELECT * FROM Players WHERE Id = ?";
+
+    if (sqlite3_prepare_v2 (playersDB, sql, -1, &stmt, 0) == SQLITE_OK) 
+        sqlite3_bind_int (stmt, 1, id);
+    else {
+        logMsg (stderr, ERROR, NO_TYPE, "Failed to prepare sqlite stmt!");
+        return NULL;
+    } 
+
+    sqlite3_step (stmt);
+
+    PlayerProfile *profile = NULL;
+
+    const char *found_username = sqlite3_column_text (stmt, 1);
+    if (!found_username) {
+        logMsg (stderr, ERROR, GAME, 
+            createString ("Failed to get player with id: %i!", id));
+        sqlite3_finalize(stmt);
+    }
+
+    else {
+        profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
+        if (profile) {
+            profile->profileID = id;
+            profile->username = (char *) calloc (64, sizeof (char));
+            strcpy (profile->username, found_username);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return profile;
+
+}
+
+PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
+
+    if (username) {
+        char *err_msg = NULL;
+        char *query = NULL;
+
+        // prepare the query
+        asprintf (&query, "SELECT * FROM Players WHERE Username = '%s'", username);
+        
+        // prepare the statement
+        sqlite3_stmt *stmt;
+        sqlite3_prepare_v2(playersDB, query, strlen(query), &stmt, NULL);
+        
+        // execute the statement
+        sqlite3_step (stmt);
+
+        PlayerProfile *profile = NULL;
+
+        const char *found_username = sqlite3_column_text (stmt, 1);
+        if (!found_username) {
+            logMsg (stderr, ERROR, GAME, 
+                createString ("Failed to get player with username: %s!", username));
+            sqlite3_finalize(stmt);
+        }
+
+        else {
+            profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
+            if (profile) {
+                profile->profileID = sqlite3_column_int (stmt, 0);
+                profile->username = (char *) calloc (64, sizeof (char));
+                strcpy (profile->username, found_username);
+                profile->password = createString ("%s", sqlite3_column_text (stmt, 2));
+            }
+        }
+        
+        sqlite3_finalize(stmt);
+        free(query);
+
+        return profile;
+    }
+
+    return NULL;
 
 }
 
@@ -44,9 +232,25 @@ u8 connectPlayersDB (void) {
 u8 blackrock_check_credentials (BlackCredentials *black_credentials) {
 
     if (black_credentials) {
+        printf ("check credentials...\n");
+
         // check for a user in our database based on the credentials
         if (black_credentials->login) {
+            PlayerProfile *search_profile = 
+                player_profile_get_from_db_by_username (black_credentials->username);
 
+            // FIXME: give feedback to the client!
+
+            if (search_profile) {
+                logMsg (stdout, SUCCESS, GAME, "Got a profile from the db!");
+                // TODO: check the password
+                if (!strcmp (black_credentials->password, search_profile->password)) return 0;
+                else return 1;
+            }
+
+            else {
+                logMsg (stderr, ERROR, GAME, "Failed finding player profile!");
+            }
         }
 
         // we have a new user, so add it to the database
@@ -317,6 +521,17 @@ u8 blackrock_loadGameData (void) {
         #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "Connedted to the players db!");
         #endif
+
+        BlackCredentials test;
+        strcpy (test.username, "erick");
+        strcpy (test.password, "hola");
+
+        player_profile_add_to_db (&test);
+        sleep (1);
+        player_profile_get_from_db_by_id (1);
+        player_profile_get_from_db_by_id (2);
+
+        player_profile_get_from_db_by_username ("erick");
     }
 
     // connect to the items db

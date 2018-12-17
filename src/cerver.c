@@ -992,6 +992,12 @@ void handleOnHoldPacket (void *data) {
 
 }
 
+void cerver_set_auth_method (Server *server, delegate authMethod) {
+
+    if (server) server->auth.authenticate = authMethod;
+
+}
+
 #pragma endregion
 
 /*** CONNECTION HANDLER ***/

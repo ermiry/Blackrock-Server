@@ -165,6 +165,8 @@ extern u8 blackrock_init_arcade (void *data);
 
 extern void deleteBrGameData (void *data);
 
+extern u8 blackrock_authMethod (void *data);
+
 /*** BLACKROCK SERIALIZED DATA ***/
 
 typedef struct BlackCredentials {
