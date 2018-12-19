@@ -125,6 +125,33 @@ typedef struct Combat  {
 
 } Combat;
 
+/*** Players ***/
+
+#define SQL_PROFILE_ID_COL          0
+#define SQL_USERNAME_COL            1
+#define SQL_PASSWORD_COL            2
+#define SQL_KILLS_COL               3
+#define SQL_GAMES_PLAYED_COL        4
+#define SQL_HIGHSCORE_COL           5
+#define SQL_N_FRIENDS_COL           6
+#define SQL_FRIENDS_COL             7
+
+typedef struct PlayerProfile {
+
+    u32 profileID;
+    char *username;
+    char *password;
+
+    u32 kills;
+    u32 gamesPlayed;
+    u32 highscore;
+
+    u32 n_friends;
+    char *friends;
+    // char *clan;
+
+} PlayerProfile;
+
 /*** GAME DATA ***/
 
 typedef struct Level {
@@ -176,5 +203,18 @@ typedef struct BlackCredentials {
     char password[64];
 
 } BlackCredentials;
+
+typedef struct SPlayerProfile {
+
+    u32 profileID;
+    char username[64];
+
+    u32 kills;
+    u32 gamesPlayed;
+
+    // char friends[64];
+    // char clan[64];
+
+} SPlayerProfile;
 
 #endif

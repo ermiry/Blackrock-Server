@@ -577,14 +577,15 @@ u8 handleOnHoldClients (void *data) {
         // poll failed
         if (poll_retval < 0) {
             logMsg (stderr, ERROR, SERVER, "On hold poll failed!");
+            server->holdingClients = false;
             break;
         }
 
         // if poll has timed out, just continue to the next loop... 
         if (poll_retval == 0) {
-            #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, SERVER, "On hold poll timeout.");
-            #endif
+            // #ifdef CERVER_DEBUG
+            // logMsg (stdout, DEBUG_MSG, SERVER, "On hold poll timeout.");
+            // #endif
             continue;
         }
 
@@ -1294,6 +1295,7 @@ u8 server_poll (Server *server) {
         if (poll_retval < 0) {
             logMsg (stderr, ERROR, SERVER, "Main server poll failed!");
             perror ("Error");
+            server->isRunning = false;
             break;
         }
 
@@ -1991,8 +1993,7 @@ u8 cerver_teardown (Server *server) {
     }
 
     // clean common server structs
-    // FIXME: 25/11/2018 -- 23:50 - getting a seg fault!!
-    // cleanUpClients (server);
+    cleanUpClients (server);
     #ifdef CERVER_DEBUG
         logMsg (stdout, DEBUG_MSG, SERVER, "Done cleaning up clients.");
     #endif

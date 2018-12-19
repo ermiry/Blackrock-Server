@@ -25,20 +25,33 @@
 #include "blackrock/blackrock.h"      // blackrock dependent types --> same as in the client
 #include "blackrock/map.h"
 
+#pragma region BLACKROCK SERIALIZATION 
+
+// FIXME:
+SPlayerProfile *black_serialize_player_profile (PlayerProfile *profile) {
+
+    if (profile) {
+
+    }
+
+}
+
+#pragma endregion
+
 #pragma region BLACKROCK PLAYER DATA
 
 const char *playersDBPath = "./data/players.db";
 sqlite3 *playersDB;
 
-// TODO: add friends and player stats!!
-// TODO: how do we want to manag profiles?
 // this is only used for development purposes
 void createPlayersDB (void) {
 
     char *err_msg = 0;
 
     char *sql = "DROP TABLE IF EXISTS Players;"
-                "CREATE TABLE Players(Id INT, Username TEXT, Password TEXT)";
+                "CREATE TABLE Players(Id INT, Username TEXT, Password TEXT,"
+                "Kills INT, GamesPlayed INT, HighScore INT,"
+                "NoFriends INT, Friends TEXT)";
 
     if (sqlite3_exec (playersDB, sql, 0, 0, &err_msg) != SQLITE_OK) {
         fprintf (stderr, "Error! Failed to create Players table!\n");
@@ -78,7 +91,8 @@ u8 player_profile_add_to_db (BlackCredentials *black_credentials) {
             player_profile_id += 1;
 
             // prepare the query
-            asprintf (&query, "insert into Players (id, username, password) values ('%d', '%s', '%s');", 
+            asprintf (&query, "insert into Players (id, username, password, kills, gamesPlayed, highscore, nofriends, friends)"
+                "values ('%d', '%s', '%s', 0, 0, 0, 0, 0);", 
                 player_profile_id, black_credentials->username, black_credentials->password);
             
             // prepare the statement
@@ -135,16 +149,6 @@ u8 player_profile_remove_from_db_by_id (const int id) {
 
 }
 
-// TODO: add update password function!
-
-typedef struct PlayerProfile {
-
-    u32 profileID;
-    char *username;
-    char *password;
-
-} PlayerProfile;
-
 PlayerProfile *player_profile_get_from_db_by_id (const int id) {
 
     // get the db data
@@ -173,8 +177,13 @@ PlayerProfile *player_profile_get_from_db_by_id (const int id) {
         profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
         if (profile) {
             profile->profileID = id;
-            profile->username = (char *) calloc (64, sizeof (char));
-            strcpy (profile->username, found_username);
+            profile->username = createString ("%s", sqlite3_column_text (stmt, SQL_USERNAME_COL));
+            profile->password = createString ("%s", sqlite3_column_text (stmt, SQL_PASSWORD_COL));
+            profile->kills = sqlite3_column_int (stmt, SQL_KILLS_COL);
+            profile->gamesPlayed = sqlite3_column_int (stmt, SQL_GAMES_PLAYED_COL);
+            profile->highscore = sqlite3_column_int (stmt, SQL_HIGHSCORE_COL);
+            profile->n_friends = sqlite3_column_int (stmt, SQL_N_FRIENDS_COL);
+            profile->friends = createString ("%s", sqlite3_column_text (stmt, SQL_FRIENDS_COL));
         }
     }
 
@@ -196,8 +205,7 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
         sqlite3_stmt *stmt;
         sqlite3_prepare_v2(playersDB, query, strlen(query), &stmt, NULL);
         
-        // execute the statement
-        sqlite3_step (stmt);
+        sqlite3_step (stmt);    // execute the statement
 
         PlayerProfile *profile = NULL;
 
@@ -211,10 +219,15 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
         else {
             profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
             if (profile) {
-                profile->profileID = sqlite3_column_int (stmt, 0);
+                profile->profileID = sqlite3_column_int (stmt, SQL_PROFILE_ID_COL);
                 profile->username = (char *) calloc (64, sizeof (char));
                 strcpy (profile->username, found_username);
-                profile->password = createString ("%s", sqlite3_column_text (stmt, 2));
+                profile->password = createString ("%s", sqlite3_column_text (stmt, SQL_PASSWORD_COL));
+                profile->kills = sqlite3_column_int (stmt, SQL_KILLS_COL);
+                profile->gamesPlayed = sqlite3_column_int (stmt, SQL_GAMES_PLAYED_COL);
+                profile->highscore = sqlite3_column_int (stmt, SQL_HIGHSCORE_COL);
+                profile->n_friends = sqlite3_column_int (stmt, SQL_N_FRIENDS_COL);
+                profile->friends = createString ("%s", sqlite3_column_text (stmt, SQL_FRIENDS_COL));
             }
         }
         
@@ -227,6 +240,9 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
     return NULL;
 
 }
+
+// TODO: 
+u8 player_profile_update_password (const char *new_password) {}
 
 // FIXME: we need to send back the client our profile information!!
 u8 blackrock_check_credentials (BlackCredentials *black_credentials) {
@@ -348,6 +364,10 @@ u8 blackrock_authMethod (void *data) {
     return 1;
 
 }
+
+// TODO: add functions to update our game stats
+// TODO: add functions to add and remove friends from our list
+// TODO: how do we want to manage friends requests?
 
 #pragma endregion
 
