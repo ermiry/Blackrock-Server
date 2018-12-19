@@ -6,7 +6,7 @@ PTHREAD := -l pthread
 SQLITE3 := -l sqlite3
 
 # print additional information
-DEFINES = -D CERVER_DEBUG -D DEBUG -D CERVER_STATS
+DEFINES = -D CERVER_DEBUG -D DEBUG -D CERVER_STATS -D BLACK_DEBUG
 
 # run from parent folder
 RUN_BIN = -D RUN_FROM_BIN

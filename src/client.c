@@ -311,11 +311,13 @@ Client *client_unregisterFromServer (Server *server, Client *client) {
     if (server && client) {
         Client *c = avl_removeNode (server->clients, client);
         if (c) {
-            for (u8 i = 0; i < client->n_active_cons; i++) {
-                for (u8 j = 0; j < poll_n_fds; j++) {
-                    if (server->fds[j].fd == client->active_connections[i]) {
-                        server->fds[j].fd = -1;
-                        server->fds[j].events = -1;
+            if (client->active_connections) {
+                for (u8 i = 0; i < client->n_active_cons; i++) {
+                    for (u8 j = 0; j < poll_n_fds; j++) {
+                        if (server->fds[j].fd == client->active_connections[i]) {
+                            server->fds[j].fd = -1;
+                            server->fds[j].events = -1;
+                        }
                     }
                 }
             }
@@ -336,7 +338,6 @@ Client *client_unregisterFromServer (Server *server, Client *client) {
 
 }
 
-// FIXME: we need to update the server main poll structures!!!
 // disconnect a client from the server and take it out from the server's clients and 
 void client_closeConnection (Server *server, Client *client) {
 

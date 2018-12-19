@@ -219,10 +219,10 @@ typedef enum PacketType {
 
 typedef struct PacketHeader {
 
-	uint32_t protocolID;
+    ProtocolId protocolID;
 	Version protocolVersion;
 	PacketType packetType;
-    u32 packetSize;             // expected packet size
+    size_t packetSize;             // expected packet size
 
 } PacketHeader;
 

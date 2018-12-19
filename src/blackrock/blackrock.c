@@ -58,7 +58,7 @@ u8 connectPlayersDB (void) {
         return 1;
     }
 
-    createPlayersDB ();
+    // createPlayersDB ();
 
     return 0;
 
@@ -228,34 +228,34 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
 
 }
 
-// FIXME:
+// FIXME: we need to send back the client our profile information!!
 u8 blackrock_check_credentials (BlackCredentials *black_credentials) {
 
     if (black_credentials) {
-        printf ("check credentials...\n");
-
         // check for a user in our database based on the credentials
         if (black_credentials->login) {
             PlayerProfile *search_profile = 
                 player_profile_get_from_db_by_username (black_credentials->username);
 
-            // FIXME: give feedback to the client!
-
             if (search_profile) {
-                logMsg (stdout, SUCCESS, GAME, "Got a profile from the db!");
-                // TODO: check the password
                 if (!strcmp (black_credentials->password, search_profile->password)) return 0;
-                else return 1;
             }
 
             else {
-                logMsg (stderr, ERROR, GAME, "Failed finding player profile!");
+                #ifdef BLACK_DEBUG
+                    logMsg (stderr, ERROR, GAME, "No player profile found with the credentials!");
+                #endif
             }
         }
 
         // we have a new user, so add it to the database
         else {
-
+            if (!player_profile_add_to_db (black_credentials)) {
+                #ifdef BLACK_DEBUG
+                    logMsg (stdout, DEBUG_MSG, GAME, "Added a new player profile!");
+                #endif
+                return 0;
+            }
         }
     }
 
@@ -302,6 +302,7 @@ u8 blackrock_authMethod (void *data) {
                     sizeof (RequestData));
 
                 if (!blackrock_check_credentials (black_credentials)) {
+                    // TODO: generate a session id bassed on the username
                     char *sessionID = session_default_generate_id (pack_info->clientSock,
                         pack_info->client->address);
 
@@ -319,16 +320,11 @@ u8 blackrock_authMethod (void *data) {
                     else logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
                 }
 
-                // FIXME: give more feedback
-                // wrong credentials
+                // wrong credentials -- server automatically sends an error packet
                 else {
-                    // FIXME:
-                    // #ifdef CERVER_DEBUG
-                    // logMsg (stderr, ERROR, NO_TYPE, 
-                    //     createString ("Default auth: %i is a wrong autentication code!", 
-                    //     authData->code));
-                    // #endif
-                    return 1;
+                    #ifdef BLACK_DEBUG
+                        logMsg (stdout, ERROR, GAME, "Client provided wrong credentials!");
+                    #endif
                 }
             }
         }
@@ -374,7 +370,6 @@ typedef struct {
 
 } MonsterLoot;
 
-// 04/09/2018 -- 12:18
 typedef struct {
 
     u32 id;
@@ -521,17 +516,6 @@ u8 blackrock_loadGameData (void) {
         #ifdef DEBUG
             logMsg (stdout, DEBUG_MSG, GAME, "Connedted to the players db!");
         #endif
-
-        BlackCredentials test;
-        strcpy (test.username, "erick");
-        strcpy (test.password, "hola");
-
-        player_profile_add_to_db (&test);
-        sleep (1);
-        player_profile_get_from_db_by_id (1);
-        player_profile_get_from_db_by_id (2);
-
-        player_profile_get_from_db_by_username ("erick");
     }
 
     // connect to the items db
