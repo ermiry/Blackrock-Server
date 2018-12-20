@@ -212,6 +212,9 @@ typedef enum PacketType {
     AUTHENTICATION,
     GAME_PACKET,
 
+    APP_ERROR_PACKET,
+    APP_PACKET,
+
     TEST_PACKET = 100,
     DONT_CHECK_TYPE,
 

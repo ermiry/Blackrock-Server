@@ -31,6 +31,24 @@ typedef unsigned char asciiChar;
 
 #define THREAD_OK   0
 
+/*** BLACKROCK ERROS ***/
+
+typedef enum BlackErrorType {
+
+    BLACK_ERROR_SERVER = 0,
+
+    BLACK_ERROR_WRONG_CREDENTIALS,
+    BLACK_ERROR_USERNAME_TAKEN,
+
+} BlackErrorType;
+
+typedef struct BlackError {
+
+    BlackErrorType errorType;
+    char msg[128];
+
+} BlackError;
+
 /*** GAME OBJECTS ***/
 
 #include "blackrock/map.h"
@@ -194,6 +212,20 @@ extern void deleteBrGameData (void *data);
 
 extern u8 blackrock_authMethod (void *data);
 
+/*** BLACKROCK PACKETS ***/
+
+typedef enum BlackPacketType {
+
+    PLAYER_PROFILE,
+
+} BlackPacketType;
+
+typedef struct BlackPacketData {
+
+    BlackPacketType blackPacketType;
+
+} BlackPacketData;
+
 /*** BLACKROCK SERIALIZED DATA ***/
 
 typedef struct BlackCredentials {
@@ -211,7 +243,9 @@ typedef struct SPlayerProfile {
 
     u32 kills;
     u32 gamesPlayed;
+    u32 highscore;
 
+    u32 n_friends;
     // char friends[64];
     // char clan[64];
 

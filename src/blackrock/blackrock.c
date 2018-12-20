@@ -25,13 +25,68 @@
 #include "blackrock/blackrock.h"      // blackrock dependent types --> same as in the client
 #include "blackrock/map.h"
 
+#pragma region ERRORS 
+
+void *generate_black_error_packet (BlackErrorType type, const char *msg) {
+
+    size_t packetSize = sizeof (PacketHeader) + sizeof (BlackError);
+    
+    void *begin = generatePacket (APP_ERROR_PACKET, packetSize);
+    char *end = begin + sizeof (PacketHeader); 
+
+    BlackError *edata = (BlackError *) end;
+    edata->errorType = type;
+    if (msg) {
+        if (strlen (msg) > sizeof (edata->msg)) {
+            // clamp the value to fit inside edata->msg
+            u16 i = 0;
+            while (i < sizeof (edata->msg) - 1) {
+                edata->msg[i] = msg[i];
+                i++;
+            }
+
+            edata->msg[i] = '\0';
+        }
+
+        else strcpy (edata->msg, msg);
+    }
+
+    return begin;
+
+}
+
+u8 send_black_error (Server *server, Client *client, u32 sock_fd, 
+    BlackErrorType errorType, const char *msg) {
+
+    if (server && client) {
+        size_t packet_size = sizeof (PacketHeader) + sizeof (BlackError);
+        void *error = generate_black_error_packet (errorType, msg);
+
+        if (error) {
+            server_sendPacket (server, sock_fd, client->address, error, packet_size);
+            free (error);
+            return 0;
+        }
+    }
+
+    return 1;
+
+}
+
+#pragma endregion
+
 #pragma region BLACKROCK SERIALIZATION 
 
-// FIXME:
-SPlayerProfile *black_serialize_player_profile (PlayerProfile *profile) {
+// TODO: how do we want to serialize the friends list?
+void black_serialize_player_profile (SPlayerProfile *s_profile, PlayerProfile *profile) {
 
-    if (profile) {
-
+    if (s_profile && profile) {
+        s_profile->profileID = profile->profileID;
+        strcpy (s_profile->username, profile->username);
+        s_profile->gamesPlayed = profile->gamesPlayed;
+        s_profile->kills = profile->kills;
+        s_profile->highscore = profile->highscore;
+        s_profile->n_friends = profile->n_friends;
     }
 
 }
@@ -251,9 +306,30 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
 // TODO: 
 u8 player_profile_update_password (const char *new_password) {}
 
-// FIXME: we need better error handling
-// FIXME: we need to send back the client our profile information!!
-void *blackrock_check_credentials (BlackCredentials *black_credentials) {
+// TODO: how do we want to send the friends list?
+void player_profile_send (Server *server, Client *client, u32 sock_fd, PlayerProfile *profile) {
+
+    if (profile) {
+        size_t packet_size = sizeof (PacketHeader) + sizeof (BlackPacketData) + sizeof (SPlayerProfile);
+        void *profile_packet = generatePacket (APP_PACKET, packet_size);
+
+        if (profile_packet) {
+            char *end = profile_packet;
+
+            BlackPacketData *black_data = (BlackPacketData *) (end += sizeof (PacketHeader));
+            black_data->blackPacketType = PLAYER_PROFILE;
+
+            PlayerProfile *s_profile = (SPlayerProfile *) (end += sizeof (BlackPacketData));
+            black_serialize_player_profile (s_profile, profile);
+
+            server_sendPacket (server, sock_fd, client->address, profile_packet, packet_size);
+            free (profile_packet);
+        }
+    }
+
+}
+
+void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErrorType *black_error) {
 
     if (black_credentials) {
         PlayerProfile *search_profile = 
@@ -270,7 +346,7 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials) {
                 #ifdef BLACK_DEBUG
                 logMsg (stderr, ERROR, GAME, "No player profile found with the credentials!");
                 #endif
-                // TODO: return the appropiate error
+                *black_error = BLACK_ERROR_WRONG_CREDENTIALS;
             }
         }
 
@@ -282,7 +358,7 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials) {
                 logMsg (stderr, WARNING, GAME, 
                     createString ("Username: %s is already taken!", black_credentials->username));
                 #endif
-                // TODO: return the appropiate error
+                *black_error = BLACK_ERROR_USERNAME_TAKEN;
             }
 
             else {
@@ -303,7 +379,7 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials) {
                         #ifdef BLACK_DEBUG
                         logMsg (stderr, ERROR, GAME, "Failed to add a new profile to players db!");
                         #endif
-                        // TODO: return the appropiate error
+                        *black_error = BLACK_ERROR_SERVER;
                     }
                 }
             }
@@ -352,7 +428,9 @@ u8 blackrock_authMethod (void *data) {
                 BlackCredentials *black_credentials = (BlackCredentials *) (end + sizeof (PacketHeader) +
                     sizeof (RequestData));
 
-                PlayerProfile *player_profile = blackrock_check_credentials (black_credentials);
+                BlackErrorType black_error;
+                PlayerProfile *player_profile = 
+                    blackrock_check_credentials (black_credentials, &black_error);
 
                 if (player_profile) {
                     // TODO: generate a better session id
@@ -367,11 +445,19 @@ u8 blackrock_authMethod (void *data) {
 
                         client_set_sessionID (pack_info->client, sessionID);
 
+                        // send back the player profile
+                        player_profile_send (pack_info->server, pack_info->client, pack_info->clientSock,
+                            player_profile);
+
                         return 0;
                     }
 
-                    // TODO: return the appropaite error
-                    else logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+                    else {
+                        logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+                        black_error = BLACK_ERROR_SERVER;
+                        send_black_error (pack_info->server, pack_info->client, pack_info->clientSock, 
+                            black_error, NULL);
+                    } 
                 }
 
                 // wrong credentials -- server automatically sends an error packet
@@ -379,6 +465,8 @@ u8 blackrock_authMethod (void *data) {
                     #ifdef BLACK_DEBUG
                         logMsg (stdout, ERROR, GAME, "Client provided wrong credentials!");
                     #endif
+                    send_black_error (pack_info->server, pack_info->client, pack_info->clientSock, 
+                        black_error, NULL);
                 }
             }
         }
