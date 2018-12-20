@@ -81,10 +81,10 @@ u8 connectPlayersDB (void) {
 // FIXME: how do we want to mange unique ids?
 u32 player_profile_id = 0;
 
-u8 player_profile_add_to_db (BlackCredentials *black_credentials) {
+u8 player_profile_add_to_db (PlayerProfile *player_profile) {
 
-    if (black_credentials) {
-        if (black_credentials->username && black_credentials->password) {
+    if (player_profile) {
+        if (player_profile->username && player_profile->password) {
             char *err_msg = NULL;
             char *query = NULL;
 
@@ -93,7 +93,7 @@ u8 player_profile_add_to_db (BlackCredentials *black_credentials) {
             // prepare the query
             asprintf (&query, "insert into Players (id, username, password, kills, gamesPlayed, highscore, nofriends, friends)"
                 "values ('%d', '%s', '%s', 0, 0, 0, 0, 0);", 
-                player_profile_id, black_credentials->username, black_credentials->password);
+                player_profile_id, player_profile->username, player_profile->password);
             
             // prepare the statement
             sqlite3_stmt *stmt;
@@ -109,6 +109,13 @@ u8 player_profile_add_to_db (BlackCredentials *black_credentials) {
                 return 1;
             }
             
+            player_profile->profileID = player_profile_id;
+            player_profile->kills = 0;
+            player_profile->highscore = 0;
+            player_profile->gamesPlayed = 0;
+            player_profile->n_friends = 0;
+            player_profile->friends = NULL;
+
             sqlite3_finalize(stmt);
             free(query);
 
@@ -244,38 +251,66 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
 // TODO: 
 u8 player_profile_update_password (const char *new_password) {}
 
+// FIXME: we need better error handling
 // FIXME: we need to send back the client our profile information!!
-u8 blackrock_check_credentials (BlackCredentials *black_credentials) {
+void *blackrock_check_credentials (BlackCredentials *black_credentials) {
 
     if (black_credentials) {
+        PlayerProfile *search_profile = 
+            player_profile_get_from_db_by_username (black_credentials->username);
+
         // check for a user in our database based on the credentials
         if (black_credentials->login) {
-            PlayerProfile *search_profile = 
-                player_profile_get_from_db_by_username (black_credentials->username);
-
             if (search_profile) {
-                if (!strcmp (black_credentials->password, search_profile->password)) return 0;
+                if (!strcmp (black_credentials->password, search_profile->password)) 
+                    return search_profile;
             }
 
             else {
                 #ifdef BLACK_DEBUG
-                    logMsg (stderr, ERROR, GAME, "No player profile found with the credentials!");
+                logMsg (stderr, ERROR, GAME, "No player profile found with the credentials!");
                 #endif
+                // TODO: return the appropiate error
             }
         }
 
         // we have a new user, so add it to the database
         else {
-            if (!player_profile_add_to_db (black_credentials)) {
+            // we al ready have registered that username
+            if (search_profile) {
                 #ifdef BLACK_DEBUG
-                    logMsg (stdout, DEBUG_MSG, GAME, "Added a new player profile!");
+                logMsg (stderr, WARNING, GAME, 
+                    createString ("Username: %s is already taken!", black_credentials->username));
                 #endif
-                return 0;
+                // TODO: return the appropiate error
+            }
+
+            else {
+                // create a new profile and add it to our database
+                PlayerProfile *new_profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
+                if (new_profile) {
+                    new_profile->username = createString ("%s", black_credentials->username);
+                    new_profile->password = createString ("%s", black_credentials->password);
+
+                    if (!player_profile_add_to_db (new_profile)) {
+                        #ifdef BLACK_DEBUG
+                        logMsg (stdout, DEBUG_MSG, GAME, "Added a new player profile!");
+                        #endif
+                        return new_profile;
+                    }
+
+                    else {
+                        #ifdef BLACK_DEBUG
+                        logMsg (stderr, ERROR, GAME, "Failed to add a new profile to players db!");
+                        #endif
+                        // TODO: return the appropiate error
+                    }
+                }
             }
         }
     }
 
-    return 1;
+    return NULL;
 
 }
 
@@ -317,8 +352,10 @@ u8 blackrock_authMethod (void *data) {
                 BlackCredentials *black_credentials = (BlackCredentials *) (end + sizeof (PacketHeader) +
                     sizeof (RequestData));
 
-                if (!blackrock_check_credentials (black_credentials)) {
-                    // TODO: generate a session id bassed on the username
+                PlayerProfile *player_profile = blackrock_check_credentials (black_credentials);
+
+                if (player_profile) {
+                    // TODO: generate a better session id
                     char *sessionID = session_default_generate_id (pack_info->clientSock,
                         pack_info->client->address);
 
@@ -333,6 +370,7 @@ u8 blackrock_authMethod (void *data) {
                         return 0;
                     }
 
+                    // TODO: return the appropaite error
                     else logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
                 }
 
