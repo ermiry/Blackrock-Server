@@ -56,11 +56,11 @@ void *generate_black_error_packet (BlackErrorType type, const char *msg) {
 }
 
 u8 send_black_error (Server *server, Client *client, u32 sock_fd, 
-    BlackErrorType errorType, const char *msg) {
+    BlackError black_error) {
 
     if (server && client) {
         size_t packet_size = sizeof (PacketHeader) + sizeof (BlackError);
-        void *error = generate_black_error_packet (errorType, msg);
+        void *error = generate_black_error_packet (black_error.errorType, black_error.msg);
 
         if (error) {
             server_sendPacket (server, sock_fd, client->address, error, packet_size);
@@ -319,7 +319,7 @@ void player_profile_send (Server *server, Client *client, u32 sock_fd, PlayerPro
             BlackPacketData *black_data = (BlackPacketData *) (end += sizeof (PacketHeader));
             black_data->blackPacketType = PLAYER_PROFILE;
 
-            PlayerProfile *s_profile = (SPlayerProfile *) (end += sizeof (BlackPacketData));
+            SPlayerProfile *s_profile = (SPlayerProfile *) (end += sizeof (BlackPacketData));
             black_serialize_player_profile (s_profile, profile);
 
             server_sendPacket (server, sock_fd, client->address, profile_packet, packet_size);
@@ -329,7 +329,7 @@ void player_profile_send (Server *server, Client *client, u32 sock_fd, PlayerPro
 
 }
 
-void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErrorType *black_error) {
+void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackError *black_error) {
 
     if (black_credentials) {
         PlayerProfile *search_profile = 
@@ -340,13 +340,22 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
             if (search_profile) {
                 if (!strcmp (black_credentials->password, search_profile->password)) 
                     return search_profile;
+
+                else {
+                    #ifdef BLACK_DEBUG
+                    logMsg (stderr, ERROR, GAME, "Player provided wrong password.");
+                    #endif
+                    black_error->errorType = BLACK_ERROR_WRONG_CREDENTIALS;
+                    strcpy (black_error->msg, "Wrong credentials!");
+                }
             }
 
             else {
                 #ifdef BLACK_DEBUG
                 logMsg (stderr, ERROR, GAME, "No player profile found with the credentials!");
                 #endif
-                *black_error = BLACK_ERROR_WRONG_CREDENTIALS;
+                black_error->errorType = BLACK_ERROR_WRONG_CREDENTIALS;
+                strcpy (black_error->msg, "Wrong credentials!");
             }
         }
 
@@ -358,7 +367,8 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
                 logMsg (stderr, WARNING, GAME, 
                     createString ("Username: %s is already taken!", black_credentials->username));
                 #endif
-                *black_error = BLACK_ERROR_USERNAME_TAKEN;
+                black_error->errorType = BLACK_ERROR_USERNAME_TAKEN;
+                strcpy (black_error->msg, "Username already taken!");
             }
 
             else {
@@ -379,7 +389,8 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
                         #ifdef BLACK_DEBUG
                         logMsg (stderr, ERROR, GAME, "Failed to add a new profile to players db!");
                         #endif
-                        *black_error = BLACK_ERROR_SERVER;
+                        black_error->errorType = BLACK_ERROR_SERVER;
+                        strcpy (black_error->msg, "Internal server error!");
                     }
                 }
             }
@@ -428,7 +439,7 @@ u8 blackrock_authMethod (void *data) {
                 BlackCredentials *black_credentials = (BlackCredentials *) (end + sizeof (PacketHeader) +
                     sizeof (RequestData));
 
-                BlackErrorType black_error;
+                BlackError black_error;
                 PlayerProfile *player_profile = 
                     blackrock_check_credentials (black_credentials, &black_error);
 
@@ -454,19 +465,20 @@ u8 blackrock_authMethod (void *data) {
 
                     else {
                         logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
-                        black_error = BLACK_ERROR_SERVER;
+                        black_error.errorType = BLACK_ERROR_SERVER;
+                        strcpy (black_error.msg, "Failed to generate session id!");
                         send_black_error (pack_info->server, pack_info->client, pack_info->clientSock, 
-                            black_error, NULL);
+                            black_error);
                     } 
                 }
 
                 // wrong credentials -- server automatically sends an error packet
                 else {
                     #ifdef BLACK_DEBUG
-                        logMsg (stdout, ERROR, GAME, "Client provided wrong credentials!");
+                        logMsg (stdout, ERROR, GAME, "Blackrock player failed to authenticate!");
                     #endif
                     send_black_error (pack_info->server, pack_info->client, pack_info->clientSock, 
-                        black_error, NULL);
+                        black_error);
                 }
             }
         }

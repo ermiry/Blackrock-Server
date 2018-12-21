@@ -928,8 +928,9 @@ void authenticateClient (void *data) {
                 logMsg (stderr, ERROR, CLIENT, "Client failed to authenticate!");
                 #endif
 
-                sendErrorPacket (pack_info->server, pack_info->clientSock, 
-                    pack_info->client->address, ERR_FAILED_AUTH, "Wrong credentials!");
+                // FIXME: this should only be used when using default authentication
+                // sendErrorPacket (pack_info->server, pack_info->clientSock, 
+                //     pack_info->client->address, ERR_FAILED_AUTH, "Wrong credentials!");
 
                 pack_info->client->authTries--;
 
@@ -1150,8 +1151,8 @@ void handleRecvBuffer (Server *server, i32 sock_fd, char *buffer, size_t total_s
 // recive all incoming data from the socket
 void server_recieve (Server *server, i32 socket_fd, bool onHold) {
 
-    if (onHold) logMsg (stdout, SUCCESS, PACKET, "server_recieve () - on hold client!");
-    else logMsg (stdout, SUCCESS, PACKET, "server_recieve () - normal client!");
+    // if (onHold) logMsg (stdout, SUCCESS, PACKET, "server_recieve () - on hold client!");
+    // else logMsg (stdout, SUCCESS, PACKET, "server_recieve () - normal client!");
 
     ssize_t rc;
     char packetBuffer[MAX_UDP_PACKET_SIZE];
