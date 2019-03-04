@@ -22,7 +22,6 @@
 #include "utils/thpool.h"
 
 #define DEFAULT_USE_IPV6                0
-#define DEFAULT_PROTOCOL                IPPROTO_TCP
 #define DEFAULT_PORT                    7001
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
