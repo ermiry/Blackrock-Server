@@ -10,22 +10,33 @@
 const char *uri_string = "mongodb://localhost:27017";
 const char *db_name = "test";
 
-// init ermiry processes
-int ermiry_init (void) {
+#pragma region Users
 
-    int errors = 0;
+static User *user_new (void) {
 
-    // TODO: do we need to pass the username and the db?
-    if (mongo_connect ()) {
-        logMsg (stderr, ERROR, NO_TYPE, "Failed to init ermiry!");
-        errors = 1;
-    }
-
-    return errors;  
+    User *user = (User *) malloc (sizeof (User));
+    if (user) memset (user, 0, sizeof (User));
+    return user;
 
 }
 
-#pragma region Users
+// FIXME: destroy the list of friends
+static void user_destroy (User *user) {
+
+    if (user) {
+        if (user->name) free (user->name);
+        if (user->email) free (user->email);
+        if (user->username) free (user->username);
+        if (user->password) free (user->password);
+        if (user->location) free (user->location);
+
+        if (user->memberSince) free (user->memberSince);
+        if (user->lastTime) free (user->lastTime);
+
+        free (user);
+    }
+
+}
 
 // FIXME: where do we free the json string??
 // FIXME: get dates
@@ -36,8 +47,7 @@ static User *user_json_parse (char *user_json, bool populate) {
     User *user = NULL;
 
     if (user_json) {
-        user = (User *) malloc (sizeof (User));
-        memset (user, 0, sizeof (User));
+        user = user_new ();
 
         jsmntok_t t[128];   // FIXME: is this true? We expect no more than 128 tokens
 
@@ -128,6 +138,7 @@ static User *user_json_parse (char *user_json, bool populate) {
 // get a user doc from the db by username
 static bson_t *user_find (mongoc_collection_t *user_collection, const char *username, bool closeHanlde) {
 
+    // FIXME: 17/03/2019 -- 23:50 - what open keeping the handle open?
     // open handle to user collection
     user_collection = mongoc_client_get_collection (client, db_name, USERS_COLL_NAME);
     if (user_collection) {
@@ -168,7 +179,57 @@ static User *user_get (const char *username) {
 
 }
 
-// connect to my ermiry account
-    // get user by username and password
+#pragma endregion
+
+#pragma region Public
+
+// init ermiry processes
+int ermiry_init (void) {
+
+    int errors = 0;
+
+    // TODO: do we need to pass the username and the db?
+    if (mongo_connect ()) {
+        logMsg (stderr, ERROR, NO_TYPE, "Failed to init ermiry!");
+        errors = 1;
+    }
+
+    return errors;  
+
+}
+
+// search for a user with the given username
+// if we find one, check if the password match
+User *ermiry_user_get (const char *username, const char *password, int *errors) {
+
+    User *user = NULL;
+
+    if (username && password) {
+        user = user_get (username);
+        if (user) {
+            // check that the password is correct
+            if (!strcmp (password, user->password)) *errors = NO_ERRORS;
+            else {
+                // password is incorrect
+                *errors = WRONG_PASSWORD;
+                user_destroy (user);
+                user = NULL;
+            }
+        }
+
+        else {
+            #ifdef ERMIRY_DEBUG
+                logMsg (stderr, ERROR, DEBUG_MSG, 
+                    createString ("Not user find with username: %s", username));
+            #endif
+            *errors = NOT_USER_FOUND;
+        }
+    }
+
+    else *errors = SERVER_ERROR;
+
+    return user;
+
+}
 
 #pragma endregion

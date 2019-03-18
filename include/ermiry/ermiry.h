@@ -4,6 +4,12 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
+// ermiry error codes
+#define SERVER_ERROR        100
+#define NO_ERRORS           0
+#define NOT_USER_FOUND      1
+#define WRONG_PASSWORD      2
+
 // init ermiry processes
 extern int ermiry_init (void);
 
@@ -23,5 +29,9 @@ typedef struct User {
     struct User **friends;
 
 } User;
+
+// search for a user with the given username
+// if we find one, check if the password match
+User *ermiry_user_get (const char *username, const char *password, int *errors);
 
 #endif
