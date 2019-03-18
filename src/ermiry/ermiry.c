@@ -1,16 +1,23 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "ermiry/ermiry.h"
 
 #include "mongo/mongo.h"
 
+#include "utils/myUtils.h"
 #include "utils/log.h"
 #include "utils/jsmn.h"
 
-// FIXME:
-#define USERS_COLL_NAME         "users"
+// FIXME: 
 const char *uri_string = "mongodb://localhost:27017";
 const char *db_name = "test";
 
 #pragma region Users
+
+#define USERS_COLL_NAME         "users"
+static mongoc_collection_t *user_collection = NULL;
 
 static User *user_new (void) {
 
@@ -136,19 +143,14 @@ static User *user_json_parse (char *user_json, bool populate) {
 }
 
 // get a user doc from the db by username
-static bson_t *user_find (mongoc_collection_t *user_collection, const char *username, bool closeHanlde) {
+static bson_t *user_find (mongoc_collection_t *user_collection, const char *username) {
 
-    // FIXME: 17/03/2019 -- 23:50 - what open keeping the handle open?
-    // open handle to user collection
-    user_collection = mongoc_client_get_collection (client, db_name, USERS_COLL_NAME);
     if (user_collection) {
         // get the desired user
         bson_t *user_query = bson_new ();
         bson_append_utf8 (user_query, "username", -1, username, -1);
 
-        bson_t *user_doc = (bson_t *) mongo_find_one (user_collection, user_query);
-        if (closeHanlde) mongoc_collection_destroy (user_collection);
-        return user_doc;
+        return (bson_t *) mongo_find_one (user_collection, user_query);
     }
 
     else logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to user collection!");
@@ -161,15 +163,12 @@ static User *user_get (const char *username) {
 
     User *user = NULL;
 
-    mongoc_collection_t *user_collection = NULL;
-    bson_t *user_doc = user_find (user_collection, username, true);
+    bson_t *user_doc = user_find (user_collection, username);
     if (user_doc) {
-        if (user) {
-            char *user_str = bson_as_canonical_extended_json (user_doc, NULL);
-            if (user_str) {
-                user = user_json_parse (user_str, false);
-                free (user_str);
-            }
+        char *user_str = bson_as_canonical_extended_json (user_doc, NULL);
+        if (user_str) {
+            user = user_json_parse (user_str, false);
+            free (user_str);
         }
 
         bson_destroy (user_doc);
@@ -181,20 +180,108 @@ static User *user_get (const char *username) {
 
 #pragma endregion
 
+#pragma region Blackrock 
+
+#define BLACK_COLL_NAME         "blackrock"
+static mongoc_collection_t *black_collection = NULL;
+
+static BlackProfile *black_profile_new (void) {
+
+    BlackProfile *profile = (BlackProfile *) malloc (sizeof (BlackProfile));
+    if (profile) memset (profile, 0, sizeof (BlackProfile));
+    return profile;
+
+}
+
+// FIXME: what happens with achievemnts??
+static void black_profile_destroy (BlackProfile *profile) {
+
+    if (profile) {
+        if (profile->user) user_destroy (profile->user);
+        if (profile->guild) free (profile->guild);
+
+        free (profile);
+    }
+
+}
+
+static bson_t *black_profile_find (mongoc_collection_t *black_collection, const bson_oid_t user_oid) {
+
+    if (black_collection) {
+        bson_t *black_query = bson_new ();
+        bson_append_oid (black_query, "user", -1, &user_oid);
+
+        return (bson_t *) mongo_find_one (black_collection, black_query);
+    }
+
+    else logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black collection!");
+
+    return NULL;
+
+}
+
+// get a blackrock associated with user 
+static BlackProfile *black_profile_get (const bson_oid_t user_oid) {
+
+    BlackProfile *profile = NULL;
+
+    bson_t *black_doc = black_profile_find (black_collection, user_oid);
+    if (black_doc) {
+        char *black_str = bson_as_canonical_extended_json (black_doc, NULL);
+        if (black_str) {
+            // TODO: parse the bson into our c model
+        }
+
+        bson_destroy (black_doc);
+    }
+
+    return profile;
+
+}
+
+#pragma endregion
+
 #pragma region Public
 
-// init ermiry processes
+// init ermiry data & processes
 int ermiry_init (void) {
 
     int errors = 0;
 
     // TODO: do we need to pass the username and the db?
-    if (mongo_connect ()) {
-        logMsg (stderr, ERROR, NO_TYPE, "Failed to init ermiry!");
+    if (!mongo_connect ()) {
+        // open handle to user collection
+        user_collection = mongoc_client_get_collection (client, db_name, USERS_COLL_NAME);
+        if (!user_collection) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to users collection!");
+            errors = 1;
+        }
+        
+        // open handle to blackrock profile collection
+        black_collection = mongoc_client_get_collection (client, db_name, BLACK_COLL_NAME);
+        if (!black_collection) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black collection!");
+            errors = 1;
+        }
+    }
+
+    else {
+        logMsg (stderr, ERROR, NO_TYPE, "Failed to connect to mongo");
         errors = 1;
     }
 
     return errors;  
+
+}
+
+// clean up ermiry data
+int ermiry_end (void) {
+
+    // close our collections handles
+    if (user_collection) mongoc_collection_destroy (user_collection);
+    if (black_collection) mongoc_collection_destroy (black_collection);
+
+    mongo_disconnect ();
 
 }
 
@@ -229,6 +316,25 @@ User *ermiry_user_get (const char *username, const char *password, int *errors) 
     else *errors = SERVER_ERROR;
 
     return user;
+
+}
+
+BlackProfile *ermiry_black_profile_get (const char *username, const char *password, int *errors) {
+
+    BlackProfile *profile = NULL;
+
+    if (username && password) {
+        User *user = ermiry_user_get (username, password, errors);
+        if (user) {
+            // we have got a valid user, so find the associated black profile
+            profile = black_profile_get ((const bson_oid_t) user->oid);
+            if (!profile) *errors = PROFILE_NOT_FOUND;
+        }
+    }
+
+    else *errors = SERVER_ERROR;
+
+    return profile;
 
 }
 

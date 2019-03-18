@@ -4,31 +4,20 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
+#include "models.h"
+
 // ermiry error codes
-#define SERVER_ERROR        100
-#define NO_ERRORS           0
-#define NOT_USER_FOUND      1
-#define WRONG_PASSWORD      2
+#define SERVER_ERROR                100
+#define NO_ERRORS                   0
+#define NOT_USER_FOUND              1
+#define WRONG_PASSWORD              2
+#define PROFILE_NOT_FOUND           3
 
 // init ermiry processes
 extern int ermiry_init (void);
 
-typedef struct User {
-
-    bson_oid_t oid;
-
-    char *name;
-    char *email;
-    char *username;
-    char *password;
-    struct tm *memberSince;
-    struct tm *lastTime;
-    char *location;
-
-    int n_friends;
-    struct User **friends;
-
-} User;
+// clean up ermiry data
+extern int ermiry_end (void);
 
 // search for a user with the given username
 // if we find one, check if the password match
