@@ -19,6 +19,8 @@ void closeProgram (int dummy) {
     if (gameServer) cerver_teardown (gameServer);
     else logMsg (stdout, NO_TYPE, NO_TYPE, "There isn't any server to teardown. Quitting application.");
 
+    exit (0);
+
 }
 
 // TODO: recieve signals to init, retsart or teardown a server -> like a control panel
