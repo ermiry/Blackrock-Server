@@ -4,8 +4,6 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
-#include "mongo-panel.h"
-
 #include "utils/myUtils.h"
 #include "utils/log.h"
 
@@ -13,6 +11,10 @@
 mongoc_uri_t *uri;
 mongoc_client_t *client;
 mongoc_database_t *database;
+
+#define APP_NAME        "blackrock-server"
+
+const char *uri_string;
 
 #pragma region MONGO
 

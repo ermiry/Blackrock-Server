@@ -4,7 +4,7 @@ TARGET      := server
 
 PTHREAD := -l pthread
 SQLITE3 := -l sqlite3
-CMONGO = `pkg-config --libs --cflags libmongoc-1.0`
+CMONGO 	:= `pkg-config --libs --cflags libmongoc-1.0`
 
 # print additional information
 DEFINES = -D CERVER_DEBUG -D DEBUG -D CERVER_STATS -D BLACK_DEBUG
@@ -26,9 +26,9 @@ DEPEXT      := d
 OBJEXT      := o
 
 CFLAGS      := -g $(DEFINES) $(RUN_MAKE)
-LIB         :=  $(PTHREAD) $(SQLITE3) $(CMONGO)
-INC         := -I$(INCDIR) -I/usr/local/include
-INCDEP      := -I$(INCDIR)
+LIB         := $(PTHREAD) $(SQLITE3) $(CMONGO)
+INC         := -I $(INCDIR) -I /usr/local/include $(LIB)
+INCDEP      := -I $(INCDIR)
 
 SOURCES     := $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
 OBJECTS     := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.$(OBJEXT)))

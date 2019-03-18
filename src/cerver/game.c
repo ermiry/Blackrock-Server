@@ -14,8 +14,7 @@
 
 #include "myTypes.h"
 
-#include "blackrock/blackrock.h" 
-#include "game.h"
+#include "cerver/game.h"
 
 #include "utils/objectPool.h"
 #include "utils/list.h"

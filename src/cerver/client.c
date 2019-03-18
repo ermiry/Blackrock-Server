@@ -1,8 +1,8 @@
 #include "myTypes.h"
 
-#include "network.h"
-#include "cerver.h"
-#include "client.h"
+#include "cerver/network.h"
+#include "cerver/cerver.h"
+#include "cerver/client.h"
 
 #include "utils/avl.h"
 

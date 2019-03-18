@@ -12,9 +12,9 @@
 #include <poll.h>
 #include <errno.h>
 
-#include "network.h"
-#include "cerver.h"
-#include "game.h"
+#include "cerver/network.h"
+#include "cerver/cerver.h"
+#include "cerver/game.h"
 
 #include "utils/thpool.h"
 

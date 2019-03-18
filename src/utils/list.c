@@ -253,7 +253,7 @@ ListElement *mergeSort (ListElement *head) {
 
 /*** CUSTOM ***/
 
-#include "game.h"
+#include "cerver/game.h"
 
 // 24/10/2018 -- removes the list element from the list and returns the player data
 Player *dllist_getPlayerById (List *list, uint16_t playerID) {

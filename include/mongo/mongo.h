@@ -4,8 +4,9 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
-extern const char *uri_string;
-extern const char *db_name;
+// FIXME: we need to have more flexibility here!!
+// extern const char *uri_string;
+// extern const char *db_name;
 
 #pragma region MONGO
 

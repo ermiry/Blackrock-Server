@@ -12,7 +12,8 @@
 
 #include <sqlite3.h>
 
-#include "game.h"           // game server
+#include "cerver/game.h"
+
 #include "utils/thpool.h"
 #include "utils/avl.h"
 

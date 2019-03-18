@@ -5,6 +5,8 @@
 #include "utils/myUtils.h"
 #include "utils/log.h"
 
+#include "cerver/cerver.h"
+
 char *getMsgType (LogMsgType type) {
 
     char temp[10];
@@ -71,8 +73,6 @@ void logMsg (FILE *__restrict __stream, LogMsgType firstType, LogMsgType secondT
     if (message) free (message);
 
 }
-
-#include "cerver.h"
 
 void log_newServer (Server *server) {
 
