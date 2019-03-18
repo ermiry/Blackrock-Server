@@ -4,6 +4,9 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
+// init ermiry processes
+extern int ermiry_init (void);
+
 typedef struct User {
 
     bson_oid_t oid;
