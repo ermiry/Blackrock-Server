@@ -329,33 +329,91 @@ static bson_t *black_guild_bson_create (BlackGuild *guild) {
         const char *key;
         size_t keylen;
         bson_t members_array;
-        bson_append_array_begin (&doc, "members", -1, &members_array);
+        bson_append_array_begin (doc, "members", -1, &members_array);
         for (int i = 0; i < guild->n_members; i++) {
             keylen = bson_uint32_to_string (i, &key, buf, sizeof (buf));
             bson_append_oid (&members_array, key, (int) keylen, &guild->members[i]->oid);
         }
-        bson_append_array_end (&doc, &members_array);
+        bson_append_array_end (doc, &members_array);
     }
 
 }
 
+// transform a serialized guild into our local models
+static BlackGuild *black_guild_deserialize (S_BlackGuild *s_guild) {
+
+    BlackGuild *guild = NULL;
+
+    if (s_guild) {
+        guild = black_guild_new ();
+        if (guild) {
+            guild->name = (char *) calloc (strlen (s_guild->name + 1), sizeof (char));
+            strcpy (guild->name, s_guild->name);
+            guild->description = (char *) calloc (strlen (s_guild->description + 1), sizeof (char));
+            strcpy (guild->description, s_guild->description);
+            guild->trophies = guild->trophies;
+            guild->location = (char *) calloc (strlen (s_guild->location + 1), sizeof (char));
+            strcpy (guild->location, s_guild->location);
+
+            time_t rawtime;
+            struct tm *timeinfo;
+            time (&rawtime);
+            guild->creation_date = gmtime (rawtime);
+
+            guild->type = s_guild->type;
+            guild->required_trophies = s_guild->required_trophies;
+
+            guild->n_members = 1;
+            guild->leader = user_new ();
+            guild->leader->oid = s_guild->leader->oid;
+            guild->members = (User **) calloc (guild->n_members, sizeof (User *));
+            guild->members[0] = user_new ();
+            guild->members[0]->oid = guild->leader->oid;
+        }
+    }
+
+    return guild;
+
+}
+
 // a user creates a new guild based on the guild data he sent
-u8 black_guild_create (User *creator, S_BlackGuild *guild_data) {
+int black_guild_create (S_BlackGuild *s_guild) {
 
     int retval = 1;
 
-    if (creator && guild_data) {
-        // TODO:
-        // we know that the creator is valid, but we need to verify that the guild data is valid
-        // create the new guild and insert it into the db
+    if (s_guild) {
+        BlackGuild *guild = black_guild_deserialize (s_guild);
+        if (guild) {
+            // create the guild bson
+            bson_t *guild_doc = black_guild_bson_create (guild);
+            if (guild_doc) {
+                // insert the bson into the db
+                if (!mongo_insert_document (black_guild_collection, guild_doc)) {
+                    // update the s_guild for return 
+                    bson_oid_to_string (&guild->oid, s_guild->guild_oid); 
+                    memcpy (&s_guild->creation_date, guild->creation_date, sizeof (struct tm));
 
-        // create the guild bson
-        // insert the bson into the db
+                    // delete our temp data
+                    bson_destroy (guild_doc);
+                    black_guild_destroy (guild);
+
+                    retval = 0;
+                }
+
+                else {
+                    #ifdef ERMIRY_DEBUG
+                    logMsg (stderr, ERROR, DEBUG_MSG, "Failed to insert black guild into mongo!");
+                    #endif
+                }
+            }
+        }
     }
 
     return retval;
 
 }
+
+int black_guild_update () {}
 
 #pragma endregion
 

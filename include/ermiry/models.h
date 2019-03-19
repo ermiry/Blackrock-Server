@@ -4,6 +4,8 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
+#include "myTypes.h"
+
 // FIXME: we need to add a reference to our blackrock account
 // TODO: what happens when we add more games or projects?
 typedef struct User {
@@ -26,7 +28,8 @@ typedef struct User {
 #pragma region BLACKROCK
 
 // FIXME: move this from here!
-#define SERIALIZE_BUFF_SIZE         64
+#define SERIALIZE_BUFF_SIZE             64
+#define EXT_SERIALIZE_BUFF_SIZE         128
 
 typedef enum BlackGuildType {
 
@@ -39,8 +42,6 @@ typedef enum BlackGuildType {
 typedef struct BlackGuild {
 
     bson_oid_t oid;
-
-    // FIXME: how can we create a club tag such as brawl?
 
     // guild description
     char *name;
@@ -77,6 +78,7 @@ typedef struct S_BlackGuild {
     // TODO: maybe have an enum for this?
     // Mexico (MX)
     char location[SERIALIZE_BUFF_SIZE];             // FIXME: how can we better select this?
+    struct tm creation_date;
 
     // conditions to enter
     BlackGuildType type;            // inivite only, open, closed
@@ -86,7 +88,7 @@ typedef struct S_BlackGuild {
     // members
     User *leader;   
     u32 n_members;
-    User *members;              // FIXME: how do we want to get members?
+    User **members;              // FIXME: how do we want to get members?
                                 // by ermiry user or by black profile?
 
 } S_BlackGuild;
