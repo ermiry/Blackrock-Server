@@ -23,4 +23,7 @@ extern int ermiry_end (void);
 // if we find one, check if the password match
 User *ermiry_user_get (const char *username, const char *password, int *errors);
 
+// we know that a user exists, so get the associated black profile
+BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors);
+
 #endif

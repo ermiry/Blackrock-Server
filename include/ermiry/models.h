@@ -25,6 +25,34 @@ typedef struct User {
 
 #pragma region BLACKROCK
 
+typedef struct BlackGuild {
+
+    bson_oid_t oid;
+
+    // FIXME: how can we create a club tag such as brawl?
+
+    // guild description
+    char *name;
+    char *description;
+    u32 trophies;
+    // Mexico (MX)
+    char *location;             // FIXME: how can we better select this?
+
+    // conditions to enter
+    char *type;                 // inivite only, open, closed
+    u32 required_trophies;      
+
+    // members
+    bson_oid_t leader;          // TODO: reference to the guild leader
+    // TODO: do we want ranks in the guilds?
+
+    // TODO: store the members as an array of oids in the db
+    u32 n_members;
+    User *members;              // FIXME: how do we want to get members?
+                                // by ermiry user or by black profile?
+
+} BlackGuild;
+
 // we should just send the oid of the achievemnt, the game client has the info
 typedef struct Achievement {
 

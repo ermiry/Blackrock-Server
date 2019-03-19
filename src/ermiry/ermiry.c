@@ -174,6 +174,7 @@ static User *user_get (const char *username) {
         bson_destroy (user_doc);
     }
 
+
     return user;
 
 }
@@ -227,10 +228,25 @@ static BlackProfile *black_profile_get (const bson_oid_t user_oid) {
 
     bson_t *black_doc = black_profile_find (black_collection, user_oid);
     if (black_doc) {
-        char *black_str = bson_as_canonical_extended_json (black_doc, NULL);
+        /* char *black_str = bson_as_canonical_extended_json (black_doc, NULL);
         if (black_str) {
             // TODO: parse the bson into our c model
-        }
+            
+        } */
+
+        // FIXME: 18/03/2019 -- try using bson iter to retrive the data from bson
+        // bson_iter_init
+        /* bson_t *b;
+        bson_iter_t iter;
+
+        if ((b = bson_new_from_data (my_data, my_data_len))) {
+            if (bson_iter_init (&iter, b)) {
+                while (bson_iter_next (&iter)) {
+                    printf ("Found element key: \"%s\"\n", bson_iter_key (&iter));
+                }
+            }
+            bson_destroy (b);
+        } */
 
         bson_destroy (black_doc);
     }
@@ -319,23 +335,47 @@ User *ermiry_user_get (const char *username, const char *password, int *errors) 
 
 }
 
-BlackProfile *ermiry_black_profile_get (const char *username, const char *password, int *errors) {
+// we know that a user exists, so get the associated black profile
+BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors) {
 
-    BlackProfile *profile = NULL;
-
-    if (username && password) {
-        User *user = ermiry_user_get (username, password, errors);
-        if (user) {
-            // we have got a valid user, so find the associated black profile
-            profile = black_profile_get ((const bson_oid_t) user->oid);
-            if (!profile) *errors = PROFILE_NOT_FOUND;
-        }
-    }
-
-    else *errors = SERVER_ERROR;
+    BlackProfile *profile = black_profile_get (user_oid);
+    if (!profile) *errors = PROFILE_NOT_FOUND;
 
     return profile;
 
 }
+
+/*** TODO: add public funcs to... ***/
+
+/*** PLAYERS / PROFILES ***/
+
+// update values in the db
+    // for example best scores or player stats
+// create a new black profile when someone first login in the blackrock game
+    // how do we want to control security?
+// how can we save a battle log??
+
+/*** FRIENDS ***/
+
+// add a friend from blackrcok
+// remove a friend from blackrock
+// how do we want to see friend activity?
+// send private messages
+// invite a friend to join a game
+
+
+/*** GUILDS ***/
+
+// create a guild
+// join a black guild
+// leave a black guild
+// the leader can be able to edit the guild from blackrock -> such as in brawl
+    // logic may vary depending of the rank of the player
+// search for guilds and return possible outcomes
+// request to join a guild
+    // only for guilds of certain access restrictions
+// send guild messages
+
+// invite a friend to a guild
 
 #pragma endregion
