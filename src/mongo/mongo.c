@@ -8,9 +8,9 @@
 #include "utils/log.h"
 
 // FIXME: we need to have more flexibility here!!
-mongoc_uri_t *uri;
-mongoc_client_t *client;
-mongoc_database_t *database;
+mongoc_uri_t *mongo_uri;
+mongoc_client_t *mongo_client;
+mongoc_database_t *mongo_database;
 
 #define APP_NAME        "blackrock-server"
 
@@ -25,8 +25,8 @@ int mongo_connect (void) {
     mongoc_init ();     // init mongo internals
 
     // safely create mongo uri object
-    uri = mongoc_uri_new_with_error (uri_string, &error);
-    if (!uri) {
+    mongo_uri = mongoc_uri_new_with_error (uri_string, &error);
+    if (!mongo_uri) {
         fprintf (stderr,
                 "failed to parse URI: %s\n"
                 "error message:       %s\n",
@@ -36,14 +36,14 @@ int mongo_connect (void) {
     }
 
     // create a new client instance
-    client = mongoc_client_new_from_uri (uri);
-    if (!client) {
+    mongo_client = mongoc_client_new_from_uri (mongo_uri);
+    if (!mongo_client) {
         fprintf (stderr, "Failed to create a new client instance!\n");
         return 1;
     }
 
     // register the app name -> for logging info
-    mongoc_client_set_appname (client, APP_NAME);
+    mongoc_client_set_appname (mongo_client, APP_NAME);
 
     return 0;       // success
 
@@ -51,10 +51,10 @@ int mongo_connect (void) {
 
 void mongo_disconnect (void) {
 
-    mongoc_database_destroy (database);
+    mongoc_database_destroy (mongo_database);
 
-    mongoc_uri_destroy (uri);
-    mongoc_client_destroy (client);
+    mongoc_uri_destroy (mongo_uri);
+    mongoc_client_destroy (mongo_client);
     mongoc_cleanup ();
 
 }

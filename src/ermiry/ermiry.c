@@ -257,6 +257,108 @@ static BlackProfile *black_profile_get (const bson_oid_t user_oid) {
 
 #pragma endregion
 
+#pragma region Black Guilds
+
+/*** GUILDS ***/
+
+// create a guild
+// join a black guild
+// leave a black guild
+// the leader can be able to edit the guild from blackrock -> such as in brawl
+    // logic may vary depending of the rank of the player
+// search for guilds and return possible outcomes
+// request to join a guild
+    // only for guilds of certain access restrictions
+// send guild messages
+
+// invite a friend to a guild
+
+#define BLACK_GUILD_COLL_NAME       "blackguild"
+static mongoc_collection_t *black_guild_collection = NULL;
+
+static BlackGuild *black_guild_new (void) {
+
+    BlackGuild *guild = (BlackGuild *) malloc (sizeof (BlackGuild));
+    if (guild) memset (guild, 0, sizeof (BlackGuild));
+    return guild;
+
+}
+
+static void black_guild_destroy (BlackGuild *guild) {
+
+    if (guild) {
+        if (guild->name) free (guild->name);
+        if (guild->description) free (guild->description);
+        if (guild->creation_date) free (guild->creation_date);
+        // FIXME: location?
+
+        free (guild);
+    }
+
+}
+
+static bson_t *black_guild_bson_create (BlackGuild *guild) {
+
+    bson_t *doc = NULL;
+
+    if (guild) {
+        doc = bson_new ();
+
+        bson_oid_init (&guild->oid, NULL);
+        bson_append_oid (doc, "_id", -1, &guild->oid);
+
+        // common guild info
+        bson_append_utf8 (doc, "name", -1, guild->name, -1);
+        bson_append_utf8 (doc, "description", -1, guild->description, -1);
+        bson_append_utf8 (doc, "trophies", -1, createString ("%i", guild->trophies), -1);
+        bson_append_utf8 (doc, "location", -1, guild->location, -1);
+        bson_append_date_time (doc, "creationDate", -1, mktime (guild->creation_date) * 1000);
+
+        // requirements
+        switch (guild->type) {
+            case GUILD_TYPE_OPEN: bson_append_utf8 (doc, "type", -1, "open", -1); break;
+            case GUILD_TYPE_INVITE: bson_append_utf8 (doc, "type", -1, "invite", -1); break;
+            case GUILD_TYPE_CLOSED: bson_append_utf8 (doc, "type", -1, "closed", -1); break;
+        }
+        bson_append_utf8 (doc, "requiredTrophies", -1, createString ("%i", guild->required_trophies), -1);
+
+        // members
+        bson_append_oid (doc, "leader", -1, &guild->leader->oid);
+
+        char buf[16];
+        const char *key;
+        size_t keylen;
+        bson_t members_array;
+        bson_append_array_begin (&doc, "members", -1, &members_array);
+        for (int i = 0; i < guild->n_members; i++) {
+            keylen = bson_uint32_to_string (i, &key, buf, sizeof (buf));
+            bson_append_oid (&members_array, key, (int) keylen, &guild->members[i]->oid);
+        }
+        bson_append_array_end (&doc, &members_array);
+    }
+
+}
+
+// a user creates a new guild based on the guild data he sent
+u8 black_guild_create (User *creator, S_BlackGuild *guild_data) {
+
+    int retval = 1;
+
+    if (creator && guild_data) {
+        // TODO:
+        // we know that the creator is valid, but we need to verify that the guild data is valid
+        // create the new guild and insert it into the db
+
+        // create the guild bson
+        // insert the bson into the db
+    }
+
+    return retval;
+
+}
+
+#pragma endregion
+
 #pragma region Public
 
 // init ermiry data & processes
@@ -267,16 +369,23 @@ int ermiry_init (void) {
     // TODO: do we need to pass the username and the db?
     if (!mongo_connect ()) {
         // open handle to user collection
-        user_collection = mongoc_client_get_collection (client, db_name, USERS_COLL_NAME);
+        user_collection = mongoc_client_get_collection (mongo_client, db_name, USERS_COLL_NAME);
         if (!user_collection) {
             logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to users collection!");
             errors = 1;
         }
         
         // open handle to blackrock profile collection
-        black_collection = mongoc_client_get_collection (client, db_name, BLACK_COLL_NAME);
+        black_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_COLL_NAME);
         if (!black_collection) {
             logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black collection!");
+            errors = 1;
+        }
+
+        // open handle to black guild collection
+        black_guild_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_GUILD_COLL_NAME);
+        if (!black_guild_collection) {
+            logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black guild collection!");
             errors = 1;
         }
     }
@@ -296,6 +405,7 @@ int ermiry_end (void) {
     // close our collections handles
     if (user_collection) mongoc_collection_destroy (user_collection);
     if (black_collection) mongoc_collection_destroy (black_collection);
+    if (black_guild_collection) mongoc_collection_destroy (black_guild_collection);
 
     mongo_disconnect ();
 
@@ -362,20 +472,5 @@ BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors) 
 // how do we want to see friend activity?
 // send private messages
 // invite a friend to join a game
-
-
-/*** GUILDS ***/
-
-// create a guild
-// join a black guild
-// leave a black guild
-// the leader can be able to edit the guild from blackrock -> such as in brawl
-    // logic may vary depending of the rank of the player
-// search for guilds and return possible outcomes
-// request to join a guild
-    // only for guilds of certain access restrictions
-// send guild messages
-
-// invite a friend to a guild
 
 #pragma endregion

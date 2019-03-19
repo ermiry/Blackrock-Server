@@ -13,9 +13,9 @@
 extern int mongo_connect (void);
 extern void mongo_disconnect (void);
 
-extern mongoc_uri_t *uri;
-extern mongoc_client_t *client;
-extern mongoc_database_t *database;
+extern mongoc_uri_t *mongo_uri;
+extern mongoc_client_t *mongo_client;
+extern mongoc_database_t *mongo_database;
 
 #pragma endregion
 

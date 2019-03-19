@@ -25,6 +25,17 @@ typedef struct User {
 
 #pragma region BLACKROCK
 
+// FIXME: move this from here!
+#define SERIALIZE_BUFF_SIZE         64
+
+typedef enum BlackGuildType {
+
+    GUILD_TYPE_OPEN = 0,
+    GUILD_TYPE_INVITE = 1,
+    GUILD_TYPE_CLOSED = 2
+
+} BlackGuildType;
+
 typedef struct BlackGuild {
 
     bson_oid_t oid;
@@ -37,21 +48,48 @@ typedef struct BlackGuild {
     u32 trophies;
     // Mexico (MX)
     char *location;             // FIXME: how can we better select this?
+    struct tm *creation_date;
 
     // conditions to enter
-    char *type;                 // inivite only, open, closed
+    BlackGuildType type;                 // inivite only, open, closed
     u32 required_trophies;      
 
     // members
-    bson_oid_t leader;          // TODO: reference to the guild leader
+    //bson_oid_t leader;          // TODO: reference to the guild leader
+    User *leader;
     // TODO: do we want ranks in the guilds?
 
     // TODO: store the members as an array of oids in the db
     u32 n_members;
-    User *members;              // FIXME: how do we want to get members?
+    User **members;              // FIXME: how do we want to get members?
                                 // by ermiry user or by black profile?
 
 } BlackGuild;
+
+// Serialized Black Guild data
+typedef struct S_BlackGuild {
+
+    char guild_oid[SERIALIZE_BUFF_SIZE];
+
+    char name[SERIALIZE_BUFF_SIZE];
+    char description[SERIALIZE_BUFF_SIZE];
+    u32 trophies;
+    // TODO: maybe have an enum for this?
+    // Mexico (MX)
+    char location[SERIALIZE_BUFF_SIZE];             // FIXME: how can we better select this?
+
+    // conditions to enter
+    BlackGuildType type;            // inivite only, open, closed
+    u32 required_trophies;
+
+    // FIXME: change for a serialized user reference
+    // members
+    User *leader;   
+    u32 n_members;
+    User *members;              // FIXME: how do we want to get members?
+                                // by ermiry user or by black profile?
+
+} S_BlackGuild;
 
 // we should just send the oid of the achievemnt, the game client has the info
 typedef struct Achievement {
