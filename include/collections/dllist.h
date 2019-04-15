@@ -12,7 +12,7 @@ typedef struct ListElement {
 
 } ListElement;
 
-typedef struct List {
+typedef struct DoubleList {
 
     size_t size;
 
@@ -36,7 +36,7 @@ typedef struct List {
 extern DoubleList *dlist_init (void (*destroy)(void *data),
     int (*compare)(void *one, void *two));
 extern void dlist_reset (DoubleList *);
-// only gets rid of the List elemenst, but the data is kept
+// only gets rid of the DoubleList elemenst, but the data is kept
 extern void dlist_clean (DoubleList *);
 extern void dlist_destroy (DoubleList *);
 

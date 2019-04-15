@@ -8,7 +8,6 @@
 
 #include "utils/myUtils.h"
 #include "utils/log.h"
-#include "utils/jsmn.h"
 
 // FIXME: 
 const char *uri_string = "mongodb://localhost:27017";
@@ -53,90 +52,7 @@ static User *user_json_parse (char *user_json, bool populate) {
 
     User *user = NULL;
 
-    if (user_json) {
-        user = user_new ();
-
-        jsmntok_t t[128];   // FIXME: is this true? We expect no more than 128 tokens
-
-        jsmn_parser p;
-        jsmn_init (&p);
-        
-        int ret = jsmn_parse (&p, user_json, strlen (user_json), t, sizeof (t) / sizeof (t[0]));
-        if (ret < 0) {
-            logMsg (stderr, ERROR, NO_TYPE, "Failed to pasre user JSON!");
-            return NULL;
-        }
-
-        // Assume the top-level element is an object
-        if (ret < 1 || t[0].type != JSMN_OBJECT) {
-            logMsg (stderr, ERROR, NO_TYPE, "User JSON Object expected!");
-            return NULL;
-        }
-
-        for (int i = 0; i < ret; i++) {
-            if (jsoneq (user_json, &t[i], "$oid") == 0) {
-                char *oid_str = createString ("%.*s\n", t[i+1].end-t[i+1].start, user_json + t[i+1].start);
-                bson_oid_init_from_string (&user->oid, oid_str);
-                i++;
-            }
-
-            else if (jsoneq (user_json, &t[i], "name") == 0) {
-                user->name = createString ("%.*s", t[i+1].end-t[i+1].start, user_json + t[i+1].start);
-                i++;
-            }
-
-            else if (jsoneq (user_json, &t[i], "email") == 0) {
-                user->email = createString ("%.*s", t[i+1].end-t[i+1].start, user_json + t[i+1].start);
-                i++;
-            }
-
-            else if (jsoneq (user_json, &t[i], "password") == 0) {
-                user->password = createString ("%.*s", t[i+1].end-t[i+1].start, user_json + t[i+1].start);
-                i++;
-            }
-
-            else if (jsoneq (user_json, &t[i], "username") == 0) {
-                user->username = createString ("%.*s", t[i+1].end-t[i+1].start, user_json + t[i+1].start);
-                i++;
-            }
-
-            // parse actions array
-            /* else if (jsoneq (role_json, &t[i], "actions") == 0) {
-        		if (t[i+1].type != JSMN_ARRAY) continue; 
-  
-                role->n_actions = t[i+1].size;
-                role->actions = (char **) calloc (role->n_actions, sizeof (char *));
-
-        		for (int j = 0; j < t[i+1].size; j++) {
-        			jsmntok_t *g = &t[i+j+2];
-                    role->actions[j] = createString ("%.*s\n", g->end - g->start, role_json + g->start);
-        		}
-
-        		i += t[i+1].size + 1;
-        	} 
-
-            else if (jsoneq (role_json, &t[i], "users") == 0) {
-        		if (t[i+1].type != JSMN_ARRAY) continue; 
-  
-                // role->n_actions = t[i+1].size;
-                // role->actions = (char **) calloc (role->n_actions, sizeof (char *));
-
-        		for (int j = 0; j < t[i+1].size; j++) {
-        			jsmntok_t *g = &t[i+j+2];
-                    char *hola = createString ("%.*s\n", g->end - g->start, role_json + g->start);
-                    printf ("%s\n", hola);
-                    // role->actions[j] = createString ("%.*s\n", g->end - g->start, role_json + g->start);
-        		}
-
-        		i += t[i+1].size + 1;
-        	}  */
-            
-            // else {
-        	// 	printf("Unexpected key: %.*s\n", t[i].end-t[i].start,
-        	// 			role_json + t[i].start);
-        	// }
-        }
-    }
+    // FIXME: parse the bson as in the mongo panel
 
     return user;
 
@@ -355,10 +271,11 @@ static BlackGuild *black_guild_deserialize (S_BlackGuild *s_guild) {
             guild->location = (char *) calloc (strlen (s_guild->location + 1), sizeof (char));
             strcpy (guild->location, s_guild->location);
 
-            time_t rawtime;
-            struct tm *timeinfo;
-            time (&rawtime);
-            guild->creation_date = gmtime (rawtime);
+            // FIXME: check mongo control panel!!
+            // time_t rawtime;
+            // struct tm *timeinfo;
+            // time (&rawtime);
+            // guild->creation_date = gmtime (rawtime);
 
             guild->type = s_guild->type;
             guild->required_trophies = s_guild->required_trophies;

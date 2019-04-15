@@ -15,10 +15,10 @@
 #include "cerver/game.h"
 
 #include "utils/thpool.h"
-#include "utils/avl.h"
+#include "collections/avl.h"
 
 #include "utils/myUtils.h"
-#include "utils/list.h"
+#include "collections/dllist.h"
 #include "utils/objectPool.h"
 #include "utils/config.h"
 #include "utils/log.h"
@@ -540,7 +540,7 @@ typedef struct {
 
 #define MONSTER_COUNT       9
 
-List *enemyData = NULL;
+DoubleList *enemyData = NULL;
 
 u8 loadMonsterLoot (u32 monId, MonsterLoot *loot) {
 
@@ -643,7 +643,7 @@ u8 connectEnemiesDB (void) {
     // FIXME: does each lobby need to have its own enemy data?
     // TODO: create a destroy function for this
     // enemies in memory
-    /* enemyData = initList (free);
+    /* enemyData = dlist_init (free);
 
     // load the enemies data into memory
     char *err = 0;

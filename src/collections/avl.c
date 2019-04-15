@@ -1,4 +1,4 @@
-#include "utils/avl.h"
+#include "collections/avl.h"
 
 AVLTree *avl_init (CompPointer comparator, void (*destroy)(void *data)) {
 

@@ -37,7 +37,7 @@ void dlist_reset (DoubleList *list) {
 
 }
 
-// only gets rid of the List elemenst, but the data is kept
+// only gets rid of the DoubleList elemenst, but the data is kept
 // this is used if another list or structure points to the same data
 void dlist_clean (DoubleList *list) {
 

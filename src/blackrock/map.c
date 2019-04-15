@@ -14,7 +14,7 @@
 #include "blackrock/room.h"
 #include "blackrock/map.h"
 
-#include "utils/list.h"
+#include "collections/dllist.h"
 
 #include "utils/myUtils.h"
 
@@ -123,7 +123,7 @@ void carveCorridorVer (Point from, Point to, bool **mapCells) {
 
 /*** SEGMENTS ***/ 
 
-void getSegments (List *segments, Point from, Point to, Room *firstRoom) {
+void getSegments (DoubleList *segments, Point from, Point to, Room *firstRoom) {
 
     // if (firstRoom == NULL) fprintf (stderr, "\nPassing a NULL room list!\n");
 
@@ -257,7 +257,7 @@ void getSegments (List *segments, Point from, Point to, Room *firstRoom) {
 
 }
 
-void carveSegments (List *hallways, bool **mapCells) {
+void carveSegments (DoubleList *hallways, bool **mapCells) {
 
     ListElement *ptr = LIST_START (hallways);
     while (ptr != NULL) {
@@ -358,7 +358,7 @@ void generateMap (bool **mapCells) {
     // 08/08/2018 -- 7:55
     // I think we got it working the same way as the array, but we still need to tweak
     // how the map generates in general..
-    List *hallways = initList (free);
+    DoubleList *hallways = dlist_init (free);
 
     Room *ptr = firstRoom->next, *preptr = firstRoom;
     while (ptr != NULL) {
@@ -368,7 +368,7 @@ void generateMap (bool **mapCells) {
         Point fromPt = randomRoomPoint (from);
         Point toPt = randomRoomPoint (to);
 
-        List *segments = initList (free);
+        DoubleList *segments = dlist_init (free);
 
         // break the proposed hallway into segments
         getSegments (segments, fromPt, toPt, firstRoom);
@@ -403,7 +403,7 @@ void generateMap (bool **mapCells) {
         }    
 
         // clean up lists
-        destroyList (segments);
+        dlist_destroy (segments);
 
         // continue looping through the rooms
         preptr = preptr->next;
@@ -415,7 +415,7 @@ void generateMap (bool **mapCells) {
 
     // cleanning up 
     firstRoom = deleteList (firstRoom);
-    destroyList (hallways);
+    dlist_destroy (hallways);
 
 }
 

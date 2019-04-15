@@ -4,7 +4,7 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
-#include "myTypes.h"
+#include "types/myTypes.h"
 
 // FIXME: we need to add a reference to our blackrock account
 // TODO: what happens when we add more games or projects?

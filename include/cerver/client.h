@@ -1,13 +1,13 @@
 #ifndef CLIENT_H   
 #define CLIENT_H
 
-#include "myTypes.h"
+#include "types/myTypes.h"
 
 #include "network.h"
 #include "cerver.h"
 #include "client.h"
 
-#include "utils/avl.h"
+#include "collections/avl.h"
 
 struct _Server;
 

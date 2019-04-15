@@ -5,7 +5,7 @@
 
 #include "cerver/game.h"
 
-#include "utils/list.h"
+#include "collections/dllist.h"
 
 /*** BLACKROCK TYPES ***/
 
@@ -191,7 +191,7 @@ typedef struct BrGameData {
 
     World *world;
 
-    List *enemyData;    // reference to a global list of enemy data
+    DoubleList *enemyData;    // reference to a global list of enemy data
 
     ScoreBoard *sb;
 
