@@ -20,8 +20,7 @@ typedef struct User {
     struct tm *lastTime;
     char *location;
 
-    int n_friends;
-    struct User **friends;
+    DoubleList *friends;
 
 } User;
 
