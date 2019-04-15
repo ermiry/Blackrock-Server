@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "types/myTypes.h"
+
 #include "cerver/game.h"
 
 #include "collections/dllist.h"
@@ -17,15 +19,6 @@
 
 #define NUM_COLS    80
 #define NUM_ROWS    45
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t i8;
-typedef int32_t i32;
-typedef int64_t i64;
 
 typedef unsigned char asciiChar;
 

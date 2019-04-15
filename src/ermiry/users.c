@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "ermiry/ermiry.h"
+#include "ermiry/models.h"
+#include "ermiry/users.h"
 
 #include "mongo/mongo.h"
 
