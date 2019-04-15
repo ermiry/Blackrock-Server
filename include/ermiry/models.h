@@ -58,14 +58,8 @@ typedef struct BlackGuild {
     u32 required_trophies;      
 
     // members
-    //bson_oid_t leader;          // TODO: reference to the guild leader
     User *leader;
-    // TODO: do we want ranks in the guilds?
-
-    // TODO: store the members as an array of oids in the db
-    u32 n_members;
-    User **members;              // FIXME: how do we want to get members?
-                                // by ermiry user or by black profile?
+    DoubleList *members;
 
 } BlackGuild;
 

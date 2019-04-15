@@ -107,21 +107,34 @@ static BlackProfile *black_profile_get (const bson_oid_t user_oid) {
 
 mongoc_collection_t *black_guild_collection = NULL;
 
-static BlackGuild *black_guild_new (void) {
+BlackGuild *black_guild_new (void) {
 
     BlackGuild *guild = (BlackGuild *) malloc (sizeof (BlackGuild));
-    if (guild) memset (guild, 0, sizeof (BlackGuild));
+    if (guild) {
+        memset (guild, 0, sizeof (BlackGuild));
+        guild->name = NULL;
+        guild->description =  NULL;
+        guild->location = NULL;
+        guild->creation_date =  NULL;
+
+        guild->leader = NULL;
+        guild->members = dlist_init (user_destroy, NULL);
+    } 
+
     return guild;
 
 }
 
-static void black_guild_destroy (BlackGuild *guild) {
+void black_guild_destroy (BlackGuild *guild) {
 
     if (guild) {
         if (guild->name) free (guild->name);
         if (guild->description) free (guild->description);
+        if (guild->location) free (guild->location);
         if (guild->creation_date) free (guild->creation_date);
-        // FIXME: location?
+
+        user_destroy (guild->leader);
+        dlist_destroy (guild->members);
 
         free (guild);
     }
@@ -160,13 +173,93 @@ static bson_t *black_guild_bson_create (BlackGuild *guild) {
         const char *key;
         size_t keylen;
         bson_t members_array;
+        unsigned int i = 0;
         bson_append_array_begin (doc, "members", -1, &members_array);
-        for (int i = 0; i < guild->n_members; i++) {
+        User *member = NULL;
+        for (ListElement *le = LIST_START (guild->members); le; le = le->next) {
+            member = (User *) le->data;
             keylen = bson_uint32_to_string (i, &key, buf, sizeof (buf));
-            bson_append_oid (&members_array, key, (int) keylen, &guild->members[i]->oid);
+            bson_append_oid (&members_array, key, (int) keylen, &member->oid);
+            i++;
         }
         bson_append_array_end (doc, &members_array);
     }
+
+}
+
+// FIXME: parse trophies and any other value we need to fill our guild model
+// parses a bson doc into a black guild model
+static BlackGuild *black_guild_doc_parse (const bson_t *guild_doc, bool populate_users) {
+
+    BlackGuild *guild =  NULL;
+
+    if (guild_doc) {
+        guild = black_guild_new ();
+
+        bson_iter_t iter;
+        bson_type_t type;
+
+        if (bson_iter_init (&iter, guild_doc)) {
+            while (bson_iter_next (&iter)) {
+                const char *key = bson_iter_key (&iter);
+                const bson_value_t *value = bson_iter_value (&iter);
+
+                if (!strcmp (key, "_id")) {
+                    bson_oid_copy (&value->value.v_oid, &guild->oid);
+                    // const bson_oid_t *oid = bson_iter_oid (&iter);
+                    // memcpy (&user->oid, oid, sizeof (bson_oid_t));
+                }
+
+                else if (!strcmp (key, "name") && value->value.v_utf8.str) {
+                    guild->name = (char *) calloc (value->value.v_utf8.len + 1, sizeof (char));
+                    strcpy (guild->name, value->value.v_utf8.str);
+                }
+
+                else if (!strcmp (key, "description") && value->value.v_utf8.str) {
+                    guild->description = (char *) calloc (value->value.v_utf8.len + 1, sizeof (char));
+                    strcpy (guild->description, value->value.v_utf8.str);
+                }
+
+                else if (!strcmp (key, "creationDate")) {
+                    time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
+                    memcpy (guild->creation_date, gmtime (&secs), sizeof (struct tm));
+                }
+                
+                else if (!strcmp (key, "location")) {
+                    if (value->value.v_utf8.str) {
+                        if (!strcmp (value->value.v_utf8.str, " ")) {
+                            guild->location = (char *) calloc (16, sizeof (char));
+                            strcpy (guild->location, "No location");
+                        }
+                        
+                        else {
+                            guild->location = (char *) calloc (value->value.v_utf8.len + 1, sizeof (char));
+                            strcpy (guild->location, value->value.v_utf8.str);
+                        }
+                    }
+                }
+
+                else if (!strcmp (key, "leader")) {
+                    // const bson_oid_t *oid = bson_iter_oid (&iter);
+                    const bson_oid_t *oid = &value->value.v_oid;
+                    if (populate_users) guild->leader = user_get_by_oid (oid, false);
+                    else {
+                        guild->leader = user_new ();
+                        bson_oid_copy (&value->value.v_oid, &guild->leader->oid);
+                    } 
+                }
+
+                // FIXME: iter members array!! and get how many they are
+                else if (!strcmp (key, "members")) {
+
+                }
+
+                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
+            }
+        }
+    }
+
+    return guild;
 
 }
 
@@ -195,12 +288,13 @@ static BlackGuild *black_guild_deserialize (S_BlackGuild *s_guild) {
             guild->type = s_guild->type;
             guild->required_trophies = s_guild->required_trophies;
 
-            guild->n_members = 1;
-            guild->leader = user_new ();
-            guild->leader->oid = s_guild->leader->oid;
-            guild->members = (User **) calloc (guild->n_members, sizeof (User *));
-            guild->members[0] = user_new ();
-            guild->members[0]->oid = guild->leader->oid;
+            // FIXME:
+            // guild->n_members = 1;
+            // guild->leader = user_new ();
+            // guild->leader->oid = s_guild->leader->oid;
+            // guild->members = (User **) calloc (guild->n_members, sizeof (User *));
+            // guild->members[0] = user_new ();
+            // guild->members[0]->oid = guild->leader->oid;
         }
     }
 
