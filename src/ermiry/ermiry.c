@@ -415,6 +415,9 @@ int black_guild_create (S_BlackGuild *s_guild) {
 
 int black_guild_update () {}
 
+// add a user to a black guild
+int black_guild_add () {}
+
 #pragma endregion
 
 #pragma region Public

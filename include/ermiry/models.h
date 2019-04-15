@@ -44,6 +44,7 @@ typedef struct BlackGuild {
     bson_oid_t oid;
 
     // guild description
+    // FIXME: add a badge
     char *name;
     char *description;
     u32 trophies;
