@@ -622,7 +622,7 @@ static int loadEnemyData (void *data, int argc, char **argv, char **azColName) {
         logMsg (stderr, ERROR, GAME, 
             createString ("Error getting monster loot. Monster id: %i.\n", mon->id));
 
-    insertAfter (enemyData, LIST_END (enemyData), mon);
+    dlist_insert_after (enemyData, LIST_END (enemyData), mon);
 
    return 0;
 
@@ -797,7 +797,7 @@ void generateLevel (World *world) {
     // FIXME: check if we have to actually create the walls or the server
     // only needs to know about their position
     // randomly generate the map data
-    initMap (world->level->mapCells);
+    // initMap (world->level->mapCells);
 
     // TODO: generate other map structures such as stairs
     // FIXME: place stairs
@@ -874,8 +874,8 @@ u8 initWorld (AVLNode *players, World *world) {
 
     // spawn players -> just mark their starting position
     // 15/11/2018 -- we spawn the players in the same position
-    Point playerSpawnPos = getFreeSpot (world->level->mapCells);
-    spawnPlayers (players, playerSpawnPos);
+    // Point playerSpawnPos = getFreeSpot (world->level->mapCells);
+    // spawnPlayers (players, playerSpawnPos);
 
     // TODO: calculate fov
 

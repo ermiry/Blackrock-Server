@@ -1621,7 +1621,7 @@ u8 initServer (Server *server, Config *cfg, ServerType type) {
     #endif
 
     if (cfg) {
-        ConfigEntity *cfgEntity = getEntityWithId (cfg, type);
+        ConfigEntity *cfgEntity = config_get_entity_with_id (cfg, type);
         if (!cfgEntity) {
             logMsg (stderr, ERROR, SERVER, "Problems with server config!");
             return 1;

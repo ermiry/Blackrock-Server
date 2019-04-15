@@ -16,10 +16,11 @@
 
 #include "cerver/game.h"
 
-#include "utils/objectPool.h"
 #include "collections/dllist.h"
 #include "collections/avl.h"
 #include "collections/htab.h"
+
+#include "utils/objectPool.h"
 
 #include "utils/myUtils.h"
 #include "utils/config.h"
@@ -152,7 +153,7 @@ u8 destroyGameServer (Server *server) {
                 destroyLobby (server, (Lobby *) (LIST_START (gameData->currentLobbys)));
 
             // destroy all lobbys
-            cleanUpList (gameData->currentLobbys);
+            dlist_clean (gameData->currentLobbys);
             pool_clear (gameData->lobbyPool);
 
             #ifdef DEBUG
@@ -790,7 +791,7 @@ u8 game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
     if (gameData->currentLobbys) 
         logMsg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
     else {
-        gameData->currentLobbys = dlist_init (deleteLobby);
+        gameData->currentLobbys = dlist_init (deleteLobby, NULL);
         if (!gameData->currentLobbys) {
             logMsg (stderr, ERROR, NO_TYPE, "Failed to init server's lobby list!");
             return 1;
@@ -820,7 +821,7 @@ u8 game_initLobbys (GameServerData *gameData, u8 n_lobbys) {
 // loads the settings for the selected game type from the game server data
 GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
 
-    ConfigEntity *cfgEntity = getEntityWithId (gameConfig, gameType);
+    ConfigEntity *cfgEntity = config_get_entity_with_id (gameConfig, gameType);
 	if (!cfgEntity) {
         logMsg (stderr, ERROR, GAME, "Problems with game settings config!");
         return NULL;
@@ -943,7 +944,7 @@ Lobby *createLobby (Server *server, Player *owner, GameType gameType) {
         lobby->isRunning = true;
 
         // add the lobby the server active ones
-        insertAfter (data->currentLobbys, LIST_END (data->currentLobbys), lobby);
+        dlist_insert_after (data->currentLobbys, LIST_END (data->currentLobbys), lobby);
 
         // create a unique thread to handle this lobby
         ServerLobby *sl = (ServerLobby *) malloc (sizeof (ServerLobby));
