@@ -6,6 +6,8 @@
 
 #include "types/myTypes.h"
 
+#include "collections/dllist.h"
+
 // FIXME: we need to add a reference to our blackrock account
 // TODO: what happens when we add more games or projects?
 typedef struct User {
