@@ -96,7 +96,7 @@ typedef struct Achievement {
 
     char *name;
     char *description;
-    struct tm date;
+    struct tm *date;
     char *img;
 
 } Achievement;
@@ -129,21 +129,20 @@ typedef struct BlackProfile {
 
     bson_oid_t oid;
 
-    User *user;     // the user this profile is related to
+    User *user;
 
-    struct tm datePurchased;
-    struct tm lastTime;
+    struct tm *datePurchased;
+    struct tm *lastTime;
     int timePlayed;
 
     int trophies;
 
     char *guild;
 
-    // TODO: what about an array of oids?
-    Achievement **achievements;
+    DoubleList *achievements;
 
-    BlackPVPStats pvpStats;
-    BlackPVEStats pveStats;
+    BlackPVEStats *pveStats;
+    BlackPVPStats *pvpStats;
 
 } BlackProfile;
 

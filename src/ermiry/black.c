@@ -18,36 +18,116 @@
 
 mongoc_collection_t *black_collection = NULL;
 
+static Achievement *black_achievement_new (void) {
+
+    Achievement *a = (Achievement *) malloc (sizeof (Achievement));
+    if (a) {
+        a->name = NULL;
+        a->description = NULL;
+        a->date = NULL;
+        a->img = NULL;
+    }
+
+    return a;
+
+}
+
+static void black_achievement_destroy (void *ptr) {
+
+    if (ptr) {
+        Achievement *a = (Achievement *) ptr;
+        if (a->name) free (a->name);
+        if (a->description) free (a->description);
+        if (a->date) free (a->date);
+        if (a->img) free (a->img);
+
+        free (a);
+    }
+
+}
+
+static inline BlackPVEStats *black_pve_stats_new (void) {
+
+    BlackPVEStats *pve_stats = (BlackPVEStats *) malloc (sizeof (BlackPVEStats));
+    if (pve_stats) memset (pve_stats, 0, sizeof (BlackPVEStats));
+    return pve_stats;
+
+}
+
+static inline void black_pve_stats_destroy (BlackPVEStats *pve_stats) { if (pve_stats) free (pve_stats); }
+
+static inline BlackPVPStats *black_pvp_stats_new (void) {
+
+    BlackPVPStats *pvp_stats = (BlackPVPStats *) malloc (sizeof (BlackPVPStats));
+    if (pvp_stats) memset (pvp_stats, 0, sizeof (BlackPVPStats));
+    return pvp_stats;
+
+}
+
+static inline void black_pvp_stats_destroy (BlackPVPStats *pvp_stats) { if (pvp_stats) free (pvp_stats); }
+
 static BlackProfile *black_profile_new (void) {
 
     BlackProfile *profile = (BlackProfile *) malloc (sizeof (BlackProfile));
-    if (profile) memset (profile, 0, sizeof (BlackProfile));
+    if (profile) {
+        memset (profile, 0, sizeof (BlackProfile));
+
+        profile->user = user_new ();
+
+        profile->datePurchased = NULL;
+        profile->lastTime = NULL;
+
+        profile->guild = NULL;
+        profile->achievements = dlist_init (black_achievement_destroy, NULL);
+
+        profile->pveStats = black_pve_stats_new ();
+        profile->pvpStats = black_pvp_stats_new ();
+    } 
+
     return profile;
 
 }
 
-// FIXME: what happens with achievemnts??
 static void black_profile_destroy (BlackProfile *profile) {
 
     if (profile) {
         if (profile->user) user_destroy (profile->user);
+
+        if (profile->datePurchased) free (profile->datePurchased);
+        if (profile->lastTime) free (profile->lastTime);
+
         if (profile->guild) free (profile->guild);
+
+        dlist_destroy (profile->achievements);
 
         free (profile);
     }
 
 }
 
-static bson_t *black_profile_find (mongoc_collection_t *black_collection, const bson_oid_t user_oid) {
+// get a black profile from the db by oid
+static const bson_t *black_profile_find_by_oid (const bson_oid_t *oid) {
 
-    if (black_collection) {
-        bson_t *black_query = bson_new ();
-        bson_append_oid (black_query, "user", -1, &user_oid);
+    if (oid) {
+        bson_t *profile_query = bson_new ();
+        bson_append_oid (profile_query, "_id", -1, oid);
 
-        return (bson_t *) mongo_find_one (black_collection, black_query);
+        return mongo_find_one (black_collection, profile_query);
     }
 
-    else logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black collection!");
+    return NULL;
+
+}
+
+// get a black profile from the db by the associated user
+static const bson_t *black_profile_find_by_user (const bson_oid_t *user_oid) {
+
+    if (user_oid) {
+        bson_t *profile_query = bson_new ();
+        bson_append_oid (profile_query, "user", -1, user_oid);
+
+        return mongo_find_one (black_collection, profile_query);
+    }
 
     return NULL;
 
