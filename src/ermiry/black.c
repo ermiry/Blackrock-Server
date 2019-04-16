@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "ermiry/ermiry.h"
 #include "ermiry/models.h"
@@ -66,7 +67,7 @@ static inline BlackPVPStats *black_pvp_stats_new (void) {
 
 static inline void black_pvp_stats_destroy (BlackPVPStats *pvp_stats) { if (pvp_stats) free (pvp_stats); }
 
-static BlackProfile *black_profile_new (void) {
+BlackProfile *black_profile_new (void) {
 
     BlackProfile *profile = (BlackProfile *) malloc (sizeof (BlackProfile));
     if (profile) {
@@ -88,7 +89,7 @@ static BlackProfile *black_profile_new (void) {
 
 }
 
-static void black_profile_destroy (BlackProfile *profile) {
+void black_profile_destroy (BlackProfile *profile) {
 
     if (profile) {
         if (profile->user) user_destroy (profile->user);
@@ -102,6 +103,70 @@ static void black_profile_destroy (BlackProfile *profile) {
 
         free (profile);
     }
+
+}
+
+// FIXME: parse all the remaining values!!!
+// parses a bson doc into a black profile model
+static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool populate) {
+
+    BlackProfile *profile = NULL;
+
+    if (profile_doc) {
+        profile = black_profile_new ();
+
+        bson_iter_t iter;
+        bson_type_t type;
+
+        if (bson_iter_init (&iter, profile_doc)) {
+            while (bson_iter_next (&iter)) {
+                const char *key = bson_iter_key (&iter);
+                const bson_value_t *value = bson_iter_value (&iter);
+
+                if (!strcmp (key, "_id")) {
+                    bson_oid_copy (&value->value.v_oid, &profile->oid);
+                    // const bson_oid_t *oid = bson_iter_oid (&iter);
+                    // memcpy (&user->oid, oid, sizeof (bson_oid_t));
+                }
+
+                else if (!strcmp (key, "user")) {
+                    // TODO: parse the associated user
+                }
+
+                else if (!strcmp (key, "datePurchased")) {
+                    time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
+                    memcpy (profile->datePurchased, gmtime (&secs), sizeof (struct tm));
+                }
+
+                else if (!strcmp (key, "lastTime")) {
+                    time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
+                    memcpy (profile->lastTime, gmtime (&secs), sizeof (struct tm));
+                }
+
+                else if (!strcmp (key, "timePlayed")) {
+                    // TODO:
+                }
+
+                else if (!strcmp (key, "guild")) {
+                    if (value->value.v_utf8.str) {
+                        if (!strcmp (value->value.v_utf8.str, " ")) {
+                            profile->guild = (char *) calloc (16, sizeof (char));
+                            strcpy (profile->guild, "No location");
+                        }
+                        
+                        else {
+                            profile->guild = (char *) calloc (value->value.v_utf8.len + 1, sizeof (char));
+                            strcpy (profile->guild, value->value.v_utf8.str);
+                        }
+                    }
+                }
+
+                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
+            }
+        }
+    }
+
+    return profile;
 
 }
 
@@ -133,37 +198,73 @@ static const bson_t *black_profile_find_by_user (const bson_oid_t *user_oid) {
 
 }
 
-// get a blackrock associated with user 
-static BlackProfile *black_profile_get (const bson_oid_t user_oid) {
+BlackProfile *black_profile_get_by_oid (const bson_t *oid, bool populate) {
 
     BlackProfile *profile = NULL;
 
-    bson_t *black_doc = black_profile_find (black_collection, user_oid);
-    if (black_doc) {
-        /* char *black_str = bson_as_canonical_extended_json (black_doc, NULL);
-        if (black_str) {
-            // TODO: parse the bson into our c model
-            
-        } */
-
-        // FIXME: 18/03/2019 -- try using bson iter to retrive the data from bson
-        // bson_iter_init
-        /* bson_t *b;
-        bson_iter_t iter;
-
-        if ((b = bson_new_from_data (my_data, my_data_len))) {
-            if (bson_iter_init (&iter, b)) {
-                while (bson_iter_next (&iter)) {
-                    printf ("Found element key: \"%s\"\n", bson_iter_key (&iter));
-                }
-            }
-            bson_destroy (b);
-        } */
-
-        bson_destroy (black_doc);
+    if (oid) {
+        const bson_t *profile_doc = black_profile_find_by_oid (oid);
+        if (profile_doc) {
+            profile = black_profile_doc_parse (profile_doc, populate);
+            bson_destroy ((bson_t *) profile_doc);
+        }
     }
 
     return profile;
+
+}
+
+BlackProfile *black_profile_get_by_user (const bson_t *user_oid, bool populate) {
+
+    BlackProfile *profile = NULL;
+
+    if (user_oid) {
+        const bson_t *profile_doc = black_profile_find_by_user (user_oid);
+        if (profile_doc) {
+            profile = black_profile_doc_parse (profile_doc, populate);
+            bson_destroy ((bson_t *) profile_doc);
+        }
+    }
+
+    return profile;
+
+}
+
+// FIXME: 
+static bson_t *black_profile_bson_create_update (const BlackProfile *black_profile) {
+
+    bson_t *doc = NULL;
+
+    if (black_profile) {
+        doc = bson_new ();
+
+        bson_t set_doc;
+        BSON_APPEND_DOCUMENT_BEGIN (doc, "$set", &set_doc);
+
+        
+        bson_append_document_end (doc, &set_doc); 
+    }
+
+    return doc;
+
+}
+
+// updates a black profile in the db with new values
+int black_profile_update_with_model (const bson_t *profile_oid, const BlackProfile *black_profile) {
+
+    int retval = 1;
+
+    if (profile_oid && black_profile) {
+        bson_t *profile_query = bson_new ();
+        bson_append_oid (profile_query, "_id", -1, profile_oid);
+
+        // create a bson with the update info
+        bson_t *update = black_profile_bson_create_update (black_profile);
+
+        retval = mongo_update_one (black_collection, profile_query, update);
+    }
+
+    return retval;
 
 }
 
