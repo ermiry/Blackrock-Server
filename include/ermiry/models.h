@@ -45,12 +45,11 @@ typedef struct BlackGuild {
     bson_oid_t oid;
 
     // guild description
-    // FIXME: add a badge
     char *name;
+    char *badge;
     char *description;
     u32 trophies;
-    // Mexico (MX)
-    char *location;             // FIXME: how can we better select this?
+    char *location;                 // Mexico (MX)      
     struct tm *creation_date;
 
     // conditions to enter
@@ -129,7 +128,7 @@ typedef struct BlackProfile {
 
     bson_oid_t oid;
 
-    User *user;
+    bson_oid_t user_oid;
 
     struct tm *datePurchased;
     struct tm *lastTime;
@@ -137,7 +136,7 @@ typedef struct BlackProfile {
 
     int trophies;
 
-    char *guild;
+    bson_oid_t guild_oid;
 
     DoubleList *achievements;
 

@@ -73,12 +73,9 @@ BlackProfile *black_profile_new (void) {
     if (profile) {
         memset (profile, 0, sizeof (BlackProfile));
 
-        profile->user = user_new ();
-
         profile->datePurchased = NULL;
         profile->lastTime = NULL;
 
-        profile->guild = NULL;
         profile->achievements = dlist_init (black_achievement_destroy, NULL);
 
         profile->pveStats = black_pve_stats_new ();
@@ -92,17 +89,63 @@ BlackProfile *black_profile_new (void) {
 void black_profile_destroy (BlackProfile *profile) {
 
     if (profile) {
-        if (profile->user) user_destroy (profile->user);
-
         if (profile->datePurchased) free (profile->datePurchased);
         if (profile->lastTime) free (profile->lastTime);
 
-        if (profile->guild) free (profile->guild);
-
         dlist_destroy (profile->achievements);
+
+        black_pve_stats_destroy (profile->pveStats);
+        black_pvp_stats_destroy (profile->pvpStats);
 
         free (profile);
     }
+
+}
+
+static void black_profile_bson_append_pve_stats (bson_t *doc, const BlackPVEStats *pve_stats) {
+
+    // TODO:
+
+}
+
+static void black_profile_bson_append_pvp_stats (bson_t *doc, const BlackPVPStats *pvp_stats) {
+
+    // TODO:
+
+}
+
+static bson_t *black_profile_bson_create (const BlackProfile *profile) {
+
+    bson_t *doc = NULL;
+
+    if (profile) {
+        doc = bson_new ();
+
+        bson_oid_init ((bson_oid_t *) &profile->oid, NULL);
+        bson_append_oid (doc, "_id", -1, &profile->oid);
+
+        bson_append_oid (doc, "user", -1, &profile->user_oid);
+
+        bson_append_date_time (doc, "datePurchased", -1, mktime (profile->datePurchased) * 1000);
+        bson_append_date_time (doc, "lastTime", -1, mktime (profile->lastTime) * 1000);
+        bson_append_int32 (doc, "timePlayed", -1, profile->timePlayed);
+
+        bson_append_int32 (doc, "trophies", -1, profile->trophies);
+
+        bson_append_oid (doc, "user", -1, &profile->guild_oid);
+
+        // append array of achievements oids
+        Achievement *a = NULL;
+        for (ListElement *le = LIST_START (profile->achievements); le; le = le->next) {
+            a = (Achievement *) le->data;
+            // FIXME:
+        }
+
+        black_profile_bson_append_pve_stats (doc, profile->pveStats);
+        black_profile_bson_append_pvp_stats (doc, profile->pvpStats);
+    }
+
+    return doc;
 
 }
 
@@ -148,17 +191,7 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                 }
 
                 else if (!strcmp (key, "guild")) {
-                    if (value->value.v_utf8.str) {
-                        if (!strcmp (value->value.v_utf8.str, " ")) {
-                            profile->guild = (char *) calloc (16, sizeof (char));
-                            strcpy (profile->guild, "No location");
-                        }
-                        
-                        else {
-                            profile->guild = (char *) calloc (value->value.v_utf8.len + 1, sizeof (char));
-                            strcpy (profile->guild, value->value.v_utf8.str);
-                        }
-                    }
+                    // TODO:
                 }
 
                 else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
@@ -198,7 +231,7 @@ static const bson_t *black_profile_find_by_user (const bson_oid_t *user_oid) {
 
 }
 
-BlackProfile *black_profile_get_by_oid (const bson_t *oid, bool populate) {
+BlackProfile *black_profile_get_by_oid (const bson_oid_t *oid, bool populate) {
 
     BlackProfile *profile = NULL;
 
@@ -214,7 +247,7 @@ BlackProfile *black_profile_get_by_oid (const bson_t *oid, bool populate) {
 
 }
 
-BlackProfile *black_profile_get_by_user (const bson_t *user_oid, bool populate) {
+BlackProfile *black_profile_get_by_user (const bson_oid_t *user_oid, bool populate) {
 
     BlackProfile *profile = NULL;
 
@@ -250,7 +283,7 @@ static bson_t *black_profile_bson_create_update (const BlackProfile *black_profi
 }
 
 // updates a black profile in the db with new values
-int black_profile_update_with_model (const bson_t *profile_oid, const BlackProfile *black_profile) {
+int black_profile_update_with_model (const bson_oid_t *profile_oid, const BlackProfile *black_profile) {
 
     int retval = 1;
 
@@ -293,6 +326,8 @@ BlackGuild *black_guild_new (void) {
     BlackGuild *guild = (BlackGuild *) malloc (sizeof (BlackGuild));
     if (guild) {
         memset (guild, 0, sizeof (BlackGuild));
+
+        guild->badge = NULL;
         guild->name = NULL;
         guild->description =  NULL;
         guild->location = NULL;
@@ -309,6 +344,7 @@ BlackGuild *black_guild_new (void) {
 void black_guild_destroy (BlackGuild *guild) {
 
     if (guild) {
+        if (guild->badge) free (guild->badge);
         if (guild->name) free (guild->name);
         if (guild->description) free (guild->description);
         if (guild->location) free (guild->location);
@@ -334,6 +370,7 @@ static bson_t *black_guild_bson_create (BlackGuild *guild) {
 
         // common guild info
         bson_append_utf8 (doc, "name", -1, guild->name, -1);
+        bson_append_utf8 (doc, "badge", -1, guild->badge, -1);
         bson_append_utf8 (doc, "description", -1, guild->description, -1);
         bson_append_utf8 (doc, "trophies", -1, createString ("%i", guild->trophies), -1);
         bson_append_utf8 (doc, "location", -1, guild->location, -1);
@@ -437,6 +474,67 @@ static BlackGuild *black_guild_doc_parse (const bson_t *guild_doc, bool populate
 
                 else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
             }
+        }
+    }
+
+    return guild;
+
+}
+
+// get a black guild doc from the db by oid
+static const bson_t *black_guild_find_by_oid (const bson_oid_t *oid) {
+
+    if (oid) {
+        bson_t *guild_query = bson_new ();
+        bson_append_oid (guild_query, "_id", -1, oid);
+
+        return mongo_find_one (black_guild_collection, guild_query);
+    }
+
+    return NULL;
+
+}
+
+// TODO: maybe change this to find many?
+static const bson_t *black_guild_find_by_name (const char *name) {
+
+    if (name) {
+        bson_t *guild_query = bson_new ();
+        bson_append_utf8 (guild_query, "name", -1, name, strlen (name));
+
+        return mongo_find_one (black_guild_collection, guild_query);
+    }
+
+    return NULL;
+
+}
+
+BlackGuild *black_guild_get_by_oid (const bson_oid_t *guild_oid, bool populate) {
+
+    BlackGuild *guild = NULL;
+
+    if (guild_oid) {
+        const bson_t *guild_doc = black_guild_find_by_oid (guild_oid);
+        if (guild_doc) {
+            guild = black_guild_doc_parse (guild_doc, populate);
+            bson_destroy ((bson_t *) guild_doc);
+        }
+    }
+
+    return guild;
+
+}
+
+// TODO: maybe change this to get many?
+BlackGuild *black_guild_get_by_name (const char *guild_name, bool populate) {
+
+    BlackGuild *guild = NULL;
+
+    if (guild_name) {
+        const bson_t *guild_doc = black_guild_find_by_name (guild_name);
+        if (guild_doc) {
+            guild = black_guild_doc_parse (guild_doc, populate);
+            bson_destroy ((bson_t *) guild_doc);
         }
     }
 
