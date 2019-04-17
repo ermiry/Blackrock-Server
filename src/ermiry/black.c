@@ -115,7 +115,7 @@ static void black_profile_bson_append_pve_stats (bson_t *doc, const BlackPVEStat
         bson_append_int64 (solo_stats, "hordeKills", -1, pve_stats->solo_stats.horde_kills);
         bson_append_int64 (solo_stats, "hordeBestScore", -1, pve_stats->solo_stats.horde_bestScore);
         bson_append_int64 (solo_stats, "hordeBestTime", -1, pve_stats->solo_stats.horde_bestTime);
-        bson_append_document (pve_stats, "soloStats", -1, solo_stats);
+        bson_append_document (pve_stats_doc, "soloStats", -1, solo_stats);
 
         bson_t *multi_stats = bson_new ();
         bson_append_int64 (multi_stats, "arcadeKills", -1, pve_stats->multi_stats.arcade_kills);
@@ -125,7 +125,7 @@ static void black_profile_bson_append_pve_stats (bson_t *doc, const BlackPVEStat
         bson_append_int64 (multi_stats, "hordeKills", -1, pve_stats->multi_stats.horde_kills);
         bson_append_int64 (multi_stats, "hordeBestScore", -1, pve_stats->multi_stats.horde_bestScore);
         bson_append_int64 (multi_stats, "hordeBestTime", -1, pve_stats->multi_stats.horde_bestTime);
-        bson_append_document (pve_stats, "multiStats", -1, multi_stats);
+        bson_append_document (pve_stats_doc, "multiStats", -1, multi_stats);
 
         bson_append_document (doc, "pveStats", -1, pve_stats_doc);
     }
@@ -162,7 +162,7 @@ static bson_t *black_profile_bson_create (const BlackProfile *profile) {
 
         bson_append_date_time (doc, "datePurchased", -1, mktime (profile->datePurchased) * 1000);
         bson_append_date_time (doc, "lastTime", -1, mktime (profile->lastTime) * 1000);
-        bson_append_int32 (doc, "timePlayed", -1, profile->timePlayed);
+        bson_append_int64 (doc, "timePlayed", -1, profile->timePlayed);
 
         bson_append_int32 (doc, "trophies", -1, profile->trophies);
 
@@ -193,7 +193,78 @@ static bson_t *black_profile_bson_create (const BlackProfile *profile) {
 
 }
 
-// FIXME: parse all the remaining values!!!
+static int black_profile_parse_pve_stats (BlackProfile *profile, bson_t *pve_stats_doc) {
+
+    int retval = 1;
+
+    if (profile && pve_stats_doc) {
+        bson_iter_t iter;
+        bson_type_t type;
+
+        if (bson_iter_init (&iter, pve_stats_doc)) {
+            while (bson_iter_next (&iter)) {
+                const char *key = bson_iter_key (&iter);
+                const bson_value_t *value = bson_iter_value (&iter);
+
+                if (!strcmp (key, "soloStats")) {
+                    // TODO:
+                }
+
+                else if (!strcmp (key, "multiStats")) {
+                    // TODO:
+                }
+
+                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing pvp stats doc.", key));
+            }
+        }
+
+        bson_destroy (pve_stats_doc);
+
+        return 0;
+    }
+
+    return retval;
+
+}
+
+static int black_profile_parse_pvp_stats (BlackProfile *profile, bson_t *pvp_stats_doc) {
+
+    int retval = 1;
+
+    if (profile && pvp_stats_doc) {
+        bson_iter_t iter;
+        bson_type_t type;
+
+        if (bson_iter_init (&iter, pvp_stats_doc)) {
+            while (bson_iter_next (&iter)) {
+                const char *key = bson_iter_key (&iter);
+                const bson_value_t *value = bson_iter_value (&iter);
+
+                if (!strcmp (key, "totalKills")) 
+                    profile->pvpStats->totalKills = value->value.v_int32;
+
+                else if (!strcmp (key, "winsDeathMatch"))
+                    profile->pvpStats->wins_death_match = value->value.v_int32;
+
+                else if (!strcmp (key, "winsFree"))
+                    profile->pvpStats->wins_free = value->value.v_int32;
+
+                else if (!strcmp (key, "winsKoth"))
+                    profile->pvpStats->wins_koth = value->value.v_int32;
+
+                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing pvp stats doc.", key));
+            }
+        }
+
+        bson_destroy (pvp_stats_doc);
+
+        return 0;
+    }
+
+    return retval;
+
+}
+
 // parses a bson doc into a black profile model
 static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool populate) {
 
@@ -216,9 +287,8 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                     // memcpy (&user->oid, oid, sizeof (bson_oid_t));
                 }
 
-                else if (!strcmp (key, "user")) {
-                    // TODO: parse the associated user
-                }
+                else if (!strcmp (key, "user")) 
+                    bson_oid_copy (&value->value.v_oid, &profile->user_oid);
 
                 else if (!strcmp (key, "datePurchased")) {
                     time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
@@ -230,27 +300,30 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                     memcpy (profile->lastTime, gmtime (&secs), sizeof (struct tm));
                 }
 
-                else if (!strcmp (key, "timePlayed")) {
-                    // TODO:
-                }
+                else if (!strcmp (key, "timePlayed")) 
+                    profile->timePlayed = value->value.v_int64;
 
-                else if (!strcmp (key, "guild")) {
-                    // TODO:
-                }
+                else if (!strcmp (key, "trophies"))
+                    profile->trophies = value->value.v_int32;
+
+                else if (!strcmp (key, "guild")) 
+                    bson_oid_copy (&value->value.v_oid, &profile->guild_oid);
 
                 else if (!strcmp (key, "achievements")) {
                     // TODO:
                 }
 
                 else if (!strcmp (key, "pveStats")) {
-                    // TODO:
+                    bson_t *pve_stats_doc = bson_new_from_data (value->value.v_doc.data, value->value.v_doc.data_len);
+                    black_profile_parse_pve_stats (profile, pve_stats_doc);
                 }
 
                 else if (!strcmp (key, "pvpStats")) {
-                    // TODO:
+                    bson_t *pvp_stats_doc = bson_new_from_data (value->value.v_doc.data, value->value.v_doc.data_len);
+                    black_profile_parse_pvp_stats (profile, pvp_stats_doc);
                 }
 
-                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
+                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing black profile doc.", key));
             }
         }
     }
@@ -319,7 +392,7 @@ BlackProfile *black_profile_get_by_user (const bson_oid_t *user_oid, bool popula
 
 }
 
-// FIXME: 
+// TODO:
 static bson_t *black_profile_bson_create_update (const BlackProfile *black_profile) {
 
     bson_t *doc = NULL;

@@ -114,7 +114,7 @@ typedef struct GameStats {
 
     int arcade_kills, arcade_bestScore;     // can be used as int64
     int arcade_bestTime;                    // stored as secs
-    
+
     int horde_kills, horde_bestScore;       // can be used as int64
     int horde_bestTime;                     // stored as secs
 
@@ -135,7 +135,7 @@ typedef struct BlackProfile {
 
     struct tm *datePurchased;
     struct tm *lastTime;
-    int timePlayed;
+    i64 timePlayed;                         // stored in secs
 
     int trophies;
 
