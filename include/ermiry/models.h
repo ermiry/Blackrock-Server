@@ -112,15 +112,18 @@ typedef struct BlackPVPStats {
 
 typedef struct GameStats {
 
-    int arcade_kills, arcade_bestScore, arcade_bestTime;
-    int horde_kills, horde_bestScore, horde_bestTime;
+    int arcade_kills, arcade_bestScore;     // can be used as int64
+    int arcade_bestTime;                    // stored as secs
+    
+    int horde_kills, horde_bestScore;       // can be used as int64
+    int horde_bestTime;                     // stored as secs
 
 } GameStats;
 
 typedef struct BlackPVEStats {
 
-    GameStats multi_stats;
     GameStats solo_stats;
+    GameStats multi_stats;
     
 } BlackPVEStats;
 

@@ -104,13 +104,47 @@ void black_profile_destroy (BlackProfile *profile) {
 
 static void black_profile_bson_append_pve_stats (bson_t *doc, const BlackPVEStats *pve_stats) {
 
-    // TODO:
+    if (doc && pve_stats) {
+        bson_t *pve_stats_doc = bson_new ();  
+
+        bson_t *solo_stats = bson_new ();
+        bson_append_int64 (solo_stats, "arcadeKills", -1, pve_stats->solo_stats.arcade_kills);
+        bson_append_int64 (solo_stats, "arcadeBestScore", -1, pve_stats->solo_stats.arcade_bestScore);
+        bson_append_int64 (solo_stats, "arcadeBestTime", -1, pve_stats->solo_stats.arcade_bestTime);
+
+        bson_append_int64 (solo_stats, "hordeKills", -1, pve_stats->solo_stats.horde_kills);
+        bson_append_int64 (solo_stats, "hordeBestScore", -1, pve_stats->solo_stats.horde_bestScore);
+        bson_append_int64 (solo_stats, "hordeBestTime", -1, pve_stats->solo_stats.horde_bestTime);
+        bson_append_document (pve_stats, "soloStats", -1, solo_stats);
+
+        bson_t *multi_stats = bson_new ();
+        bson_append_int64 (multi_stats, "arcadeKills", -1, pve_stats->multi_stats.arcade_kills);
+        bson_append_int64 (multi_stats, "arcadeBestScore", -1, pve_stats->multi_stats.arcade_bestScore);
+        bson_append_int64 (multi_stats, "arcadeBestTime", -1, pve_stats->multi_stats.arcade_bestTime);
+
+        bson_append_int64 (multi_stats, "hordeKills", -1, pve_stats->multi_stats.horde_kills);
+        bson_append_int64 (multi_stats, "hordeBestScore", -1, pve_stats->multi_stats.horde_bestScore);
+        bson_append_int64 (multi_stats, "hordeBestTime", -1, pve_stats->multi_stats.horde_bestTime);
+        bson_append_document (pve_stats, "multiStats", -1, multi_stats);
+
+        bson_append_document (doc, "pveStats", -1, pve_stats_doc);
+    }
 
 }
 
 static void black_profile_bson_append_pvp_stats (bson_t *doc, const BlackPVPStats *pvp_stats) {
 
-    // TODO:
+    if (doc && pvp_stats) {
+        bson_t *pvp_stats_doc = bson_new ();
+
+        bson_append_int32 (pvp_stats_doc, "totalKills", -1, pvp_stats->totalKills);
+
+        bson_append_int32 (pvp_stats_doc, "winsDeathMatch", -1, pvp_stats->wins_death_match);
+        bson_append_int32 (pvp_stats_doc, "winsFree", -1, pvp_stats->wins_free);
+        bson_append_int32 (pvp_stats_doc, "winsKoth", -1, pvp_stats->wins_koth);
+
+        bson_append_document (doc, "pveStats", -1, pvp_stats_doc);
+    }
 
 }
 
@@ -132,14 +166,24 @@ static bson_t *black_profile_bson_create (const BlackProfile *profile) {
 
         bson_append_int32 (doc, "trophies", -1, profile->trophies);
 
-        bson_append_oid (doc, "user", -1, &profile->guild_oid);
+        bson_append_oid (doc, "guild", -1, &profile->guild_oid);
+
+        char buf[16];
+        const char *key = NULL;
+        size_t keylen = 0;
+        unsigned int i = 0;
 
         // append array of achievements oids
+        bson_t achievements_array;
+        bson_append_array_begin (doc, "achievements", -1, &achievements_array);
         Achievement *a = NULL;
         for (ListElement *le = LIST_START (profile->achievements); le; le = le->next) {
             a = (Achievement *) le->data;
-            // FIXME:
+            keylen = bson_uint32_to_string (i, &key, buf, sizeof (buf));
+            bson_append_oid (&achievements_array, key, (int) keylen, &a->oid);
+            i++;
         }
+        bson_append_array_end (doc, &achievements_array);
 
         black_profile_bson_append_pve_stats (doc, profile->pveStats);
         black_profile_bson_append_pvp_stats (doc, profile->pvpStats);
@@ -191,6 +235,18 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                 }
 
                 else if (!strcmp (key, "guild")) {
+                    // TODO:
+                }
+
+                else if (!strcmp (key, "achievements")) {
+                    // TODO:
+                }
+
+                else if (!strcmp (key, "pveStats")) {
+                    // TODO:
+                }
+
+                else if (!strcmp (key, "pvpStats")) {
                     // TODO:
                 }
 
