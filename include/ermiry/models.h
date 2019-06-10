@@ -1,12 +1,13 @@
-#ifndef __MODELS_H__
-#define __MODELS_H__
+#ifndef _ERMIRY_MODELS_H_
+#define _ERMIRY_MODELS_H_
 
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
-#include "types/myTypes.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
-#include "collections/dllist.h"
+#include "cerver/collections/dllist.h"
 
 // FIXME: we need to add a reference to our blackrock account
 // TODO: what happens when we add more games or projects?

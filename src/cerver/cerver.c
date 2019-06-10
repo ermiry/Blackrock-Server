@@ -184,7 +184,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
         cerver_log_msg (stdout, DEBUG_MSG, PACKET, 
-            string_create ("Recieved size: %i - Expected size %i", packetSize, header->packetSize));
+            c_string_create ("Recieved size: %i - Expected size %i", packetSize, header->packetSize));
         #endif
         return 1;
     } 
@@ -490,12 +490,12 @@ char *session_default_generate_id (i32 fd, const struct sockaddr_storage address
     if (ipstr && (port > 0)) {
         #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, DEBUG_MSG, CLIENT,
-                string_create ("Client connected form IP address: %s -- Port: %i", 
+                c_string_create ("Client connected form IP address: %s -- Port: %i", 
                 ipstr, port));
         #endif
 
         // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
-        char *connection_values = string_create ("%s-%i", ipstr, port);
+        char *connection_values = c_string_create ("%s-%i", ipstr, port);
 
         uint8_t hash[32];
         char hash_string[65];
@@ -503,7 +503,7 @@ char *session_default_generate_id (i32 fd, const struct sockaddr_storage address
         sha_256_calc (hash, connection_values, strlen (connection_values));
         sha_256_hash_to_string (hash_string, hash);
 
-        char *retval = string_create ("%s", hash_string);
+        char *retval = c_string_create ("%s", hash_string);
 
         return retval;
     }
@@ -640,7 +640,7 @@ void onHoldClient (Server *server, Client *client, i32 fd) {
 
                 #ifdef CERVER_STATS
                     cerver_log_msg (stdout, SERVER, NO_TYPE, 
-                        string_create ("Current on hold clients: %i.", server->n_hold_clients));
+                        c_string_create ("Current on hold clients: %i.", server->n_hold_clients));
                 #endif
             }
 
@@ -708,7 +708,7 @@ Client *removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
 
         #ifdef CERVER_STATS
             cerver_log_msg (stdout, SERVER, NO_TYPE, 
-            string_create ("On hold clients: %i.", server->n_hold_clients));
+            c_string_create ("On hold clients: %i.", server->n_hold_clients));
         #endif
 
         return retval;
@@ -762,7 +762,7 @@ u8 defaultAuthMethod (void *data) {
                 if (authData->code == DEFAULT_AUTH_CODE) {
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stdout, DEBUG_MSG, NO_TYPE, 
-                        string_create ("Default auth: client provided code: %i.", authData->code));
+                        c_string_create ("Default auth: client provided code: %i.", authData->code));
                     #endif
 
                     // FIXME: 19/april/2019 -- 19:08 -- dont we need to use server->generateSessionID?
@@ -772,7 +772,7 @@ u8 defaultAuthMethod (void *data) {
                     if (sessionID) {
                         #ifdef CERVER_DEBUG
                         cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
-                            string_create ("Generated client session id: %s", sessionID));
+                            c_string_create ("Generated client session id: %s", sessionID));
                         #endif
 
                         client_set_sessionID (pack_info->client, sessionID);
@@ -786,7 +786,7 @@ u8 defaultAuthMethod (void *data) {
                 else {
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stderr, ERROR, NO_TYPE, 
-                        string_create ("Default auth: %i is a wrong autentication code!", 
+                        c_string_create ("Default auth: %i is a wrong autentication code!", 
                         authData->code));
                     #endif
                     return 1;
@@ -803,7 +803,7 @@ u8 defaultAuthMethod (void *data) {
             if (authData->code == DEFAULT_AUTH_CODE) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stdout, DEBUG_MSG, NO_TYPE, 
-                    string_create ("Default auth: client provided code: %i.", authData->code));
+                    c_string_create ("Default auth: client provided code: %i.", authData->code));
                 #endif
                 return 0;
             } 
@@ -811,7 +811,7 @@ u8 defaultAuthMethod (void *data) {
             else {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, ERROR, NO_TYPE, 
-                    string_create ("Default auth: %i is a wrong autentication code!", 
+                    c_string_create ("Default auth: %i is a wrong autentication code!", 
                     authData->code));
                 #endif
             }     
@@ -859,7 +859,7 @@ void authenticateClient (void *data) {
 
                         #ifdef CERVER_DEBUG
                         cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
-                            string_create ("Registered a new connection to client with session id: %s",
+                            c_string_create ("Registered a new connection to client with session id: %s",
                             pack_info->client->sessionID));
                         printf ("sessionId: %s\n", pack_info->client->sessionID);
                         #endif
@@ -1299,7 +1299,7 @@ static i32 server_accept (Server *server) {
     else {
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, DEBUG_MSG, CLIENT,
-            string_create ("Connection values: %s", connection_values));
+            c_string_create ("Connection values: %s", connection_values));
         #endif
     } 
 
@@ -1317,7 +1317,7 @@ static i32 server_accept (Server *server) {
             if (session_id) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
-                    string_create ("Generated client session id: %s", session_id));
+                    c_string_create ("Generated client session id: %s", session_id));
                 #endif
 
                 client_set_sessionID (client, session_id);
@@ -1549,7 +1549,7 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
     else server->useIpv6 = DEFAULT_USE_IPV6;
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Use IPv6: %i", server->useIpv6));
+    cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Use IPv6: %i", server->useIpv6));
     #endif
 
     char *tcp = config_get_entity_value (cfgEntity, "tcp");
@@ -1578,12 +1578,12 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         // check that we have a valid range, if not, set to default port
         if (server->port <= 0 || server->port >= MAX_PORT_NUM) {
             cerver_log_msg (stdout, WARNING, SERVER, 
-                string_create ("Invalid port number. Setting port to default value: %i", DEFAULT_PORT));
+                c_string_create ("Invalid port number. Setting port to default value: %i", DEFAULT_PORT));
             server->port = DEFAULT_PORT;
         }
 
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Listening on port: %i", server->port));
+        cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Listening on port: %i", server->port));
         #endif
         free (port);
     }
@@ -1591,7 +1591,7 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
     else {
         server->port = DEFAULT_PORT;
         cerver_log_msg (stdout, WARNING, SERVER, 
-            string_create ("No port found. Setting port to default value: %i", DEFAULT_PORT));
+            c_string_create ("No port found. Setting port to default value: %i", DEFAULT_PORT));
     } 
 
     char *queue = config_get_entity_value (cfgEntity, "queue");
@@ -1599,14 +1599,14 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         server->connectionQueue = atoi (queue);
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
-            string_create ("Connection queue: %i", server->connectionQueue));
+            c_string_create ("Connection queue: %i", server->connectionQueue));
         #endif
         free (queue);
     } 
     else {
         server->connectionQueue = DEFAULT_CONNECTION_QUEUE;
         cerver_log_msg (stdout, WARNING, SERVER, 
-            string_create ("Connection queue no specified. Setting it to default: %i", 
+            c_string_create ("Connection queue no specified. Setting it to default: %i", 
                 DEFAULT_CONNECTION_QUEUE));
     }
 
@@ -1615,14 +1615,14 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
         server->pollTimeout = atoi (timeout);
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
-            string_create ("Server poll timeout: %i", server->pollTimeout));
+            c_string_create ("Server poll timeout: %i", server->pollTimeout));
         #endif
         free (timeout);
     }
     else {
         server->pollTimeout = DEFAULT_POLL_TIMEOUT;
         cerver_log_msg (stdout, WARNING, SERVER, 
-            string_create ("Poll timeout no specified. Setting it to default: %i", 
+            c_string_create ("Poll timeout no specified. Setting it to default: %i", 
                 DEFAULT_POLL_TIMEOUT));
     }
 
@@ -1647,14 +1647,14 @@ u8 getServerCfgValues (Server *server, ConfigEntity *cfgEntity) {
             server->auth.maxAuthTries = atoi (tries);
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
-                string_create ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+                c_string_create ("Max auth tries set to: %i.", server->auth.maxAuthTries));
             #endif
             free (tries);
         }
         else {
             server->auth.maxAuthTries = DEFAULT_AUTH_TRIES;
             cerver_log_msg (stdout, WARNING, SERVER, 
-                string_create ("Max auth tries set to default: %i.", DEFAULT_AUTH_TRIES));
+                c_string_create ("Max auth tries set to default: %i.", DEFAULT_AUTH_TRIES));
         }
     }
 
@@ -1705,15 +1705,15 @@ static u8 cerver_init (Server *server, Config *cfg, ServerType type) {
         // log server values
         else {
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Use IPv6: %i", server->useIpv6));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Listening on port: %i", server->port));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Connection queue: %i", server->connectionQueue));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Server poll timeout: %i", server->pollTimeout));
+            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Use IPv6: %i", server->useIpv6));
+            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Listening on port: %i", server->port));
+            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Connection queue: %i", server->connectionQueue));
+            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Server poll timeout: %i", server->pollTimeout));
             cerver_log_msg (stdout, DEBUG_MSG, SERVER, server->authRequired == 1 ? 
                 "Server requires client authentication" : "Server does not requires client authentication");
             if (server->authRequired) 
                 cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
-                string_create ("Max auth tries set to: %i.", server->auth.maxAuthTries));
+                c_string_create ("Max auth tries set to: %i.", server->auth.maxAuthTries));
             cerver_log_msg (stdout, DEBUG_MSG, SERVER, server->useSessions == 1 ? 
                 "Server supports client sessions." : "Server does not support client sessions.");
             #endif
@@ -2092,7 +2092,7 @@ u8 cerver_teardown (Server *server) {
     if (server->thpool) {
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
-            string_create ("Server active thpool threads: %i", 
+            c_string_create ("Server active thpool threads: %i", 
             thpool_num_threads_working (server->thpool)));
         #endif
 

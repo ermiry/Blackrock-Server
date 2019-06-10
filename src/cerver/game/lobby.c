@@ -65,7 +65,7 @@ void lobby_default_generate_id (char *lobby_id) {
     sha_256_calc (hash, temp, len);
     sha_256_hash_to_string (hash_string, hash);
 
-    lobby_id = string_create ("%s", hash_string);
+    lobby_id = c_string_create ("%s", hash_string);
 
 }
 
@@ -727,7 +727,7 @@ static void lobby_default_handler (void *data) {
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, string_create ("Player timeout: %i", settings->playerTimeout));
+    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("Player timeout: %i", settings->playerTimeout));
     #endif
 
     char *fps = config_get_entity_value (cfgEntity, "fps");
@@ -741,7 +741,7 @@ static void lobby_default_handler (void *data) {
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, string_create ("FPS: %i", settings->fps));
+    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("FPS: %i", settings->fps));
     #endif
 
     char *minPlayers = config_get_entity_value (cfgEntity, "minPlayers");
@@ -755,7 +755,7 @@ static void lobby_default_handler (void *data) {
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, string_create ("Min players: %i", settings->minPlayers));
+    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("Min players: %i", settings->minPlayers));
     #endif
 
     char *maxPlayers = config_get_entity_value (cfgEntity, "maxPlayers");
@@ -769,7 +769,7 @@ static void lobby_default_handler (void *data) {
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, string_create ("Max players: %i", settings->maxPlayers));
+    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("Max players: %i", settings->maxPlayers));
     #endif
 
     return settings;

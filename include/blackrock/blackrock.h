@@ -3,11 +3,10 @@
 
 #include <stdint.h>
 
-#include "types/myTypes.h"
-
-#include "cerver/game.h"
-
-#include "collections/dllist.h"
+#include "cerver/types/types.h"
+#include "cerver/game/game.h"
+#include "cerver/game/score.h"
+#include "cerver/collections/dllist.h"
 
 /*** BLACKROCK TYPES ***/
 

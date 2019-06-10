@@ -23,7 +23,7 @@ char *client_getConnectionValues (i32 fd, const struct sockaddr_storage address)
     u16 port = sock_ip_port ((const struct sockaddr *) &address);
 
     if (ipstr && (port > 0)) 
-        connectionValues = string_create ("%s-%i", ipstr, port);
+        connectionValues = c_string_create ("%s-%i", ipstr, port);
 
     return connectionValues;
 
@@ -33,7 +33,7 @@ void client_set_sessionID (Client *client, const char *sessionID) {
 
     if (client && sessionID) {
         if (client->sessionID) free (client->sessionID);
-        client->sessionID = string_create ("%s", sessionID);
+        client->sessionID = c_string_create ("%s", sessionID);
     }
 
 }
@@ -64,7 +64,7 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     if (connection_values) {
         if (client->clientID) free (client->clientID);
 
-        client->clientID = string_create ("%s", connection_values);
+        client->clientID = c_string_create ("%s", connection_values);
         free (connection_values);
     }
 
@@ -190,13 +190,13 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
 
     if (clients && sessionID) {
         Client temp;
-        temp.sessionID = string_create ("%s", sessionID);
+        temp.sessionID = c_string_create ("%s", sessionID);
         
         void *data = avl_get_node_data (clients, &temp);
         if (data) return (Client *) data;
         else 
             cerver_log_msg (stderr, WARNING, SERVER, 
-                string_create ("Couldn't find a client associated with the session ID: %s.", 
+                c_string_create ("Couldn't find a client associated with the session ID: %s.", 
                 sessionID));
     }
 
@@ -287,7 +287,7 @@ void client_registerToServer (Server *server, Client *client, i32 newfd) {
 
             #ifdef CERVER_STATS
                 cerver_log_msg (stdout, SERVER, NO_TYPE, 
-                string_create ("New client registered to server. Connected clients: %i.", 
+                c_string_create ("New client registered to server. Connected clients: %i.", 
                 server->connectedClients));
             #endif
         }
@@ -357,7 +357,7 @@ void client_closeConnection (Server *server, Client *client) {
 
         #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
-                string_create ("Disconnected a client from the server.\
+                c_string_create ("Disconnected a client from the server.\
                 \nConnected clients remainning: %i.", server->connectedClients));
         #endif
     }

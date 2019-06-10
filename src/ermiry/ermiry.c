@@ -8,10 +8,10 @@
 
 #include "mongo/mongo.h"
 
-#include "collections/dllist.h"
+#include "cerver/collections/dllist.h"
 
-#include "utils/myUtils.h"
-#include "utils/log.h"
+#include "cerver/utils/utils.h"
+#include "cerver/utils/log.h"
 
 const char *uri_string = "mongodb://localhost:27017";
 const char *db_name = "ermiry";
@@ -26,27 +26,27 @@ int ermiry_init (void) {
         // open handle to user collection
         users_collection = mongoc_client_get_collection (mongo_client, db_name, USERS_COLL_NAME);
         if (!users_collection) {
-            logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to users collection!");
+            cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to get handle to users collection!");
             errors = 1;
         }
         
         // open handle to blackrock profile collection
         black_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_COLL_NAME);
         if (!black_collection) {
-            logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black collection!");
+            cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to get handle to black collection!");
             errors = 1;
         }
 
         // open handle to black guild collection
         black_guild_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_GUILD_COLL_NAME);
         if (!black_guild_collection) {
-            logMsg (stderr, ERROR, NO_TYPE, "Failed to get handle to black guild collection!");
+            cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to get handle to black guild collection!");
             errors = 1;
         }
     }
 
     else {
-        logMsg (stderr, ERROR, NO_TYPE, "Failed to connect to mongo");
+        cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to connect to mongo");
         errors = 1;
     }
 
@@ -89,8 +89,8 @@ User *ermiry_user_get (const char *username, const char *password, int *errors) 
 
         else {
             #ifdef ERMIRY_DEBUG
-                logMsg (stderr, ERROR, DEBUG_MSG, 
-                    createString ("Not user find with username: %s", username));
+                cerver_log_msg (stderr, ERROR, DEBUG_MSG, 
+                    c_string_create ("Not user find with username: %s", username));
             #endif
             *errors = NOT_USER_FOUND;
         }

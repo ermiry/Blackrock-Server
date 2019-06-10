@@ -259,7 +259,7 @@
 
 // void carveSegments (DoubleList *hallways, bool **mapCells) {
 
-//     ListElement *ptr = LIST_START (hallways);
+//     ListElement *ptr = dlist_start (hallways);
 //     while (ptr != NULL) {
 //         Segment *seg = (Segment *) ptr->data;
 
@@ -375,7 +375,7 @@
 
 //         // traverse the segment's list and skip adding any segments
 //         // that join rooms that are already joined
-//         for (ListElement *e = LIST_START (segments); e != NULL; e = e->next) {
+//         for (ListElement *e = dlist_start (segments); e != NULL; e = e->next) {
 //             i32 rm1 = ((Segment *) (e->data))->roomFrom;
 //             i32 rm2 = ((Segment *) (e->data))->roomTo;
 
@@ -383,7 +383,7 @@
 //             if (hallways->size == 0) uSeg = (Segment *) e->data;
 //             else {
 //                 bool unique = true;
-//                 for (ListElement *h = LIST_START (hallways); h != NULL; h = h->next) {
+//                 for (ListElement *h = dlist_start (hallways); h != NULL; h = h->next) {
 //                     Segment *seg = (Segment *) (h->data);
 //                     if (((seg->roomFrom == rm1) && (seg->roomTo == rm2)) ||
 //                     ((seg->roomTo == rm1) && (seg->roomFrom == rm2))) {

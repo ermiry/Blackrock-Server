@@ -116,7 +116,7 @@ u8 game_server_teardown (Server *server) {
         GameServerData *game_server_data = (GameServerData *) server->serverData;
         if (game_server_data) {
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, string_create ("Destroying server's: %s game data...", server->name));
+            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Destroying server's: %s game data...", server->name));
             #endif
             
             if (game_server_data->final_game_action) game_server_data->final_game_action (server);
@@ -124,7 +124,7 @@ u8 game_server_teardown (Server *server) {
             game_server_data_delete (game_server_data);
         }
 
-        else cerver_log_msg (stderr, WARNING, NO_TYPE, string_create ("Server %s does not have a refernce to a game data.", server->name));
+        else cerver_log_msg (stderr, WARNING, NO_TYPE, c_string_create ("Server %s does not have a refernce to a game data.", server->name));
     }
 
     return retval;

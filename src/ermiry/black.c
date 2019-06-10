@@ -10,10 +10,10 @@
 
 #include "mongo/mongo.h"
 
-#include "collections/dllist.h"
+#include "cerver/collections/dllist.h"
 
-#include "utils/myUtils.h"
-#include "utils/log.h"
+#include "cerver/utils/utils.h"
+#include "cerver/utils/log.h"
 
 #pragma region Blackrock 
 
@@ -177,7 +177,7 @@ static bson_t *black_profile_bson_create (const BlackProfile *profile) {
         bson_t achievements_array;
         bson_append_array_begin (doc, "achievements", -1, &achievements_array);
         Achievement *a = NULL;
-        for (ListElement *le = LIST_START (profile->achievements); le; le = le->next) {
+        for (ListElement *le = dlist_start (profile->achievements); le; le = le->next) {
             a = (Achievement *) le->data;
             keylen = bson_uint32_to_string (i, &key, buf, sizeof (buf));
             bson_append_oid (&achievements_array, key, (int) keylen, &a->oid);
@@ -214,7 +214,7 @@ static int black_profile_parse_pve_stats (BlackProfile *profile, bson_t *pve_sta
                     // TODO:
                 }
 
-                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing pvp stats doc.", key));
+                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
             }
         }
 
@@ -252,7 +252,7 @@ static int black_profile_parse_pvp_stats (BlackProfile *profile, bson_t *pvp_sta
                 else if (!strcmp (key, "winsKoth"))
                     profile->pvpStats->wins_koth = value->value.v_int32;
 
-                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing pvp stats doc.", key));
+                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
             }
         }
 
@@ -323,7 +323,7 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                     black_profile_parse_pvp_stats (profile, pvp_stats_doc);
                 }
 
-                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing black profile doc.", key));
+                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing black profile doc.", key));
             }
         }
     }
@@ -501,7 +501,7 @@ static bson_t *black_guild_bson_create (BlackGuild *guild) {
         bson_append_utf8 (doc, "name", -1, guild->name, -1);
         bson_append_utf8 (doc, "badge", -1, guild->badge, -1);
         bson_append_utf8 (doc, "description", -1, guild->description, -1);
-        bson_append_utf8 (doc, "trophies", -1, createString ("%i", guild->trophies), -1);
+        bson_append_utf8 (doc, "trophies", -1, c_string_create ("%i", guild->trophies), -1);
         bson_append_utf8 (doc, "location", -1, guild->location, -1);
         bson_append_date_time (doc, "creationDate", -1, mktime (guild->creation_date) * 1000);
 
@@ -511,7 +511,7 @@ static bson_t *black_guild_bson_create (BlackGuild *guild) {
             case GUILD_TYPE_INVITE: bson_append_utf8 (doc, "type", -1, "invite", -1); break;
             case GUILD_TYPE_CLOSED: bson_append_utf8 (doc, "type", -1, "closed", -1); break;
         }
-        bson_append_utf8 (doc, "requiredTrophies", -1, createString ("%i", guild->required_trophies), -1);
+        bson_append_utf8 (doc, "requiredTrophies", -1, c_string_create ("%i", guild->required_trophies), -1);
 
         // members
         bson_append_oid (doc, "leader", -1, &guild->leader->oid);
@@ -523,7 +523,7 @@ static bson_t *black_guild_bson_create (BlackGuild *guild) {
         unsigned int i = 0;
         bson_append_array_begin (doc, "members", -1, &members_array);
         User *member = NULL;
-        for (ListElement *le = LIST_START (guild->members); le; le = le->next) {
+        for (ListElement *le = dlist_start (guild->members); le; le = le->next) {
             member = (User *) le->data;
             keylen = bson_uint32_to_string (i, &key, buf, sizeof (buf));
             bson_append_oid (&members_array, key, (int) keylen, &member->oid);
@@ -601,7 +601,7 @@ static BlackGuild *black_guild_doc_parse (const bson_t *guild_doc, bool populate
 
                 }
 
-                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
+                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing user doc.", key));
             }
         }
     }
@@ -736,7 +736,7 @@ int black_guild_create (S_BlackGuild *s_guild) {
 
                 else {
                     #ifdef ERMIRY_DEBUG
-                    logMsg (stderr, ERROR, DEBUG_MSG, "Failed to insert black guild into mongo!");
+                    cerver_log_msg (stderr, ERROR, DEBUG_MSG, "Failed to insert black guild into mongo!");
                     #endif
                 }
             }

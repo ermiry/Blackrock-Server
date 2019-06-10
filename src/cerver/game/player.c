@@ -271,7 +271,7 @@ void addPlayer (struct sockaddr_storage address) {
     // TODO: handle ipv6 ips
     /* char addrStr[IP_TO_STR_LEN];
     sock_ip_to_string ((struct sockaddr *) &address, addrStr, sizeof (addrStr));
-    cerver_log_msg (stdout, SERVER, PLAYER, string_create ("New player connected from ip: %s @ port: %d.\n", 
+    cerver_log_msg (stdout, SERVER, PLAYER, c_string_create ("New player connected from ip: %s @ port: %d.\n", 
         addrStr, sock_ip_port ((struct sockaddr *) &address))); */
 
     // TODO: init other necessarry game values

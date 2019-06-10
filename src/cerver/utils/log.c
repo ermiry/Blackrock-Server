@@ -48,13 +48,13 @@ void cerver_log_msg (FILE *__restrict __stream, LogMsgType firstType, LogMsgType
         second = log_get_msg_type (secondType);
 
         if (firstType == DEBUG_MSG)
-            message = string_create ("%s: %s\n", second, msg);
+            message = c_string_create ("%s: %s\n", second, msg);
         
-        else message = string_create ("%s%s: %s\n", first, second, msg);
+        else message = c_string_create ("%s%s: %s\n", first, second, msg);
     }
 
     else if (firstType != DEBUG_MSG)
-        message = string_create ("%s: %s\n", first, msg);
+        message = c_string_create ("%s: %s\n", first, msg);
 
     // log messages with color
     switch (firstType) {

@@ -8,10 +8,10 @@
 
 #include "mongo/mongo.h"
 
-#include "collections/dllist.h"
+#include "cerver/collections/dllist.h"
 
-#include "utils/myUtils.h"
-#include "utils/log.h"
+#include "cerver/utils/utils.h"
+#include "cerver/utils/log.h"
 
 mongoc_collection_t *users_collection = NULL;
 
@@ -186,7 +186,7 @@ static User *user_doc_parse (const bson_t *user_doc, bool populate) {
 
                 }
 
-                else logMsg (stdout, WARNING, NO_TYPE, createString ("Got unknown key %s when parsing user doc.", key));
+                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing user doc.", key));
             }
         }
     }
@@ -280,7 +280,7 @@ int user_update_with_model (const char *username, User *user_update_model) {
 static User *user_get_friend_by_username (const User *user, const char *friend_username) {
 
     User *friend = NULL;
-    for (ListElement *le = LIST_START (user->friends); le; le = le->next) {
+    for (ListElement *le = dlist_start (user->friends); le; le = le->next) {
         friend = (User *) le->data;
         if (!strcmp (friend->username, friend_username)) return friend;
     }
@@ -291,7 +291,7 @@ static User *user_get_friend_by_username (const User *user, const char *friend_u
 
 static inline void user_add_friend_to_friend_list (const User *user, const User *friend) {
 
-    if (user && friend) dlist_insert_after (user->friends, LIST_END (user->friends), (void *) friend);
+    if (user && friend) dlist_insert_after (user->friends, dlist_end (user->friends), (void *) friend);
 
 }
 
@@ -301,7 +301,7 @@ static int user_remove_friend_from_friend_list (const User *user, const User *fr
 
     if (user && friend) {
         User *f = NULL;
-        for (ListElement *le = LIST_START (user->friends); le; le = le->next) {
+        for (ListElement *le = dlist_start (user->friends); le; le = le->next) {
             f = (User *) le->data;
             if (!strcmp (f->username, friend->username)) {
                 dlist_remove_element (user->friends, le);
@@ -339,17 +339,17 @@ int user_add_friend (const char *username, const char *friend_username) {
                     errors = user_update_with_model (friend_username, friend);
                 }
 
-                else logMsg (stderr, ERROR, NO_TYPE, "One user already has the other in its friend list!");
+                else cerver_log_msg (stderr, ERROR, NO_TYPE, "One user already has the other in its friend list!");
 
                 user_destroy (friend);
             }
 
-            else logMsg (stderr, ERROR, NO_TYPE, createString ("Failed to get friend %s", friend_username));
+            else cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("Failed to get friend %s", friend_username));
             
             user_destroy (user);
         }
 
-        else logMsg (stderr, ERROR, NO_TYPE, createString ("Failed to get user %s", username));
+        else cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("Failed to get user %s", username));
     }
 
     return errors;
@@ -380,10 +380,10 @@ int user_remove_friend (const char *username, const char *friend_username) {
                         errors = user_update_with_model (friend_username, friend);
                     }
 
-                    else logMsg (stderr, ERROR, NO_TYPE, "Failed to remove user from friends list!");
+                    else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to remove user from friends list!");
                 }
 
-                else logMsg (stderr, ERROR, NO_TYPE, "Both users dont have each other in ther friends list!");
+                else cerver_log_msg (stderr, ERROR, NO_TYPE, "Both users dont have each other in ther friends list!");
                 
                 user_destroy (friend);
             }

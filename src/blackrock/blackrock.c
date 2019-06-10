@@ -12,16 +12,19 @@
 
 #include <sqlite3.h>
 
-#include "cerver/game.h"
+#include "cerver/game/game.h"
+#include "cerver/game/lobby.h"
+#include "cerver/game/player.h"
+#include "cerver/game/score.h"
 
-#include "utils/thpool.h"
-#include "collections/avl.h"
+#include "cerver/collections/dllist.h"
+#include "cerver/collections/avl.h"
 
-#include "utils/myUtils.h"
-#include "collections/dllist.h"
-#include "utils/objectPool.h"
-#include "utils/config.h"
-#include "utils/log.h"
+#include "cerver/utils/utils.h"
+#include "cerver/utils/thpool.h"
+#include "cerver/utils/objectPool.h"
+#include "cerver/utils/config.h"
+#include "cerver/utils/log.h"
 
 #include "blackrock/blackrock.h"      // blackrock dependent types --> same as in the client
 #include "blackrock/map.h"
@@ -115,7 +118,7 @@ void createPlayersDB (void) {
         sqlite3_free (err_msg);
     }
 
-    else logMsg (stdout, SUCCESS, NO_TYPE, "Created players db table!");
+    else cerver_log_msg (stdout, SUCCESS, NO_TYPE, "Created players db table!");
 
 }
 
@@ -159,7 +162,7 @@ u8 player_profile_add_to_db (PlayerProfile *player_profile) {
             int rc = sqlite3_step (stmt);
             
             if (rc != SQLITE_DONE) {
-                logMsg (stderr, ERROR, GAME, "Failed to insert new player into db!");
+                cerver_log_msg (stderr, ERROR, GAME, "Failed to insert new player into db!");
                 fprintf (stderr, "Error: %s\n", sqlite3_errmsg (playersDB));
                 free(query);
                 return 1;
@@ -199,7 +202,7 @@ u8 player_profile_remove_from_db_by_id (const int id) {
     int rc = sqlite3_step (stmt);
     
     if (rc != SQLITE_DONE) {
-        logMsg (stderr, ERROR, GAME, "Failed to remove new player into db!");
+        cerver_log_msg (stderr, ERROR, GAME, "Failed to remove new player into db!");
         fprintf (stderr, "Error: %s\n", sqlite3_errmsg (playersDB));
         free(query);
         return 1;
@@ -221,7 +224,7 @@ PlayerProfile *player_profile_get_from_db_by_id (const int id) {
     if (sqlite3_prepare_v2 (playersDB, sql, -1, &stmt, 0) == SQLITE_OK) 
         sqlite3_bind_int (stmt, 1, id);
     else {
-        logMsg (stderr, ERROR, NO_TYPE, "Failed to prepare sqlite stmt!");
+        cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to prepare sqlite stmt!");
         return NULL;
     } 
 
@@ -231,8 +234,8 @@ PlayerProfile *player_profile_get_from_db_by_id (const int id) {
 
     const char *found_username = sqlite3_column_text (stmt, 1);
     if (!found_username) {
-        logMsg (stderr, ERROR, GAME, 
-            createString ("Failed to get player with id: %i!", id));
+        cerver_log_msg (stderr, ERROR, GAME, 
+            c_string_create ("Failed to get player with id: %i!", id));
         sqlite3_finalize(stmt);
     }
 
@@ -240,13 +243,13 @@ PlayerProfile *player_profile_get_from_db_by_id (const int id) {
         profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
         if (profile) {
             profile->profileID = id;
-            profile->username = createString ("%s", sqlite3_column_text (stmt, SQL_USERNAME_COL));
-            profile->password = createString ("%s", sqlite3_column_text (stmt, SQL_PASSWORD_COL));
+            profile->username = c_string_create ("%s", sqlite3_column_text (stmt, SQL_USERNAME_COL));
+            profile->password = c_string_create ("%s", sqlite3_column_text (stmt, SQL_PASSWORD_COL));
             profile->kills = sqlite3_column_int (stmt, SQL_KILLS_COL);
             profile->gamesPlayed = sqlite3_column_int (stmt, SQL_GAMES_PLAYED_COL);
             profile->highscore = sqlite3_column_int (stmt, SQL_HIGHSCORE_COL);
             profile->n_friends = sqlite3_column_int (stmt, SQL_N_FRIENDS_COL);
-            profile->friends = createString ("%s", sqlite3_column_text (stmt, SQL_FRIENDS_COL));
+            profile->friends = c_string_create ("%s", sqlite3_column_text (stmt, SQL_FRIENDS_COL));
         }
     }
 
@@ -274,8 +277,8 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
 
         const char *found_username = sqlite3_column_text (stmt, 1);
         if (!found_username) {
-            logMsg (stderr, ERROR, GAME, 
-                createString ("Failed to get player with username: %s!", username));
+            cerver_log_msg (stderr, ERROR, GAME, 
+                c_string_create ("Failed to get player with username: %s!", username));
             sqlite3_finalize(stmt);
         }
 
@@ -285,12 +288,12 @@ PlayerProfile *player_profile_get_from_db_by_username (const char *username) {
                 profile->profileID = sqlite3_column_int (stmt, SQL_PROFILE_ID_COL);
                 profile->username = (char *) calloc (64, sizeof (char));
                 strcpy (profile->username, found_username);
-                profile->password = createString ("%s", sqlite3_column_text (stmt, SQL_PASSWORD_COL));
+                profile->password = c_string_create ("%s", sqlite3_column_text (stmt, SQL_PASSWORD_COL));
                 profile->kills = sqlite3_column_int (stmt, SQL_KILLS_COL);
                 profile->gamesPlayed = sqlite3_column_int (stmt, SQL_GAMES_PLAYED_COL);
                 profile->highscore = sqlite3_column_int (stmt, SQL_HIGHSCORE_COL);
                 profile->n_friends = sqlite3_column_int (stmt, SQL_N_FRIENDS_COL);
-                profile->friends = createString ("%s", sqlite3_column_text (stmt, SQL_FRIENDS_COL));
+                profile->friends = c_string_create ("%s", sqlite3_column_text (stmt, SQL_FRIENDS_COL));
             }
         }
         
@@ -344,7 +347,7 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
 
                 else {
                     #ifdef BLACK_DEBUG
-                    logMsg (stderr, ERROR, GAME, "Player provided wrong password.");
+                    cerver_log_msg (stderr, ERROR, GAME, "Player provided wrong password.");
                     #endif
                     black_error->errorType = BLACK_ERROR_WRONG_CREDENTIALS;
                     strcpy (black_error->msg, "Wrong credentials!");
@@ -353,7 +356,7 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
 
             else {
                 #ifdef BLACK_DEBUG
-                logMsg (stderr, ERROR, GAME, "No player profile found with the credentials!");
+                cerver_log_msg (stderr, ERROR, GAME, "No player profile found with the credentials!");
                 #endif
                 black_error->errorType = BLACK_ERROR_WRONG_CREDENTIALS;
                 strcpy (black_error->msg, "Wrong credentials!");
@@ -365,8 +368,8 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
             // we al ready have registered that username
             if (search_profile) {
                 #ifdef BLACK_DEBUG
-                logMsg (stderr, WARNING, GAME, 
-                    createString ("Username: %s is already taken!", black_credentials->username));
+                cerver_log_msg (stderr, WARNING, GAME, 
+                    c_string_create ("Username: %s is already taken!", black_credentials->username));
                 #endif
                 black_error->errorType = BLACK_ERROR_USERNAME_TAKEN;
                 strcpy (black_error->msg, "Username already taken!");
@@ -376,19 +379,19 @@ void *blackrock_check_credentials (BlackCredentials *black_credentials, BlackErr
                 // create a new profile and add it to our database
                 PlayerProfile *new_profile = (PlayerProfile *) malloc (sizeof (PlayerProfile));
                 if (new_profile) {
-                    new_profile->username = createString ("%s", black_credentials->username);
-                    new_profile->password = createString ("%s", black_credentials->password);
+                    new_profile->username = c_string_create ("%s", black_credentials->username);
+                    new_profile->password = c_string_create ("%s", black_credentials->password);
 
                     if (!player_profile_add_to_db (new_profile)) {
                         #ifdef BLACK_DEBUG
-                        logMsg (stdout, DEBUG_MSG, GAME, "Added a new player profile!");
+                        cerver_log_msg (stdout, DEBUG_MSG, GAME, "Added a new player profile!");
                         #endif
                         return new_profile;
                     }
 
                     else {
                         #ifdef BLACK_DEBUG
-                        logMsg (stderr, ERROR, GAME, "Failed to add a new profile to players db!");
+                        cerver_log_msg (stderr, ERROR, GAME, "Failed to add a new profile to players db!");
                         #endif
                         black_error->errorType = BLACK_ERROR_SERVER;
                         strcpy (black_error->msg, "Internal server error!");
@@ -428,7 +431,7 @@ u8 blackrock_authMethod (void *data) {
 
                 else {
                     #ifdef CERVER_DEBUG
-                    logMsg (stderr, ERROR, CLIENT, "Wrong session id provided by client!");
+                    cerver_log_msg (stderr, ERROR, CLIENT, "Wrong session id provided by client!");
                     #endif
                     return 1;      // the session id is wrong -> error!
                 }
@@ -451,8 +454,8 @@ u8 blackrock_authMethod (void *data) {
 
                     if (sessionID) {
                         #ifdef CERVER_DEBUG
-                        logMsg (stdout, DEBUG_MSG, CLIENT, 
-                            createString ("Generated client session id: %s", sessionID));
+                        cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                            c_string_create ("Generated client session id: %s", sessionID));
                         #endif
 
                         client_set_sessionID (pack_info->client, sessionID);
@@ -465,7 +468,7 @@ u8 blackrock_authMethod (void *data) {
                     }
 
                     else {
-                        logMsg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+                        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to generate session id!");
                         black_error.errorType = BLACK_ERROR_SERVER;
                         strcpy (black_error.msg, "Failed to generate session id!");
                         send_black_error (pack_info->server, pack_info->client, pack_info->clientSock, 
@@ -476,7 +479,7 @@ u8 blackrock_authMethod (void *data) {
                 // wrong credentials -- server automatically sends an error packet
                 else {
                     #ifdef BLACK_DEBUG
-                        logMsg (stdout, ERROR, GAME, "Blackrock player failed to authenticate!");
+                        cerver_log_msg (stdout, ERROR, GAME, "Blackrock player failed to authenticate!");
                     #endif
                     send_black_error (pack_info->server, pack_info->client, pack_info->clientSock, 
                         black_error);
@@ -550,8 +553,8 @@ u8 loadMonsterLoot (u32 monId, MonsterLoot *loot) {
 
     if (sqlite3_prepare_v2 (enemiesDB, sql, -1, &res, 0) == SQLITE_OK) sqlite3_bind_int (res, 1, monId);
     else {
-        logMsg (stderr, ERROR, GAME, 
-            createString ("Failed to execute db statement: %s", sqlite3_errmsg (enemiesDB)));
+        cerver_log_msg (stderr, ERROR, GAME, 
+            c_string_create ("Failed to execute db statement: %s", sqlite3_errmsg (enemiesDB)));
         return 1;
     } 
 
@@ -567,7 +570,7 @@ u8 loadMonsterLoot (u32 monId, MonsterLoot *loot) {
         strcpy (itemsTxt, c);
 
         // parse the string by commas
-        char **tokens = splitString (itemsTxt, ',');
+        char **tokens = c_string_split (itemsTxt, ',');
         if (tokens) {
             // count how many elements will be extracted
             u32 count = 0;
@@ -619,10 +622,10 @@ static int loadEnemyData (void *data, int argc, char **argv, char **azColName) {
     mon->probability = atof (argv[2]);
 
     if (loadMonsterLoot (mon->id, &mon->loot))
-        logMsg (stderr, ERROR, GAME, 
-            createString ("Error getting monster loot. Monster id: %i.\n", mon->id));
+        cerver_log_msg (stderr, ERROR, GAME, 
+            c_string_create ("Error getting monster loot. Monster id: %i.\n", mon->id));
 
-    dlist_insert_after (enemyData, LIST_END (enemyData), mon);
+    dlist_insert_after (enemyData, dlist_end (enemyData), mon);
 
    return 0;
 
@@ -633,7 +636,7 @@ static int loadEnemyData (void *data, int argc, char **argv, char **azColName) {
 u8 connectEnemiesDB (void) {
 
     if (sqlite3_open (enemiesDBPath, &enemiesDB) != SQLITE_OK) {
-        logMsg (stderr, ERROR, GAME, "Failed to open the enemies db!");
+        cerver_log_msg (stderr, ERROR, GAME, "Failed to open the enemies db!");
         // TODO: try loading the file from a backup
         return 1;
     } 
@@ -650,7 +653,7 @@ u8 connectEnemiesDB (void) {
     char *sql = "SELECT * FROM Monsters";
           
     if (sqlite3_exec (enemiesDB, sql, loadEnemyData, NULL, &err) != SQLITE_OK ) {
-        logMsg (stderr, ERROR, GAME, createString ("SQL error: %s\n", err));
+        cerver_log_msg (stderr, ERROR, GAME, c_string_create ("SQL error: %s\n", err));
         sqlite3_free (err);
     } */
 
@@ -673,36 +676,36 @@ u8 blackrock_loadGameData (void) {
     // connect to the players db
     if (!connectPlayersDB ()) {
         #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, GAME, "Connedted to the players db!");
+            cerver_log_msg (stdout, DEBUG_MSG, GAME, "Connedted to the players db!");
         #endif
     }
 
     // connect to the items db
     if (sqlite3_open (itemsDBPath, &itemsDB) != SQLITE_OK) {
-        logMsg (stderr, ERROR, GAME, "Failed to open the items db!");
+        cerver_log_msg (stderr, ERROR, GAME, "Failed to open the items db!");
         return 1;
     }
 
     else {
         #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, GAME, "Connected to items db.");
+            cerver_log_msg (stdout, DEBUG_MSG, GAME, "Connected to items db.");
         #endif
     }
 
     // get enemy info from enemies db    
     if (!connectEnemiesDB ()) {
         #ifdef DEBUG
-            logMsg (stdout, DEBUG_MSG, GAME, "Done loading enemies data.");
+            cerver_log_msg (stdout, DEBUG_MSG, GAME, "Done loading enemies data.");
         #endif
     }
 
     else {
-        logMsg (stderr, ERROR, GAME, "Failed to load enemies data!");
+        cerver_log_msg (stderr, ERROR, GAME, "Failed to load enemies data!");
         return 1;
     }
 
     #ifdef DEBUG
-        logMsg (stdout, DEBUG_MSG, GAME, "Done loading enemy data from db.");
+        cerver_log_msg (stdout, DEBUG_MSG, GAME, "Done loading enemy data from db.");
     #endif
 
     return 0;
@@ -771,12 +774,12 @@ u8 initGameData (BrGameData *brdata, Lobby *lobby) {
     if (brdata) {
         if (enemyData) brdata->enemyData = enemyData;
         else {
-            logMsg (stdout, WARNING, GAME, "NULL reference to enemy data list. Creating a new one.");
+            cerver_log_msg (stdout, WARNING, GAME, "NULL reference to enemy data list. Creating a new one.");
             // TODO: init enmy data list
         }
 
         // add players to the scoreboard
-        if (!brdata->sb) brdata->sb = game_score_new (lobby->players_nfds, 
+        if (!brdata->sb) brdata->sb = game_score_create (lobby->players_nfds, 
             BR_SCORES_NUM, "kills", "deaths", "score");
         
         // FIXME:
@@ -785,7 +788,7 @@ u8 initGameData (BrGameData *brdata, Lobby *lobby) {
     }
 
     else {
-        logMsg (stderr, ERROR, GAME, "Can't init a NULL BR game data!");
+        cerver_log_msg (stderr, ERROR, GAME, "Can't init a NULL BR game data!");
         return 1;
     }
 
@@ -822,8 +825,8 @@ void generateLevel (World *world) {
     }
 
     #ifdef DEBUG
-        logMsg (stdout, DEBUG_MSG, GAME, 
-        createString ("%i / %i monsters created successfully.", monCount, monCount));
+        cerver_log_msg (stdout, DEBUG_MSG, GAME, 
+        c_string_create ("%i / %i monsters created successfully.", monCount, monCount));
     #endif
 
 }
@@ -888,7 +891,7 @@ u8 initWorld (AVLNode *players, World *world) {
 u8 blackrock_init_arcade (void *data) {
 
     if (!data) {
-        logMsg (stderr, ERROR, GAME, "No sl data recieved! Failed to init a new game.");
+        cerver_log_msg (stderr, ERROR, GAME, "No sl data recieved! Failed to init a new game.");
         return 1;
     }
 
@@ -898,11 +901,11 @@ u8 blackrock_init_arcade (void *data) {
     // init our own game data inside the cerver lobby
     BrGameData *brdata = newBrGameData ();
     if (!brdata) {
-        logMsg (stderr, ERROR, GAME, "Failed to create new Blackrock game data!");
+        cerver_log_msg (stderr, ERROR, GAME, "Failed to create new Blackrock game data!");
         return 1;
     }
 
-    sl->lobby->gameData = brdata;
+    sl->lobby->game_data = brdata;
 
     if (!initGameData (brdata, sl->lobby)) {
         if (!initWorld (sl->lobby->players->root, brdata->world)) {
@@ -915,7 +918,7 @@ u8 blackrock_init_arcade (void *data) {
             RequestData *reqdata = (RequestData *) end;
             reqdata->type = GAME_INIT;
 
-            broadcastToAllPlayers (sl->lobby->players->root, sl->server, initPacket, packetSize);
+            player_broadcast_to_all (sl->lobby->players->root, sl->server, initPacket, packetSize);
 
             // after we have sent the game data, we need to wait until all the
             // players have generated their own levels and we need to be sure
@@ -931,13 +934,13 @@ u8 blackrock_init_arcade (void *data) {
         }
 
         else {
-            logMsg (stderr, ERROR, GAME, "Failed to init BR world!");
+            cerver_log_msg (stderr, ERROR, GAME, "Failed to init BR world!");
             return 1;
         }
     }
 
     else {
-        logMsg (stderr, ERROR, GAME, "Failed to init BR game data!");
+        cerver_log_msg (stderr, ERROR, GAME, "Failed to init BR game data!");
         return 1;
     }
 
@@ -982,7 +985,7 @@ void blackrock_update_arcade (void *data) {
     // logMessage ("You have entered the dungeon!", 0xFFFFFFFF);
 
     #ifdef DEBUG
-        logMsg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
+        cerver_log_msg (stdout, DEBUG_MSG, GAME, "Players have entered the dungeon!");
     #endif
 
     // TODO: start the game -> this should be similar to the update game in blackrcok client
