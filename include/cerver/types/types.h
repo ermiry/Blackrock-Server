@@ -1,5 +1,5 @@
-#ifndef MY_TYPES_H  
-#define MY_TYPES_H  
+#ifndef _CERVER_TYPES_H_
+#define _CERVER_TYPES_H_
 
 #define EXIT_FAILURE    1
 
@@ -25,5 +25,14 @@ typedef u8 (*Func)(void);
 typedef void (*Action)(void *);
 // takes an argument and returns a value (int)
 typedef u8 (*delegate)(void *);
+
+// TODO: handle different data lengths
+typedef enum ValueType {
+
+    VALUE_TYPE_INT,
+    VALUE_TYPE_DOUBLE,
+    VALUE_TYPE_STRING,
+
+} ValueType;
 
 #endif

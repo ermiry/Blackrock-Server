@@ -1,5 +1,5 @@
-#ifndef HTAB_H
-#define HTAB_H
+#ifndef _COLLECTIONS_HTAB_H_
+#define _COLLECTIONS_HTAB_H_
 
 #include <stdlib.h>
 #include <string.h>

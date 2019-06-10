@@ -1,17 +1,18 @@
-#include "types/myTypes.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include "cerver/types/types.h"
 
 #include "cerver/network.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 
-#include "collections/avl.h"
+#include "cerver/collections/avl.h"
 
-#include "utils/log.h"
-#include "utils/myUtils.h"
-
-/*** CLIENTS ***/
-
-#pragma region CLIENTS
+#include "cerver/utils/log.h"
+#include "cerver/utils/utils.h"
 
 // get from where the client is connecting
 char *client_getConnectionValues (i32 fd, const struct sockaddr_storage address) {
@@ -22,7 +23,7 @@ char *client_getConnectionValues (i32 fd, const struct sockaddr_storage address)
     u16 port = sock_ip_port ((const struct sockaddr *) &address);
 
     if (ipstr && (port > 0)) 
-        connectionValues = createString ("%s-%i", ipstr, port);
+        connectionValues = string_create ("%s-%i", ipstr, port);
 
     return connectionValues;
 
@@ -32,7 +33,7 @@ void client_set_sessionID (Client *client, const char *sessionID) {
 
     if (client && sessionID) {
         if (client->sessionID) free (client->sessionID);
-        client->sessionID = createString ("%s", sessionID);
+        client->sessionID = string_create ("%s", sessionID);
     }
 
 }
@@ -63,7 +64,7 @@ Client *newClient (Server *server, i32 clientSock, struct sockaddr_storage addre
     if (connection_values) {
         if (client->clientID) free (client->clientID);
 
-        client->clientID = createString ("%s", connection_values);
+        client->clientID = string_create ("%s", connection_values);
         free (connection_values);
     }
 
@@ -189,13 +190,13 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
 
     if (clients && sessionID) {
         Client temp;
-        temp.sessionID = createString ("%s", sessionID);
+        temp.sessionID = string_create ("%s", sessionID);
         
-        void *data = avl_getNodeData (clients, &temp);
+        void *data = avl_get_node_data (clients, &temp);
         if (data) return (Client *) data;
         else 
-            logMsg (stderr, WARNING, SERVER, 
-                createString ("Couldn't find a client associated with the session ID: %s.", 
+            cerver_log_msg (stderr, WARNING, SERVER, 
+                string_create ("Couldn't find a client associated with the session ID: %s.", 
                 sessionID));
     }
 
@@ -280,20 +281,20 @@ void client_registerToServer (Server *server, Client *client, i32 newfd) {
             printf ("client_registerToServer () - idx: %i\n", idx);
 
             // insert the new client into the server's clients
-            avl_insertNode (server->clients, client);
+            avl_insert_node (server->clients, client);
 
             server->connectedClients++;
 
             #ifdef CERVER_STATS
-                logMsg (stdout, SERVER, NO_TYPE, 
-                createString ("New client registered to server. Connected clients: %i.", 
+                cerver_log_msg (stdout, SERVER, NO_TYPE, 
+                string_create ("New client registered to server. Connected clients: %i.", 
                 server->connectedClients));
             #endif
         }
 
         // TODO: how to better handle this error?
         else {
-            logMsg (stderr, ERROR, SERVER, 
+            cerver_log_msg (stderr, ERROR, SERVER, 
                 "Failed to get a free main poll idx. Is the server full?");
             // just drop the client connection
             close (newfd);
@@ -309,7 +310,7 @@ void client_registerToServer (Server *server, Client *client, i32 newfd) {
 Client *client_unregisterFromServer (Server *server, Client *client) {
 
     if (server && client) {
-        Client *c = avl_removeNode (server->clients, client);
+        Client *c = avl_remove_node (server->clients, client);
         if (c) {
             if (client->active_connections) {
                 for (u8 i = 0; i < client->n_active_cons; i++) {
@@ -323,7 +324,7 @@ Client *client_unregisterFromServer (Server *server, Client *client) {
             }
 
             #ifdef CERVER_DEBUG
-                logMsg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
+                cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Unregistered a client from the sever");
             #endif
 
             server->connectedClients--;
@@ -331,7 +332,7 @@ Client *client_unregisterFromServer (Server *server, Client *client) {
             return c;
         }
 
-        else logMsg (stdout, WARNING, CLIENT, "The client wasn't registered in the server.");
+        else cerver_log_msg (stdout, WARNING, CLIENT, "The client wasn't registered in the server.");
     }
 
     return NULL;
@@ -355,15 +356,40 @@ void client_closeConnection (Server *server, Client *client) {
         client_unregisterFromServer (server, client);
 
         #ifdef CERVER_DEBUG
-            logMsg (stdout, DEBUG_MSG, CLIENT, 
-                createString ("Disconnected a client from the server.\
+            cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                string_create ("Disconnected a client from the server.\
                 \nConnected clients remainning: %i.", server->connectedClients));
         #endif
     }
 
 }
 
+// disconnect the client from the server by a socket -- usefull for http servers
+int client_disconnect_by_socket (Server *server, const int sock_fd) {
+    
+    int retval = 1;
+
+    if (server) {
+        Client *c = getClientBySocket (server->clients->root, sock_fd);
+        if (c) {
+            if (c->n_active_cons <= 1) 
+                client_closeConnection (server, c);
+
+            // FIXME: check for client_CloseConnection retval to be sure!!
+            retval  = 0;
+        }
+            
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, ERROR, CLIENT, 
+                "Couldn't find an active client with the requested socket!");
+            #endif
+        }
+    }
+
+    return retval;
+
+}
+
 // TODO: used to check for client timeouts in any type of server
 void client_checkTimeouts (Server *server) {}
-
-#pragma endregion
