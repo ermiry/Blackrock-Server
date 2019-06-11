@@ -4,6 +4,7 @@
 #include <poll.h>
 
 #include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
 #include "cerver/cerver.h"
 
@@ -97,15 +98,6 @@ u8 game_server_teardown (struct _Server *server);
 
 /*** THE FOLLOWING AND KIND OF BLACKROCK SPECIFIC ***/
 /*** WE NEED TO DECIDE WITH NEED TO BE ON THE FRAMEWORK AND WHICH DOES NOT!! ***/
-
-
-enum _GameType {
-
-	ARCADE = 1
-
-};
-
-typedef enum _GameType GameType;
 
 // 17/11/2018 -- aux structure for traversing a players tree
 typedef struct PlayerAndData {
