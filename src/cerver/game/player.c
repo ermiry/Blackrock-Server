@@ -46,7 +46,6 @@ Player *player_new (Client *client, const char *session_id, void *player_data) {
 
 }
 
-// FIXME: correctly destroy the game components
 // TODO: what happens with the client data??
 // deletes a player struct for ever
 void player_delete (void *data) {
@@ -60,6 +59,8 @@ void player_delete (void *data) {
     }
 
 }
+
+void player_delete_dummy (void *ptr) {}
 
 // this is our default player comparator
 // comparator for players's avl tree

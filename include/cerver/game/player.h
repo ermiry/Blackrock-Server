@@ -46,6 +46,7 @@ extern void player_set_delete_player_data (Player *player, Action destroy);
 extern Player *player_new (Client *client, const char *session_id, void *player_data);
 // deletes a player struct for ever
 extern void player_delete (void *data);
+extern void player_delete_dummy (void *ptr);
 
 // comparator for players's avl tree
 extern int player_comparator_client_id (const void *a, const void *b);

@@ -9,6 +9,7 @@
 #include <errno.h>
 
 #include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
 #include "cerver/game/game.h"
 #include "cerver/game/player.h"
@@ -23,34 +24,27 @@
 #include "cerver/utils/log.h"
 #include "cerver/utils/sha-256.h"
 
-static void lobby_default_handler (void *data);
+// creates a list to manage the server lobbys
+// called when we init the game server
+// returns 0 on success, 1 on error
+u8 game_init_lobbys (GameServerData *game_data, u8 n_lobbys) {
 
-/*** Lobby Configuration ***/
+    u8 retval = 1;
 
-// sets the lobby settings and a function to delete it
-void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action delete_game_settings) {
-
-    if (lobby) {
-        lobby->game_settings = game_settings;
-        lobby->delete_lobby_game_settings = delete_game_settings;
+    if (game_data) {
+        if (game_data->currentLobbys) cerver_log_msg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
+        else {
+            game_data->currentLobbys = dlist_init (lobby_delete, lobby_comparator);
+            if (game_data->currentLobbys) retval = 0;
+            else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to init server's lobby list!");
+        }
     }
+
+    return retval;
 
 }
 
-// sets the lobby game data and a function to delete it
-void lobby_set_game_data (Lobby *lobby, void *game_data, Action delete_lobby_game_data) {
-
-    if (lobby) {
-        lobby->game_data = game_data;
-        lobby->delete_lobby_game_data = delete_lobby_game_data;
-    }
-
-}
-
-// set the lobby player handler
-void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->handler = handler; }
-
-void lobby_default_generate_id (char *lobby_id) {
+static void lobby_default_generate_id (char *lobby_id) {
 
     time_t rawtime = time (NULL);
     struct tm *timeinfo = localtime (&rawtime);
@@ -69,39 +63,175 @@ void lobby_default_generate_id (char *lobby_id) {
 
 }
 
-// lobby constructor, it also initializes basic lobby data
-Lobby *lobby_new (GameServerData *game_data, unsigned int max_players) {
+// we remove any fd that was set to -1 for what ever reason
+static void lobby_players_compress (Lobby *lobby) {
+
+    if (lobby) {
+        lobby->compress_players = false;
+        
+        for (u16 i = 0; i < lobby->players_nfds; i++) {
+            if (lobby->players_fds[i].fd == -1) {
+                for (u16 j = i; j < lobby->players_nfds; j++)
+                    lobby->players_fds[i].fd = lobby->players_fds[j + 1].fd;
+
+                i--;
+                lobby->players_nfds--;
+            }
+        }
+    }
+
+}
+
+// takes as data a server lobby structure
+// recieves packages from players inside the lobby
+// packages are assumed to use cerver structure to transfer data
+// if you need to manage packages in a custom way or do not user cerver types at all, 
+// you can set your own handler
+static void lobby_default_handler (void *ptr) {
+
+    // check we have the correct data
+    if (!ptr) {
+        cerver_log_msg (stderr, ERROR, GAME, 
+            "Can start lobby handler, neither server nor lobby can be null!");
+        return;
+    } 
+
+    ServerLobby *sl = (ServerLobby *) ptr;
+    Server *server = sl->server;
+    Lobby *lobby = sl->lobby;
+
+    if (!server || !lobby) {
+        cerver_log_msg (stderr, ERROR, GAME, 
+            "Can start lobby handler, neither server nor lobby can be null!");
+        return;
+    } 
+
+    // we are good to go...
+    cerver_log_msg (stdout, SUCCESS, SERVER, "Lobby has started!");
+
+    int poll_retval;
+    while (lobby->running) {
+        poll_retval = poll (lobby->players_fds, lobby->players_nfds, lobby->poll_timeout);
+
+        // poll failed
+        if (poll_retval < 0) {
+            cerver_log_msg (stderr, ERROR, SERVER, 
+                c_string_create ("Lobby %s poll failed!", lobby->id->str));
+            #ifdef CERVER_DEBUG
+            perror ("Error");
+            #endif
+            server->isRunning = false;
+            break;
+        }
+
+        // if poll has timed out, just continue to the next loop... 
+        if (poll_retval == 0) {
+            // #ifdef CERVER_DEBUG
+            // cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
+            // #endif
+            continue;
+        }
+
+        // FIXME:
+        // one or more fd(s) are readable, need to determine which ones they are
+        /* for (u8 i = 0; i < poll_n_fds; i++) {
+            if (server->fds[i].revents == 0) continue;
+            if (server->fds[i].revents != POLLIN) continue;
+
+            // accept incoming connections that are queued
+            if (server->fds[i].fd == server->serverSock) {
+                if (server_accept (server)) {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
+                    #endif
+                }
+                else {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                    #endif
+                } 
+            }
+
+            // TODO: maybe later add this directly to the thread pool
+            // not the server socket, so a connection fd must be readable
+            else server_recieve (server, server->fds[i].fd, false);
+        } */
+
+        // if (server->compress_clients) compressClients (server);
+    }
+
+    #ifdef CERVER_DEBUG
+    cerver_log_msg (stdout, DEBUG_MSG, GAME, 
+        c_string_create ("Lobby %s handler has stopped!", lobby->id->str));
+    #endif
+
+}
+
+
+/*** Lobby ***/
+
+// lobby constructor
+Lobby *lobby_new (void) {
 
     Lobby *lobby = (Lobby *) malloc (sizeof (Lobby));
     if (lobby) {
-        memset (lobby, 0, sizeof (Lobby));
+        lobby->id = NULL;
+        lobby->creation_time_stamp = 0;
 
-        lobby->creation_time_stamp = time (NULL);
-        game_data->lobby_id_generator ((char *) lobby->id);
+        lobby->running = false;
+        lobby->in_game = false;
 
         lobby->game_settings = NULL;
+        lobby->delete_lobby_game_settings = NULL;
 
-        // FIXME: we dont want to delete the players here!! they also have a refrence in the main avl tree!!
-        lobby->players = avl_init (game_data->player_comparator, player_delete);
-        lobby->owner = NULL; 
-        
-        lobby->max_players = max_players;
-        lobby->players_fds = (struct pollfd *) calloc (max_players, sizeof (struct pollfd));
-        lobby->compress_players = false;        // default
+        lobby->owner = NULL;
+        lobby->players = NULL;
+        lobby->max_players = 0;
+        lobby->current_players = 0;
+
+        lobby->players_fds = NULL;
+        lobby->players_nfds = 0;
+        lobby->compress_players = false;
+        lobby->poll_timeout = 0;
 
         lobby->game_data = NULL;
         lobby->delete_lobby_game_data = NULL;
 
-        lobby->isRunning = false;
-        lobby->inGame = false;
-
-        lobby->handler = lobby_default_handler;
+        lobby->handler = NULL;
     }
 
     return lobby;
 
 }
 
+// initializes a new lobby
+// pass the server game data
+// pass 0 to max players to use the default 4
+// pass NULL in handle to use default
+Lobby *lobby_init (GameServerData *game_data, unsigned max_players, Action handler) {
+
+    Lobby *lobby = lobby_new ();
+    if (lobby) {
+        lobby->creation_time_stamp = time (NULL);
+
+        char *id = NULL;
+        game_data->lobby_id_generator ((char *) id);
+        lobby->id = str_new (id);
+
+        // we dont want to really destroy the player data, just removed it from the tree
+        lobby->players = avl_init (game_data->player_comparator, player_delete_dummy);
+        lobby->max_players = max_players <= 0 ? DEFAULT_MAX_LOBBY_PLAYERS : max_players;
+        lobby->players_fds = (struct pollfd *) calloc (lobby->max_players, sizeof (struct pollfd));
+        lobby->poll_timeout = LOBBY_DEFAULT_POLL_TIMEOUT;
+
+        lobby->handler = handler ? handler : lobby_default_handler;
+    }
+
+    return lobby;
+
+}
+
+// TODO: how do we handle to destroy a lobby that is not empty yet
 // deletes a lobby for ever -- called when we teardown the server
 // we do not need to give any feedback to the players if there is any inside
 void lobby_delete (void *ptr) {
@@ -109,11 +239,11 @@ void lobby_delete (void *ptr) {
     if (ptr) {
         Lobby *lobby = (Lobby *) ptr;
 
-        if (lobby->id) free ((void *) lobby->id);
+        str_delete (lobby->id);
 
-        lobby->inGame = false;          // just to be sure
-        lobby->isRunning = false;
-        lobby->owner = NULL;            // the owner is destroyed in the avl tree
+        lobby->running = false;
+        lobby->in_game = false;             // just to be sure
+        lobby->owner = NULL;                // the owner is destroyed in the avl tree
 
         if (lobby->game_data) {
             if (lobby->delete_lobby_game_data) lobby->delete_lobby_game_data (lobby->game_data);
@@ -146,14 +276,40 @@ int lobby_comparator (void *one, void *two) {
         Lobby *lobby_one = (Lobby *) one;
         Lobby *lobby_two = (Lobby *) two;
 
-        if (lobby_one->id < lobby_two->id) return -1;
-        else if (lobby_one->id <= lobby_two->id) return 0;
-        else return 1;
+        return str_compare (lobby_one->id, lobby_two->id);
     }
 
 }
 
-// TODO: add the option to set a comparator in the game data
+/*** Lobby Configuration ***/
+
+// sets the lobby settings and a function to delete it
+void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action delete_game_settings) {
+
+    if (lobby) {
+        lobby->game_settings = game_settings;
+        lobby->delete_lobby_game_settings = delete_game_settings;
+    }
+
+}
+
+// sets the lobby game data and a function to delete it
+void lobby_set_game_data (Lobby *lobby, void *game_data, Action delete_lobby_game_data) {
+
+    if (lobby) {
+        lobby->game_data = game_data;
+        lobby->delete_lobby_game_data = delete_lobby_game_data;
+    }
+
+}
+
+// set the lobby player handler
+void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->handler = handler; }
+
+// set lobby poll function timeout in mili secs
+// how often we are checking for new packages
+void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout) { if (lobby) lobby->poll_timeout = timeout; }
+
 // searchs a lobby in the game data and returns a reference to it
 Lobby *lobby_get (GameServerData *game_data, Lobby *query) {
 
@@ -167,43 +323,7 @@ Lobby *lobby_get (GameServerData *game_data, Lobby *query) {
 
 }
 
-// we remove any fd that was set to -1 for what ever reason
-static void lobby_players_compress (Lobby *lobby) {
-
-    if (lobby) {
-        lobby->compress_players = false;
-        
-        for (u16 i = 0; i < lobby->players_nfds; i++) {
-            if (lobby->players_fds[i].fd == -1) {
-                for (u16 j = i; j < lobby->players_nfds; j++)
-                    lobby->players_fds[i].fd = lobby->players_fds[j + 1].fd;
-
-                i--;
-                lobby->players_nfds--;
-            }
-        }
-    }
-
-}
-
-// create a list to manage the server lobbys
-// called when we init the game server
-u8 game_init_lobbys (GameServerData *game_data, u8 n_lobbys) {
-
-    u8 retval = 1;
-
-    if (game_data) {
-        if (game_data->currentLobbys) cerver_log_msg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
-        else {
-            game_data->currentLobbys = dlist_init (lobby_delete, lobby_comparator);
-            if (game_data->currentLobbys) retval = 0;
-            else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to init server's lobby list!");
-        }
-    }
-
-    return retval;
-
-}
+/*** Handle lobby players ***/
 
 // FIXME:
 // add a player to a lobby
@@ -312,13 +432,16 @@ u8 player_remove_from_lobby (Server *server, Lobby *lobby, Player *player) {
 
 }
 
-// starts the lobby in a separte thread using its hanlder
+/*** Public lobby functions ***/
+
+// starts the lobby in a separte thread using its handler
 u8 lobby_start (Server *server, Lobby *lobby) {
 
     u8 retval = 1;
 
     if (server && lobby) {
         if (lobby->handler) {
+            lobby->running = true;      // make the lobby active
             ServerLobby *sl = (ServerLobby *) malloc (sizeof (ServerLobby));
             sl->server = server;
             sl->lobby = lobby;
@@ -335,36 +458,51 @@ u8 lobby_start (Server *server, Lobby *lobby) {
 }
 
 // creates a new lobby and inits his values with an owner
-Lobby *lobby_create (Server *server, Player *owner, unsigned int max_players) {
+// pass a custom handler or NULL to use teh default one
+Lobby *lobby_create (Server *server, Player *owner, unsigned int max_players, Action handler) {
 
     Lobby *lobby = NULL;
 
     if (server && owner) {
         GameServerData *game_data = (GameServerData *) server->serverData;
+        if (game_data) {
+            // we create a timestamp of the creation of the lobby
+            lobby = lobby_init (game_data, max_players, handler);
+            if (lobby) {
+                if (!lobby_add_player (lobby, owner)) {
+                    lobby->owner = owner;
+                    lobby->current_players = 1;
 
-        // we create a timestamp of the creation of the lobby
-        lobby = lobby_new (game_data, max_players);
-        if (lobby) {
-            if (!lobby_add_player (lobby, owner)) {
-                lobby->owner = owner;
-                lobby->current_players = 1;
+                    // add the lobby the server active ones
+                    dlist_insert_after (game_data->currentLobbys, dlist_end (game_data->currentLobbys), lobby);
+                }
 
-                // add the lobby the server active ones
-                dlist_insert_after (game_data->currentLobbys, dlist_end (game_data->currentLobbys), lobby);
+                else {
+                    cerver_log_msg (stderr, ERROR, GAME, "Failed to add owner to lobby!");
+                    lobby_delete (lobby);
+                    lobby = NULL;
+                }
             }
 
             else {
-                cerver_log_msg (stderr, ERROR, GAME, "Failed to add owner to lobby!");
-                lobby_delete (lobby);
-                lobby = NULL;
-            }
-        }
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, ERROR, GAME, "Failed to init new lobby!");
+                #endif
+            } 
+        }  
+
+        else {
+            cerver_log_msg (stderr, ERROR, GAME, 
+                c_string_create ("Server %s doesn't have a reference to game data!", 
+                server->name->str));
+        } 
     }
 
     return lobby;
 
 }
 
+// FIXME: return a custom error code to handle by the server and client
 // called by a registered player that wants to join a lobby on progress
 // the lobby model gets updated with new values
 u8 lobby_join (GameServerData *game_data, Lobby *lobby, Player *player) {
@@ -375,7 +513,7 @@ u8 lobby_join (GameServerData *game_data, Lobby *lobby, Player *player) {
         // check if for whatever reason a player al ready inside the lobby wants to join...
         if (!player_is_in_lobby (lobby, game_data->player_comparator, player)) {
             // check if the lobby is al ready running the game
-            if (!lobby->inGame) {
+            if (!lobby->in_game) {
                 // check lobby capacity
                 if (lobby->current_players < lobby->max_players) {
                     // the player is clear to join the lobby
@@ -621,88 +759,6 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
     return lobby;
 
 } */
-
-// FIXME: 20/04/2019 - we need to check this - this is kind of blackrock specific
-// recieves packages from players inside the lobby
-static void lobby_default_handler (void *data) {
-
-    if (data) {
-        ServerLobby *sl = (ServerLobby *) data;
-        Server *server = sl->server;
-        Lobby *lobby = sl->lobby;
-
-        // 21/04/2019 -- 6:09 -- these must go here!!
-        lobby->inGame = false;
-        lobby->isRunning = true;
-
-        /* ssize_t rc;                                  // retval from recv -> size of buffer
-        char packetBuffer[MAX_UDP_PACKET_SIZE];      // buffer for data recieved from fd
-        GamePacketInfo *info = NULL;
-
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, SUCCESS, SERVER, "New lobby has started!");
-        #endif
-
-        int poll_retval;    // ret val from poll function
-        int currfds;        // copy of n active server poll fds
-        while (lobby->isRunning) {
-            poll_retval = poll (lobby->players_fds, lobby->players_nfds, lobby->poll_timeout);
-
-            // poll failed
-            if (poll_retval < 0) {
-                cerver_log_msg (stderr, ERROR, SERVER, "Lobby poll failed!");
-                perror ("Error");
-                lobby->isRunning = false;
-                break;
-            }
-
-            // if poll has timed out, just continue to the next loop... 
-            if (poll_retval == 0) {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Lobby poll timeout.");
-                #endif
-                continue;
-            }
-
-            // one or more fd(s) are readable, need to determine which ones they are
-            currfds = lobby->players_nfds;
-            for (u8 i = 0; i < currfds; i++) {
-                if (lobby->players_fds[i].fd <= -1) continue;
-
-                if (lobby->players_fds[i].revents == 0) continue;
-
-                if (lobby->players_fds[i].revents != POLLIN) 
-                    cerver_log_msg (stderr, ERROR, GAME, "Lobby poll - Unexpected poll result!");
-
-                do {
-                    rc = recv (lobby->players_fds[i].fd, packetBuffer, sizeof (packetBuffer), 0);
-                    
-                    if (rc < 0) {
-                        if (errno != EWOULDBLOCK) {
-                            cerver_log_msg (stderr, ERROR, SERVER, "On hold recv failed!");
-                            perror ("Error:");
-                        }
-
-                        break;  // there is no more data to handle
-                    }
-
-                    if (rc == 0) break;
-
-                    info = newGamePacketInfo (server, lobby, 
-                        getPlayerBySock (lobby->players->root, lobby->players_fds[i].fd), packetBuffer, rc);
-
-                    thpool_add_work (server->thpool, (void *) handleGamePacket, info);
-                } while (true);
-            }
-
-            if (lobby->compress_players) compressPlayers (lobby);
-        } */
-
-        // this must go here!!
-        free (sl);
-    } 
-
-}
 
 // FIXME: this is blackrcock specific code!!
 // loads the settings for the selected game type from the game server data

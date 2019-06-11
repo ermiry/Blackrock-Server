@@ -1351,7 +1351,9 @@ static u8 server_poll (Server *server) {
     int poll_retval;
 
     cerver_log_msg (stdout, SUCCESS, SERVER, "Server has started!");
+    #ifdef CERVER_DEBUG
     cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+    #endif
 
     while (server->isRunning) {
         poll_retval = poll (server->fds, poll_n_fds, server->pollTimeout);
