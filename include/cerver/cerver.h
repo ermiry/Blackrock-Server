@@ -330,27 +330,6 @@ extern u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage 
 
 #pragma endregion
 
-/*** GAME SERVER ***/
-
-#pragma region GAME SERVER
-
-struct _GameSettings;
-struct _Lobby;
-
-extern u16 nextPlayerId;
-
-#pragma endregion
-
-/*** MISC SERVER FUNCS ***/
-
-#pragma region MISC
-
-extern i32 getFreePollSpot (Server *server);
-
-extern void dropClient (Server *server, Client *client);
-
-#pragma endregion
-
 /*** SERIALIZATION ***/
 
 #pragma region SERIALIZATION
