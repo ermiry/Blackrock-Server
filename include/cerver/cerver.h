@@ -390,17 +390,6 @@ typedef struct DefAuthData {
 
 } DefAuthData;
 
-typedef int32_t SRelativePtr;
-
-struct _SArray {
-
-    i32 n_elems;
-    SRelativePtr begin;
-
-};
-
-typedef struct _SArray SArray;
-
 // session id - token
 typedef struct Token {
 
