@@ -1,0 +1,404 @@
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+
+#include "cerver/types/types.h"
+#include "cerver/cerver.h"
+#include "cerver/handler.h"
+#include "cerver/utils/utils.h"
+#include "cerver/utils/log.h"
+
+static RecvdBufferData *rcvd_buffer_data_new (Server *server, i32 socket_fd, char *packet_buffer, size_t total_size, bool on_hold) {
+
+    RecvdBufferData *data = (RecvdBufferData *) malloc (sizeof (RecvdBufferData));
+    if (data) {
+        data->server = server;
+        data->sock_fd = socket_fd;
+
+        data->buffer = (char *) calloc (total_size, sizeof (char));
+        memcpy (data->buffer, packet_buffer, total_size);
+        data->total_size = total_size;
+
+        data->onHold = on_hold;
+    }
+
+    return data;
+
+}
+
+void rcvd_buffer_data_delete (RecvdBufferData *data) {
+
+    if (data) {
+        if (data->buffer) free (data->buffer);
+        free (data);
+    }
+
+}
+
+i32 getFreePollSpot (Server *server) {
+
+    if (server) 
+        for (u32 i = 0; i < poll_n_fds; i++)
+            if (server->fds[i].fd == -1) return i;
+
+    return -1;
+
+}
+
+// we remove any fd that was set to -1 for what ever reason
+static void compressClients (Server *server) {
+
+    if (server) {
+        server->compress_clients = false;
+
+        for (u16 i = 0; i < server->nfds; i++) {
+            if (server->fds[i].fd == -1) {
+                for (u16 j = i; j < server->nfds; j++) 
+                    server->fds[j].fd = server->fds[j + 1].fd;
+
+                i--;
+                server->nfds--;
+            }
+        }
+    }  
+
+}
+
+// called with the th pool to handle a new packet
+void handlePacket (void *data) {
+
+    if (data) {
+        PacketInfo *packet = (PacketInfo *) data;
+
+        if (!checkPacket (packet->packetSize, packet->packetData, DONT_CHECK_TYPE))  {
+            PacketHeader *header = (PacketHeader *) packet->packetData;
+
+            switch (header->packetType) {
+                case CLIENT_PACKET: {
+                    RequestData *reqdata = (RequestData *) (packet->packetData + sizeof (PacketHeader));
+                    
+                    switch (reqdata->type) {
+                        /* case CLIENT_DISCONNET: 
+                            cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "Ending client connection - client_disconnect ()");
+                            client_closeConnection (packet->server, packet->client); 
+                            break; */
+                        default: break;
+                    }
+                }
+
+                // handles an error from the client
+                case ERROR_PACKET: break;
+
+                // a client is trying to authenticate himself
+                case AUTHENTICATION: break;
+
+                // handles a request made from the client
+                case REQUEST: break;
+
+                // FIXME:
+                // handle a game packet sent from a client
+                // case GAME_PACKET: gs_handlePacket (packet); break;
+
+                case TEST_PACKET: 
+                    cerver_log_msg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                    // send a test packet back to the client
+                    if (!sendTestPacket (packet->server, packet->clientSock, packet->client->address))
+                        cerver_log_msg (stdout, DEBUG_MSG, PACKET, "Success answering the test packet.");
+
+                    else cerver_log_msg (stderr, ERROR, PACKET, "Failed to answer test packet!");
+                    break;
+
+                default: 
+                    cerver_log_msg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
+                    break;
+            }
+        }
+
+        // FIXME: 22/11/2018 - error with packet pool!!! seg fault always the second time 
+        // a client sends a packet!!
+        // no matter what, we send the packet to the pool after using it
+        // pool_push (packet->server->packetPool, data);
+        destroyPacketInfo (packet);
+    }
+
+}
+
+// TODO: move this from here! -> maybe create a server configuration section
+void cerver_set_handler_received_buffer (Server *server, Action handler) {
+
+    if (server) server->handle_recieved_buffer = handler;
+
+}
+
+// split the entry buffer in packets of the correct size
+void default_handle_recieved_buffer (void *rcvd_buffer_data) {
+
+    if (rcvd_buffer_data) {
+        RecvdBufferData *data = (RecvdBufferData *) rcvd_buffer_data;
+
+        if (data->buffer && (data->total_size > 0)) {
+            u32 buffer_idx = 0;
+            char *end = data->buffer;
+
+            PacketHeader *header = NULL;
+            u32 packet_size;
+            char *packet_data = NULL;
+
+            PacketInfo *info = NULL;
+
+            while (buffer_idx < data->total_size) {
+                header = (PacketHeader *) end;
+
+                // check the packet size
+                packet_size = header->packetSize;
+                if (packet_size > 0) {
+                    // copy the content of the packet from the buffer
+                    packet_data = (char *) calloc (packet_size, sizeof (char));
+                    for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
+                        packet_data[i] = data->buffer[buffer_idx];
+
+                    Client *c = data->onHold ? getClientBySocket (data->server->onHoldClients->root, data->sock_fd) :
+                        getClientBySocket (data->server->clients->root, data->sock_fd);
+
+                    if (!c) {
+                        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to get client by socket!");
+                        return;
+                    }
+
+                    info = newPacketInfo (data->server, c, data->sock_fd, packet_data, packet_size);
+
+                    if (info)
+                        thpool_add_work (data->server->thpool, data->onHold ?
+                            (void *) handleOnHoldPacket : (void *) handlePacket, info);
+
+                    else {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stderr, ERROR, PACKET, "Failed to create packet info!");
+                        #endif
+                    }
+
+                    end += packet_size;
+                }
+
+                else break;
+            }
+        }
+    }
+
+}
+
+// TODO: add support for handling large files transmissions
+// what happens if my buffer isn't enough, for example a larger file?
+// recive all incoming data from the socket
+static void server_recieve (Server *server, i32 socket_fd, bool onHold) {
+
+    // if (onHold) cerver_log_msg (stdout, SUCCESS, PACKET, "server_recieve () - on hold client!");
+    // else cerver_log_msg (stdout, SUCCESS, PACKET, "server_recieve () - normal client!");
+
+    ssize_t rc;
+    char packetBuffer[MAX_UDP_PACKET_SIZE];
+    memset (packetBuffer, 0, MAX_UDP_PACKET_SIZE);
+
+    // do {
+        rc = recv (socket_fd, packetBuffer, sizeof (packetBuffer), 0);
+        
+        if (rc < 0) {
+            if (errno != EWOULDBLOCK) {     // no more data to read 
+                // as of 02/11/2018 -- we juts close the socket and if the client is hanging
+                // it will be removed with the client timeout function 
+                // this is to prevent an extra client_count -= 1
+                cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "server_recieve () - rc < 0");
+
+                close (socket_fd);  // close the client socket
+            }
+
+            // break;
+        }
+
+        else if (rc == 0) {
+            // man recv -> steam socket perfomed an orderly shutdown
+            // but in dgram it might mean something?
+            perror ("Error:");
+            cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                    "Ending client connection - server_recieve () - rc == 0");
+
+            close (socket_fd);  // close the client socket
+
+            if (onHold) 
+                 removeOnHoldClient (server, 
+                    getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);  
+
+            else {
+                // remove the socket from the main poll
+                for (u32 i = 0; i < poll_n_fds; i++) {
+                    if (server->fds[i].fd == socket_fd) {
+                        server->fds[i].fd = -1;
+                        server->fds[i].events = -1;
+                    }
+                } 
+
+                Client *c = getClientBySocket (server->clients->root, socket_fd);
+                if (c) 
+                    if (c->n_active_cons <= 1) 
+                        client_closeConnection (server, c);
+
+                else {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, ERROR, CLIENT, 
+                        "Couldn't find an active client with the requested socket!");
+                    #endif
+                }
+            }
+
+            // break;
+        }
+
+        else {
+            // pass the necessary data to the server buffer handler
+            RecvdBufferData *data = rcvd_buffer_data_new (server, socket_fd, packetBuffer, rc, onHold);
+            server->handle_recieved_buffer (data);
+        }
+    // } while (true);
+
+}
+
+// FIXME: move this from here!!
+
+static i32 server_accept (Server *server) {
+
+    Client *client = NULL;
+
+	struct sockaddr_storage clientAddress;
+	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
+    socklen_t socklen = sizeof (struct sockaddr_storage);
+
+    i32 newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &socklen);
+
+    if (newfd < 0) {
+        // if we get EWOULDBLOCK, we have accepted all connections
+        if (errno != EWOULDBLOCK) cerver_log_msg (stderr, ERROR, SERVER, "Accept failed!");
+        return -1;
+    }
+
+    #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "Accepted a new client connection.");
+    #endif
+
+    // get client values to use as default id in avls
+    char *connection_values = client_getConnectionValues (newfd, clientAddress);
+    if (!connection_values) {
+        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to get client connection values.");
+        close (newfd);
+        return -1;
+    }
+
+    else {
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, DEBUG_MSG, CLIENT,
+            c_string_create ("Connection values: %s", connection_values));
+        #endif
+    } 
+
+    client = newClient (server, newfd, clientAddress, connection_values);
+
+    // if we requiere authentication, we send the client to on hold structure
+    if (server->authRequired) onHoldClient (server, client, newfd);
+
+    // if not, just register to the server as new client
+    else {
+        // if we need to generate session ids...
+        if (server->useSessions) {
+            // FIXME: change to the custom generate session id action in server->generateSessionID
+            char *session_id = session_default_generate_id (newfd, clientAddress);
+            if (session_id) {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                    c_string_create ("Generated client session id: %s", session_id));
+                #endif
+
+                client_set_sessionID (client, session_id);
+            }
+            
+            else cerver_log_msg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+        }
+
+        client_registerToServer (server, client, newfd);
+    } 
+
+    // FIXME: add the option to select which connection values to send!!!
+    // if (server->type != WEB_SERVER) sendServerInfo (server, newfd, clientAddress);
+   
+    #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
+    #endif
+
+    return newfd;
+
+}
+
+// server poll loop to handle events in the registered socket's fds
+static u8 server_poll (Server *server) {
+
+    if (!server) {
+        cerver_log_msg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
+        return 1;
+    }
+
+    int poll_retval;
+
+    cerver_log_msg (stdout, SUCCESS, SERVER, "Server has started!");
+    #ifdef CERVER_DEBUG
+    cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+    #endif
+
+    while (server->isRunning) {
+        poll_retval = poll (server->fds, poll_n_fds, server->pollTimeout);
+
+        // poll failed
+        if (poll_retval < 0) {
+            cerver_log_msg (stderr, ERROR, SERVER, "Main server poll failed!");
+            perror ("Error");
+            server->isRunning = false;
+            break;
+        }
+
+        // if poll has timed out, just continue to the next loop... 
+        if (poll_retval == 0) {
+            // #ifdef CERVER_DEBUG
+            // cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
+            // #endif
+            continue;
+        }
+
+        // one or more fd(s) are readable, need to determine which ones they are
+        for (u8 i = 0; i < poll_n_fds; i++) {
+            if (server->fds[i].revents == 0) continue;
+            if (server->fds[i].revents != POLLIN) continue;
+
+            // accept incoming connections that are queued
+            if (server->fds[i].fd == server->serverSock) {
+                if (server_accept (server)) {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
+                    #endif
+                }
+                else {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                    #endif
+                } 
+            }
+
+            // TODO: maybe later add this directly to the thread pool
+            // not the server socket, so a connection fd must be readable
+            else server_recieve (server, server->fds[i].fd, false);
+        }
+
+        // if (server->compress_clients) compressClients (server);
+    }
+
+    #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, SERVER, NO_TYPE, "Server main poll has stopped!");
+    #endif
+
+}

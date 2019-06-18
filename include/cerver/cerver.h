@@ -167,19 +167,6 @@ extern u8 cerver_shutdown (Server *server);
 // teardown a server -> stop the server and clean all of its data
 extern u8 cerver_teardown (Server *server);
 
-// auxiliary struct for handle_recieved_buffer Action
-typedef struct RecvdBufferData {
-
-    Server *server; 
-    i32 sock_fd;
-    char *buffer; 
-    size_t total_size; 
-    bool onHold;
-
-} RecvdBufferData;
-
-extern void rcvd_buffer_data_delete (RecvdBufferData *data);
-
 #pragma endregion
 
 /*** LOAD BALANCER ***/
