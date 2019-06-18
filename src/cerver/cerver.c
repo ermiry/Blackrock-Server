@@ -1175,11 +1175,3 @@ u8 cerver_teardown (Server *server) {
 }
 
 #pragma endregion
-
-/*** LOAD BALANCER ***/
-
-#pragma region LOAD BALANCER
-
-// TODO:
-
-#pragma endregion
