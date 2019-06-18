@@ -316,7 +316,7 @@ void *createLobbyPacket (RequestType reqType, Lobby *lobby, size_t packetSize) {
     // slobby->settings.maxPlayers = lobby->settings->maxPlayers;
     // slobby->settings.playerTimeout = lobby->settings->playerTimeout;
 
-    slobby->inGame = lobby->inGame;
+    // slobby->inGame = lobby->inGame;
 
     // FIXME: 
     // we serialize the players using a vector
@@ -354,6 +354,7 @@ void gs_leaveLobby (Server *, Player *, Lobby *);
 void gs_initGame (Server *, Player *, Lobby *);
 void gs_sendMsg (Server *, Player *, Lobby *, char *msg);
 
+// FIXME:
 // this is called from the main poll in a new thread
 void gs_handlePacket (PacketInfo *pack_info) {
 
@@ -362,9 +363,9 @@ void gs_handlePacket (PacketInfo *pack_info) {
     RequestData *reqData = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
     switch (reqData->type) {
         // TODO: get the correct game type from the packet
-        case LOBBY_CREATE: 
-            gs_createLobby (pack_info->server, pack_info->client, pack_info->clientSock, ARCADE); break;
-        case LOBBY_JOIN: gs_joinLobby (pack_info->server, pack_info->client, ARCADE); break;
+        // case LOBBY_CREATE: 
+        //     gs_createLobby (pack_info->server, pack_info->client, pack_info->clientSock, ARCADE); break;
+        // case LOBBY_JOIN: gs_joinLobby (pack_info->server, pack_info->client, ARCADE); break;
         default: break;
     }
 

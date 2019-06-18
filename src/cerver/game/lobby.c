@@ -44,7 +44,7 @@ u8 game_init_lobbys (GameServerData *game_data, u8 n_lobbys) {
 
 }
 
-static void lobby_default_generate_id (char *lobby_id) {
+void lobby_default_generate_id (char *lobby_id) {
 
     time_t rawtime = time (NULL);
     struct tm *timeinfo = localtime (&rawtime);

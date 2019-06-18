@@ -16,9 +16,9 @@
 #include "cerver/types/string.h"
 
 #include "cerver/network.h"
+#include "cerver/packets.h"
 #include "cerver/cerver.h"
 #include "cerver/game/game.h"
-
 
 #include "cerver/collections/avl.h" 
 #include "cerver/collections/vector.h"
@@ -28,12 +28,6 @@
 #include "cerver/utils/config.h"
 #include "cerver/utils/utils.h"
 #include "cerver/utils/sha-256.h"
-
-/*** VALUES ***/
-
-// these 2 are used to manage the packets
-ProtocolId PROTOCOL_ID = 0x4CA140FF; // randomly chosen
-Version PROTOCOL_VERSION = { 1, 1 };
 
 /*** SERIALIZATION ***/
 
