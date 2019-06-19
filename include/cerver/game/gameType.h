@@ -28,10 +28,10 @@ extern GameType *game_type_create (const char *name, void *data, void (*delete_d
 
 extern void game_type_delete (void *ptr);
 
-// registers a new game type, returns 0 on success, 1 on error
+// registers a new game type, returns 0 on LOG_SUCCESS, 1 on error
 extern int game_type_register (GameType *game_type);
 
-// unregister a game type, returns 0 on success, 1 on error
+// unregister a game type, returns 0 on LOG_SUCCESS, 1 on error
 extern int game_type_unregister (const char *name);
 
 // gets a registered game type by its name

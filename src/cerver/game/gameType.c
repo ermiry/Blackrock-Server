@@ -59,7 +59,7 @@ void game_type_delete (void *ptr) {
 
 }
 
-// registers a new game type, returns 0 on success, 1 on error
+// registers a new game type, returns 0 on LOG_SUCCESS, 1 on error
 int game_type_register (GameType *game_type) {
 
     int retval = 1;
@@ -73,7 +73,7 @@ int game_type_register (GameType *game_type) {
 
 }
 
-// unregister a game type, returns 0 on success, 1 on error
+// unregister a game type, returns 0 on LOG_SUCCESS, 1 on error
 int game_type_unregister (const char *name) {
 
     int retval = 1;

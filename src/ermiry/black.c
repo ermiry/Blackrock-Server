@@ -214,7 +214,7 @@ static int black_profile_parse_pve_stats (BlackProfile *profile, bson_t *pve_sta
                     // TODO:
                 }
 
-                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
+                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
             }
         }
 
@@ -252,7 +252,7 @@ static int black_profile_parse_pvp_stats (BlackProfile *profile, bson_t *pvp_sta
                 else if (!strcmp (key, "winsKoth"))
                     profile->pvpStats->wins_koth = value->value.v_int32;
 
-                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
+                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
             }
         }
 
@@ -323,7 +323,7 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                     black_profile_parse_pvp_stats (profile, pvp_stats_doc);
                 }
 
-                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing black profile doc.", key));
+                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing black profile doc.", key));
             }
         }
     }
@@ -601,7 +601,7 @@ static BlackGuild *black_guild_doc_parse (const bson_t *guild_doc, bool populate
 
                 }
 
-                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing user doc.", key));
+                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing user doc.", key));
             }
         }
     }
@@ -736,7 +736,7 @@ int black_guild_create (S_BlackGuild *s_guild) {
 
                 else {
                     #ifdef ERMIRY_DEBUG
-                    cerver_log_msg (stderr, ERROR, DEBUG_MSG, "Failed to insert black guild into mongo!");
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_DEBUG, "Failed to insert black guild into mongo!");
                     #endif
                 }
             }

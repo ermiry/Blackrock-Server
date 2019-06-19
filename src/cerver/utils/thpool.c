@@ -277,7 +277,7 @@ int thpool_num_threads_working(thpool_* thpool_p){
  *
  * @param thread        address to the pointer of the thread to be created
  * @param id            id to be given to the thread
- * @return 0 on success, -1 otherwise.
+ * @return 0 on LOG_SUCCESS, -1 otherwise.
  */
 static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 

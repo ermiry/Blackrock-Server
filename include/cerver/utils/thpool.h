@@ -31,7 +31,7 @@ typedef struct thpool_* threadpool;
  *    ..
  *
  * @param  num_threads   number of threads to be created in the threadpool
- * @return threadpool    created threadpool on success,
+ * @return threadpool    created threadpool on LOG_SUCCESS,
  *                       NULL on error
  */
 extern threadpool thpool_init(int num_threads);

@@ -41,7 +41,7 @@ typedef struct BlackError {
 
 } BlackError;
 
-/*** GAME OBJECTS ***/
+/*** LOG_GAME OBJECTS ***/
 
 #include "blackrock/map.h"
 
@@ -162,7 +162,7 @@ typedef struct PlayerProfile {
 
 } PlayerProfile;
 
-/*** GAME DATA ***/
+/*** LOG_GAME DATA ***/
 
 typedef struct Level {
 

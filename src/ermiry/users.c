@@ -186,7 +186,7 @@ static User *user_doc_parse (const bson_t *user_doc, bool populate) {
 
                 }
 
-                else cerver_log_msg (stdout, WARNING, NO_TYPE, c_string_create ("Got unknown key %s when parsing user doc.", key));
+                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing user doc.", key));
             }
         }
     }
@@ -339,17 +339,17 @@ int user_add_friend (const char *username, const char *friend_username) {
                     errors = user_update_with_model (friend_username, friend);
                 }
 
-                else cerver_log_msg (stderr, ERROR, NO_TYPE, "One user already has the other in its friend list!");
+                else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "One user already has the other in its friend list!");
 
                 user_destroy (friend);
             }
 
-            else cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("Failed to get friend %s", friend_username));
+            else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, c_string_create ("Failed to get friend %s", friend_username));
             
             user_destroy (user);
         }
 
-        else cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("Failed to get user %s", username));
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, c_string_create ("Failed to get user %s", username));
     }
 
     return errors;
@@ -380,10 +380,10 @@ int user_remove_friend (const char *username, const char *friend_username) {
                         errors = user_update_with_model (friend_username, friend);
                     }
 
-                    else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to remove user from friends list!");
+                    else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to remove user from friends list!");
                 }
 
-                else cerver_log_msg (stderr, ERROR, NO_TYPE, "Both users dont have each other in ther friends list!");
+                else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Both users dont have each other in ther friends list!");
                 
                 user_destroy (friend);
             }

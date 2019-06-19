@@ -42,7 +42,7 @@
 
 /*** SEVER ***/
 
-#pragma region SERVER
+#pragma region LOG_CERVER
 
 #ifdef RUN_FROM_MAKE
     #define SERVER_CFG          "./config/server.cfg"

@@ -79,7 +79,7 @@ void handlePacket (void *data) {
                     
                     switch (reqdata->type) {
                         /* case CLIENT_DISCONNET: 
-                            cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "Ending client connection - client_disconnect ()");
+                            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Ending client connection - client_disconnect ()");
                             client_closeConnection (packet->server, packet->client); 
                             break; */
                         default: break;
@@ -100,16 +100,16 @@ void handlePacket (void *data) {
                 // case GAME_PACKET: gs_handlePacket (packet); break;
 
                 case TEST_PACKET: 
-                    cerver_log_msg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                    cerver_log_msg (stdout, LOG_TEST, LOG_NO_TYPE, "Got a successful test packet!"); 
                     // send a test packet back to the client
                     if (!sendTestPacket (packet->server, packet->clientSock, packet->client->address))
-                        cerver_log_msg (stdout, DEBUG_MSG, PACKET, "Success answering the test packet.");
+                        cerver_log_msg (stdout, LOG_DEBUG, LOG_PACKET, "LOG_SUCCESS answering the test packet.");
 
-                    else cerver_log_msg (stderr, ERROR, PACKET, "Failed to answer test packet!");
+                    else cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to answer test packet!");
                     break;
 
                 default: 
-                    cerver_log_msg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
+                    cerver_log_msg (stderr, LOG_WARNING, LOG_PACKET, "Got a packet of incompatible type."); 
                     break;
             }
         }
@@ -161,7 +161,7 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
                         getClientBySocket (data->server->clients->root, data->sock_fd);
 
                     if (!c) {
-                        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to get client by socket!");
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to get client by socket!");
                         return;
                     }
 
@@ -173,7 +173,7 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 
                     else {
                         #ifdef CERVER_DEBUG
-                        cerver_log_msg (stderr, ERROR, PACKET, "Failed to create packet info!");
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to create packet info!");
                         #endif
                     }
 
@@ -192,8 +192,8 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 // recive all incoming data from the socket
 static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
 
-    // if (onHold) cerver_log_msg (stdout, SUCCESS, PACKET, "cerver_recieve () - on hold client!");
-    // else cerver_log_msg (stdout, SUCCESS, PACKET, "cerver_recieve () - normal client!");
+    // if (onHold) cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - on hold client!");
+    // else cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - normal client!");
 
     ssize_t rc;
     char packetBuffer[MAX_UDP_PACKET_SIZE];
@@ -207,7 +207,7 @@ static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
                 // as of 02/11/2018 -- we juts close the socket and if the client is hanging
                 // it will be removed with the client timeout function 
                 // this is to prevent an extra client_count -= 1
-                cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "cerver_recieve () - rc < 0");
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "cerver_recieve () - rc < 0");
 
                 close (socket_fd);  // close the client socket
             }
@@ -219,7 +219,7 @@ static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
             // man recv -> steam socket perfomed an orderly shutdown
             // but in dgram it might mean something?
             perror ("Error:");
-            cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
                     "Ending client connection - cerver_recieve () - rc == 0");
 
             close (socket_fd);  // close the client socket
@@ -244,7 +244,7 @@ static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
 
                 else {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, ERROR, CLIENT, 
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
                         "Couldn't find an active client with the requested socket!");
                     #endif
                 }
@@ -276,25 +276,25 @@ static i32 cerver_accept (Cerver *server) {
 
     if (newfd < 0) {
         // if we get EWOULDBLOCK, we have accepted all connections
-        if (errno != EWOULDBLOCK) cerver_log_msg (stderr, ERROR, SERVER, "Accept failed!");
+        if (errno != EWOULDBLOCK) cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Accept failed!");
         return -1;
     }
 
     #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "Accepted a new client connection.");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Accepted a new client connection.");
     #endif
 
     // get client values to use as default id in avls
     char *connection_values = client_getConnectionValues (newfd, clientAddress);
     if (!connection_values) {
-        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to get client connection values.");
+        cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to get client connection values.");
         close (newfd);
         return -1;
     }
 
     else {
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, CLIENT,
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
             c_string_create ("Connection values: %s", connection_values));
         #endif
     } 
@@ -312,14 +312,14 @@ static i32 cerver_accept (Cerver *server) {
             char *session_id = session_default_generate_id (newfd, clientAddress);
             if (session_id) {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
                     c_string_create ("Generated client session id: %s", session_id));
                 #endif
 
                 client_set_sessionID (client, session_id);
             }
             
-            else cerver_log_msg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+            else cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to generate session id!");
         }
 
         client_registerToServer (server, client, newfd);
@@ -329,7 +329,7 @@ static i32 cerver_accept (Cerver *server) {
     // if (server->type != WEB_SERVER) sendServerInfo (server, newfd, clientAddress);
    
     #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "A new client connected to the server!");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "A new client connected to the server!");
     #endif
 
     return newfd;
@@ -342,10 +342,10 @@ u8 cerver_poll (Cerver *cerver) {
     u8 retval = 1;
 
     if (cerver) {
-        cerver_log_msg (stdout, SUCCESS, SERVER, 
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
             c_string_create ("Cerver %s has started!", cerver->name->str));
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Waiting for connections...");
         #endif
 
         int poll_retval = 0;
@@ -355,7 +355,7 @@ u8 cerver_poll (Cerver *cerver) {
 
             // poll failed
             if (poll_retval < 0) {
-                cerver_log_msg (stderr, ERROR, SERVER, 
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                     c_string_create ("Cerver %s main poll has failed!", cerver->name->str));
                 perror ("Error");
                 cerver->isRunning = false;
@@ -365,7 +365,7 @@ u8 cerver_poll (Cerver *cerver) {
             // if poll has timed out, just continue to the next loop... 
             if (poll_retval == 0) {
                 // #ifdef CERVER_DEBUG
-                // cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+                // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                 //    c_string_create ("Cerver %s poll timeout", cerver->name->str));
                 // #endif
                 continue;
@@ -380,12 +380,12 @@ u8 cerver_poll (Cerver *cerver) {
                 if (cerver->fds[i].fd == cerver->sock) {
                     if (cerver_accept (cerver)) {
                         #ifdef CERVER_DEBUG
-                        cerver_log_msg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
+                        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, "LOG_SUCCESS accepting a new client!");
                         #endif
                     }
                     else {
                         #ifdef CERVER_DEBUG
-                        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to accept a new client!");
                         #endif
                     } 
                 }
@@ -399,14 +399,14 @@ u8 cerver_poll (Cerver *cerver) {
         }
 
         #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, SERVER, NO_TYPE, 
+            cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
                 c_string_create ("Cerver %s main poll has stopped!", cerver->name->str));
         #endif
 
         retval = 0;
     }
 
-    else cerver_log_msg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
+    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't listen for connections on a NULL server!");
 
     return retval;
 

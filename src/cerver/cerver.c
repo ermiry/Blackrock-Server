@@ -41,7 +41,7 @@ char *session_default_generate_id (i32 fd, const struct sockaddr_storage address
 
     if (ipstr && (port > 0)) {
         #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, CLIENT,
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
                 c_string_create ("Client connected form IP address: %s -- Port: %i", 
                 ipstr, port));
         #endif
@@ -71,14 +71,14 @@ void session_set_id_generator (Cerver *cerver, Action idGenerator) {
         if (cerver->useSessions) 
             cerver->generateSessionID = idGenerator;
 
-        else cerver_log_msg (stderr, ERROR, SERVER, "Cerver is not set to use sessions!");
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Cerver is not set to use sessions!");
     }
 
 }
 
 #pragma endregion
 
-/*** SERVER ***/
+/*** LOG_CERVER ***/
 
 // TODO: handle ipv6 configuration
 // TODO: create some helpful timestamps
@@ -129,7 +129,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
         // initialize cerver's own thread pool
         cerver->thpool = thpool_init (DEFAULT_TH_POOL_INIT);
         if (!cerver->thpool) {
-            cerver_log_msg (stderr, ERROR, SERVER, "Failed to init cerver's thread pool!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to init cerver's thread pool!");
             return 1;
         } 
 
@@ -142,13 +142,13 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
 
                 // // init the lobbys with n inactive in the pool
                 // if (game_init_lobbys (gameData, GS_LOBBY_POOL_INIT)) {
-                //     cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to init cerver lobbys!");
+                //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver lobbys!");
                 //     return 1;
                 // }
 
                 // // init the players with n inactive in the pool
                 // if (game_init_players (gameData, GS_PLAYER_POOL_INT)) {
-                //     cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to init cerver players!");
+                //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver players!");
                 //     return 1;
                 // }
 
@@ -157,7 +157,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
             default: break;
         }
 
-        retval = 0;     // success!!
+        retval = 0;     // LOG_SUCCESS!!
     }
 
     return retval;
@@ -199,7 +199,7 @@ static u8 cerver_init_values (Cerver *cerver) {
                 // get game modes info from a config file
                 // data->gameSettingsConfig = config_parse_file (GS_GAME_SETTINGS_CFG);
                 // if (!data->gameSettingsConfig) 
-                //     cerver_log_msg (stderr, ERROR, GAME, "Problems loading game settings config!");
+                //     cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Problems loading game settings config!");
 
                 // data->n_gameInits = 0;
                 // data->gameInitFuncs = NULL;
@@ -210,7 +210,7 @@ static u8 cerver_init_values (Cerver *cerver) {
 
         cerver->connectedClients = 0;
 
-        retval = 0;     // success!!
+        retval = 0;     // LOG_SUCCESS!!
     }
 
     return retval;
@@ -233,14 +233,14 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
     else cerver->use_ipv6 = DEFAULT_USE_IPV6;
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Use IPv6: %i", cerver->useIpv6));
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Use IPv6: %i", cerver->useIpv6));
     #endif
 
     char *tcp = config_get_entity_value (cfgEntity, "tcp");
     if (tcp) {
         u8 usetcp = atoi (tcp);
         if (usetcp < 0 || usetcp > 1) {
-            cerver_log_msg (stdout, WARNING, SERVER, "Unknown protocol. Using default: tcp protocol");
+            cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "Unknown protocol. Using default: tcp protocol");
             usetcp = 1;
         }
 
@@ -254,7 +254,7 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
     // set to default (tcp) if we don't found a value
     else {
         cerver->protocol = PROTOCOL_TCP;
-        cerver_log_msg (stdout, WARNING, SERVER, "No protocol found. Using default: TCP protocol");
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "No protocol found. Using default: TCP protocol");
     }
 
     char *port = config_get_entity_value (cfgEntity, "port");
@@ -262,20 +262,20 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
         cerver->port = atoi (port);
         // check that we have a valid range, if not, set to default port
         if (cerver->port <= 0 || cerver->port >= MAX_PORT_NUM) {
-            cerver_log_msg (stdout, WARNING, SERVER, 
+            cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
                 c_string_create ("Invalid port number. Setting port to default value: %i", DEFAULT_PORT));
             cerver->port = DEFAULT_PORT;
         }
 
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Listening on port: %i", cerver->port));
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Listening on port: %i", cerver->port));
         #endif
         free (port);
     }
     // set to default port
     else {
         cerver->port = DEFAULT_PORT;
-        cerver_log_msg (stdout, WARNING, SERVER, 
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
             c_string_create ("No port found. Setting port to default value: %i", DEFAULT_PORT));
     } 
 
@@ -283,14 +283,14 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
     if (queue) {
         cerver->connection_queue = atoi (queue);
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
             c_string_create ("Connection queue: %i", cerver->connection_queue));
         #endif
         free (queue);
     } 
     else {
         cerver->connection_queue = DEFAULT_CONNECTION_QUEUE;
-        cerver_log_msg (stdout, WARNING, SERVER, 
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
             c_string_create ("Connection queue no specified. Setting it to default: %i", 
                 DEFAULT_CONNECTION_QUEUE));
     }
@@ -299,14 +299,14 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
     if (timeout) {
         cerver->poll_timeout = atoi (timeout);
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
             c_string_create ("Cerver poll timeout: %i", cerver->poll_timeout));
         #endif
         free (timeout);
     }
     else {
         cerver->poll_timeout = DEFAULT_POLL_TIMEOUT;
-        cerver_log_msg (stdout, WARNING, SERVER, 
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
             c_string_create ("Poll timeout no specified. Setting it to default: %i", 
                 DEFAULT_POLL_TIMEOUT));
     }
@@ -315,14 +315,14 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
     if (auth) {
         cerver->auth_required = atoi (auth);
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, cerver->auth_required == 1 ? 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, cerver->auth_required == 1 ? 
             "Cerver requires client authentication" : "Cerver does not requires client authentication");
         #endif
         free (auth);
     }
     else {
         cerver->auth_required = DEFAULT_REQUIRE_AUTH;
-        cerver_log_msg (stdout, WARNING, SERVER, 
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
             "No auth option found. No authentication required by default.");
     }
 
@@ -331,14 +331,14 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
         if (tries) {
             cerver->auth.max_auth_tries = atoi (tries);
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                 c_string_create ("Max auth tries set to: %i.", cerver->auth.max_auth_tries));
             #endif
             free (tries);
         }
         else {
             cerver->auth.max_auth_tries = DEFAULT_AUTH_TRIES;
-            cerver_log_msg (stdout, WARNING, SERVER, 
+            cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
                 c_string_create ("Max auth tries set to default: %i.", cerver->auth.max_auth_tries));
         }
     }
@@ -347,14 +347,14 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
     if (sessions) {
         cerver->use_sessions = atoi (sessions);
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, cerver->use_sessions == 1 ? 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, cerver->use_sessions == 1 ? 
             "Cerver supports client sessions." : "Cerver does not support client sessions.");
         #endif
         free (sessions);
     }
     else {
         cerver->use_sessions = DEFAULT_USE_SESSIONS;
-        cerver_log_msg (stdout, WARNING, SERVER, 
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
             "No sessions option found. No support for client sessions by default.");
     }
 
@@ -375,21 +375,21 @@ static u8 cerver_network_init (Cerver *cerver) {
                 cerver->sock = socket ((cerver->use_ipv6 == 1 ? AF_INET6 : AF_INET), SOCK_DGRAM, 0);
                 break;
 
-            default: cerver_log_msg (stderr, ERROR, SERVER, "Unkonw protocol type!"); return 1;
+            default: cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Unkonw protocol type!"); return 1;
         }
         
         if (cerver->sock < 0) {
-            cerver_log_msg (stderr, ERROR, SERVER, "Failed to create cerver socket!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to create cerver socket!");
             return 1;
         }
 
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Created cerver socket");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Created cerver socket");
         #endif
 
         // set the socket to non blocking mode
         if (!sock_set_blocking (cerver->sock, cerver->blocking)) {
-            cerver_log_msg (stderr, ERROR, SERVER, "Failed to set cerver socket to non blocking mode!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to set cerver socket to non blocking mode!");
             close (cerver->sock);
             return 1;
         }
@@ -397,7 +397,7 @@ static u8 cerver_network_init (Cerver *cerver) {
         else {
             cerver->blocking = false;
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Cerver socket set to non blocking mode.");
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Cerver socket set to non blocking mode.");
             #endif
         }
 
@@ -419,11 +419,11 @@ static u8 cerver_network_init (Cerver *cerver) {
         }
 
         if ((bind (cerver->sock, (const struct sockaddr *) &address, sizeof (struct sockaddr_storage))) < 0) {
-            cerver_log_msg (stderr, ERROR, SERVER, "Failed to bind cerver socket!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to bind cerver socket!");
             return 1;
         }  
 
-        return 0;       // success!!
+        return 0;       // LOG_SUCCESS!!
     }
 
     return 1; 
@@ -437,37 +437,37 @@ static u8 cerver_init (Cerver *cerver, Config *cfg, ServerType type) {
 
     if (cerver) {
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Initializing cerver...");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Initializing cerver...");
         #endif
 
         if (cfg) {
             ConfigEntity *cfgEntity = config_get_entity_with_id (cfg, type);
             if (!cfgEntity) {
-                cerver_log_msg (stderr, ERROR, SERVER, "Problems with cerver config!");
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Problems with cerver config!");
                 return 1;
             } 
 
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Using config entity to set cerver values...");
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Using config entity to set cerver values...");
             #endif
 
             if (!cerver_get_cfg_values (cerver, cfgEntity)) 
-                cerver_log_msg (stdout, SUCCESS, SERVER, "Done getting cfg cerver values");
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Done getting cfg cerver values");
         }
 
         // log cerver values
         else {
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Use IPv6: %i", cerver->useIpv6));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Listening on port: %i", cerver->port));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Connection queue: %i", cerver->connectionQueue));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, c_string_create ("Cerver poll timeout: %i", cerver->pollTimeout));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, cerver->authRequired == 1 ? 
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Use IPv6: %i", cerver->useIpv6));
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Listening on port: %i", cerver->port));
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Connection queue: %i", cerver->connectionQueue));
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Cerver poll timeout: %i", cerver->pollTimeout));
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, cerver->authRequired == 1 ? 
                 "Cerver requires client authentication" : "Cerver does not requires client authentication");
             if (cerver->authRequired) 
-                cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                 c_string_create ("Max auth tries set to: %i.", cerver->auth.maxAuthTries));
-            cerver_log_msg (stdout, DEBUG_MSG, SERVER, cerver->useSessions == 1 ? 
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, cerver->useSessions == 1 ? 
                 "Cerver supports client sessions." : "Cerver does not support client sessions.");
             #endif
         }
@@ -478,17 +478,17 @@ static u8 cerver_init (Cerver *cerver, Config *cfg, ServerType type) {
             if (!cerver_init_data_structures (cerver)) {
                 if (!cerver_init_values (cerver)) {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                         "Done initializing cerver data structures and values!");
                     #endif
 
-                    retval = 0;     // success!!
+                    retval = 0;     // LOG_SUCCESS!!
                 }
 
-                else cerver_log_msg (stderr, ERROR, SERVER, "Failed to init cerver values!");
+                else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to init cerver values!");
             }
 
-            else cerver_log_msg (stderr, ERROR, SERVER, "Failed to init cerver data structures!");
+            else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to init cerver data structures!");
         }
     }
 
@@ -557,7 +557,7 @@ Cerver *cerver_create (ServerType type, const char *name, Cerver *cerver) {
         }
 
         else {
-            cerver_log_msg (stderr, ERROR, SERVER, "Failed to init the cerver!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to init the cerver!");
             cerver_delete (c);   // delete the failed cerver...
         }
     }
@@ -574,13 +574,13 @@ Cerver *cerver_create (ServerType type, const char *name, Cerver *cerver) {
             }
 
             else {
-                cerver_log_msg (stderr, ERROR, SERVER, "Failed to init the cerver!");
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to init the cerver!");
                 config_destroy (serverConfig);
                 cerver_delete (c); 
             }
         } 
 
-        else cerver_log_msg (stderr, ERROR, NO_TYPE, "Problems loading cerver config!\n");
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Problems loading cerver config!\n");
     }
 
     return c;
@@ -591,7 +591,7 @@ Cerver *cerver_create (ServerType type, const char *name, Cerver *cerver) {
 Cerver *cerver_restart (Cerver *cerver) {
 
     if (cerver) {
-        cerver_log_msg (stdout, SERVER, NO_TYPE, "Restarting the cerver...");
+        cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, "Restarting the cerver...");
 
         Cerver temp = { 
             .use_ipv6 = cerver->use_ipv6, .protocol = cerver->protocol, .port = cerver->port,
@@ -602,20 +602,20 @@ Cerver *cerver_restart (Cerver *cerver) {
         temp.name = str_new (cerver->name->str);
 
         if (!cerver_teardown (cerver)) 
-            cerver_log_msg (stdout, SUCCESS, SERVER, "Done with cerver teardown");
-        else cerver_log_msg (stderr, ERROR, SERVER, "Failed to teardown the cerver!");
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Done with cerver teardown");
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to teardown the cerver!");
 
         // what ever the output, create a new cerver --> restart
         Cerver *retServer = cerver_new (&temp);
         if (!cerver_init (retServer, NULL, temp.type)) {
-            cerver_log_msg (stdout, SUCCESS, SERVER, "Cerver has restarted!");
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Cerver has restarted!");
             return retServer;
         }
 
-        else cerver_log_msg (stderr, ERROR, SERVER, "Unable to retstart the cerver!");
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Unable to retstart the cerver!");
     }
 
-    else cerver_log_msg (stdout, WARNING, SERVER, "Can't restart a NULL cerver!");
+    else cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "Can't restart a NULL cerver!");
     
     return NULL;
 
@@ -625,7 +625,7 @@ Cerver *cerver_restart (Cerver *cerver) {
 u8 cerver_start (Cerver *cerver) {
 
     if (cerver->isRunning) {
-        cerver_log_msg (stdout, WARNING, SERVER, "The cerver is already running!");
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "The cerver is already running!");
         return 1;
     }
 
@@ -640,7 +640,7 @@ u8 cerver_start (Cerver *cerver) {
         }
 
         else {
-            cerver_log_msg (stdout, WARNING, GAME, 
+            cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, 
                 "Game cerver doesn't have a reference to a game data!");
         } 
     }
@@ -664,14 +664,14 @@ u8 cerver_start (Cerver *cerver) {
                 }
 
                 else {
-                    cerver_log_msg (stderr, ERROR, SERVER, 
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                         "Failed to listen in cerver socket!");
                     close (cerver->sock);
                 }
             }
 
             else {
-                cerver_log_msg (stderr, ERROR, SERVER, 
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                     "Cerver socket is not set to non blocking!");
             }
             
@@ -680,7 +680,7 @@ u8 cerver_start (Cerver *cerver) {
         case PROTOCOL_UDP: /* TODO: */ break;
 
         default: 
-            cerver_log_msg (stderr, ERROR, SERVER, "Cant't start cerver! Unknown protocol!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Cant't start cerver! Unknown protocol!");
             break;
     }
 
@@ -697,13 +697,13 @@ u8 cerver_shutdown (Cerver *cerver) {
         // close the cerver socket
         if (!close (cerver->sock)) {
             #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, DEBUG_MSG, SERVER, "The cerver socket has been closed.");
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "The cerver socket has been closed.");
             #endif
 
             return 0;
         }
 
-        else cerver_log_msg (stdout, ERROR, SERVER, "Failed to close cerver socket!");
+        else cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "Failed to close cerver socket!");
     } 
 
     return 1;
@@ -752,12 +752,12 @@ static void cerver_destroy_clients (Cerver *cerver) {
 u8 cerver_teardown (Cerver *cerver) {
 
     if (!cerver) {
-        cerver_log_msg (stdout, ERROR, SERVER, "Can't destroy a NULL cerver!");
+        cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "Can't destroy a NULL cerver!");
         return 1;
     }
 
     #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, SERVER, NO_TYPE, "Init cerver teardown...");
+        cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, "Init cerver teardown...");
     #endif
 
     // TODO: what happens if we have a custom auth method?
@@ -775,7 +775,7 @@ u8 cerver_teardown (Cerver *cerver) {
         // switch (cerver->type) {
         //     case GAME_SERVER: 
         //         if (!destroyGameServer (cerver))
-        //             cerver_log_msg (stdout, SUCCESS, SERVER, "Done clearing game cerver data!"); 
+        //             cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Done clearing game cerver data!"); 
         //         break;
         //     case FILE_SERVER: break;
         //     case WEB_SERVER: break;
@@ -786,18 +786,18 @@ u8 cerver_teardown (Cerver *cerver) {
     // clean common cerver structs
     cerver_destroy_clients (cerver);
     #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Done cleaning up clients.");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Done cleaning up clients.");
     #endif
 
     // disable socket I/O in both ways and stop any ongoing job
     if (!cerver_shutdown (cerver))
-        cerver_log_msg (stdout, SUCCESS, SERVER, "Cerver has been shutted down.");
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Cerver has been shutted down.");
 
-    else cerver_log_msg (stderr, ERROR, SERVER, "Failed to shutdown cerver!");
+    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to shutdown cerver!");
     
     if (cerver->thpool) {
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
             c_string_create ("Cerver active thpool threads: %i", 
             thpool_num_threads_working (cerver->thpool)));
         #endif
@@ -806,7 +806,7 @@ u8 cerver_teardown (Cerver *cerver) {
         thpool_destroy (cerver->thpool);
 
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Destroyed cerver thpool!");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Destroyed cerver thpool!");
         #endif
     } 
 
@@ -816,7 +816,7 @@ u8 cerver_teardown (Cerver *cerver) {
 
     cerver_delete (cerver);
 
-    cerver_log_msg (stdout, SUCCESS, NO_TYPE, "Cerver teardown was successfull!");
+    cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE, "Cerver teardown was successfull!");
 
     return 0;
 

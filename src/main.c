@@ -17,7 +17,7 @@ Server *gameServer = NULL;
 void closeProgram (int dummy) {
     
     if (gameServer) cerver_teardown (gameServer);
-    else cerver_log_msg (stdout, NO_TYPE, NO_TYPE, "There isn't any server to teardown. Quitting application.");
+    else cerver_log_msg (stdout, LOG_NO_TYPE, LOG_NO_TYPE, "There isn't any server to teardown. Quitting application.");
 
     ermiry_end ();      // disconnect from ermiry's db
 
@@ -64,10 +64,10 @@ int main (void) {
         // gs_set_lobbyDeleteGameData (gameServer, deleteBrGameData);
 
         if (cerver_start (gameServer)) 
-            cerver_log_msg (stderr, ERROR, SERVER, "Failed to start server!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to start server!");
     } 
 
-    else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to create Blackrock Server!");
+    else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to create Blackrock Server!");
 
     ermiry_end ();      // disconnect from ermiry's db
 

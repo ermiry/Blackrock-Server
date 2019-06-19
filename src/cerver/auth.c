@@ -68,14 +68,14 @@ static void server_recieve (Server *server, i32 fd, bool onHold);
 u8 handleOnHoldClients (void *data) {
 
     if (!data) {
-        cerver_log_msg (stderr, ERROR, SERVER, "Can't handle on hold clients on a NULL server!");
+        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't handle on hold clients on a NULL server!");
         return 1;
     }
 
     Server *server = (Server *) data;
 
     #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, SUCCESS, SERVER, "On hold client poll has started!");
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "On hold client poll has started!");
     #endif
 
     int poll_retval;
@@ -84,7 +84,7 @@ u8 handleOnHoldClients (void *data) {
         
         // poll failed
         if (poll_retval < 0) {
-            cerver_log_msg (stderr, ERROR, SERVER, "On hold poll failed!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "On hold poll failed!");
             server->holdingClients = false;
             break;
         }
@@ -92,7 +92,7 @@ u8 handleOnHoldClients (void *data) {
         // if poll has timed out, just continue to the next loop... 
         if (poll_retval == 0) {
             // #ifdef CERVER_DEBUG
-            // cerver_log_msg (stdout, DEBUG_MSG, SERVER, "On hold poll timeout.");
+            // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "On hold poll timeout.");
             // #endif
             continue;
         }
@@ -108,7 +108,7 @@ u8 handleOnHoldClients (void *data) {
     } 
 
     #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, SERVER, NO_TYPE, "Server on hold poll has stopped!");
+        cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, "Server on hold poll has stopped!");
     #endif
 
 }
@@ -137,12 +137,12 @@ void onHoldClient (Server *server, Client *client, i32 fd) {
                 }          
 
                 #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                         "Added a new client to the on hold structures.");
                 #endif
 
                 #ifdef CERVER_STATS
-                    cerver_log_msg (stdout, SERVER, NO_TYPE, 
+                    cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
                         c_string_create ("Current on hold clients: %i.", server->n_hold_clients));
                 #endif
             }
@@ -150,7 +150,7 @@ void onHoldClient (Server *server, Client *client, i32 fd) {
             // FIXME: better handle this error!
             else {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, ERROR, SERVER, "New on hold idx = -1. Is the server full?");
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "New on hold idx = -1. Is the server full?");
                 #endif
             }
         }
@@ -171,7 +171,7 @@ void dropClient (Server *server, Client *client) {
         // server->compress_hold_clients = true;
 
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
             "Client removed from on hold structure. Failed to authenticate");
         #endif
     }   
@@ -199,7 +199,7 @@ Client *removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
 
         else {
             #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, ERROR, CLIENT, "Could not find client associated with socket!");
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Could not find client associated with socket!");
             #endif
 
             // this migth be an unusual error
@@ -210,7 +210,7 @@ Client *removeOnHoldClient (Server *server, Client *client, i32 socket_fd) {
         if (server->n_hold_clients <= 0) server->holdingClients = false;
 
         #ifdef CERVER_STATS
-            cerver_log_msg (stdout, SERVER, NO_TYPE, 
+            cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
             c_string_create ("On hold clients: %i.", server->n_hold_clients));
         #endif
 
@@ -241,7 +241,7 @@ u8 defaultAuthMethod (void *data) {
 
                 // verify the token and search for a client with the session ID
                 Client *c = getClientBySession (pack_info->server->clients, tokenData->token);
-                // if we found a client, auth is success
+                // if we found a client, auth is LOG_SUCCESS
                 if (c) {
                     client_set_sessionID (pack_info->client, tokenData->token);
                     return 0;
@@ -249,7 +249,7 @@ u8 defaultAuthMethod (void *data) {
 
                 else {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, ERROR, CLIENT, "Wrong session id provided by client!");
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Wrong session id provided by client!");
                     #endif
                     return 1;      // the session id is wrong -> error!
                 } 
@@ -264,7 +264,7 @@ u8 defaultAuthMethod (void *data) {
                 // credentials are good
                 if (authData->code == DEFAULT_AUTH_CODE) {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, DEBUG_MSG, NO_TYPE, 
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
                         c_string_create ("Default auth: client provided code: %i.", authData->code));
                     #endif
 
@@ -274,7 +274,7 @@ u8 defaultAuthMethod (void *data) {
 
                     if (sessionID) {
                         #ifdef CERVER_DEBUG
-                        cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
                             c_string_create ("Generated client session id: %s", sessionID));
                         #endif
 
@@ -283,12 +283,12 @@ u8 defaultAuthMethod (void *data) {
                         return 0;
                     }
                     
-                    else cerver_log_msg (stderr, ERROR, CLIENT, "Failed to generate session id!");
+                    else cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to generate session id!");
                 } 
                 // wrong credentials
                 else {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, ERROR, NO_TYPE, 
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Default auth: %i is a wrong autentication code!", 
                         authData->code));
                     #endif
@@ -305,7 +305,7 @@ u8 defaultAuthMethod (void *data) {
             // credentials are good
             if (authData->code == DEFAULT_AUTH_CODE) {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, DEBUG_MSG, NO_TYPE, 
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
                     c_string_create ("Default auth: client provided code: %i.", authData->code));
                 #endif
                 return 0;
@@ -313,7 +313,7 @@ u8 defaultAuthMethod (void *data) {
             // wrong credentials
             else {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, ERROR, NO_TYPE, 
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                     c_string_create ("Default auth: %i is a wrong autentication code!", 
                     authData->code));
                 #endif
@@ -333,9 +333,9 @@ void authenticateClient (void *data) {
         PacketInfo *pack_info = (PacketInfo *) data;
 
         if (pack_info->server->auth.authenticate) {
-            // we expect the function to return us a 0 on success
+            // we expect the function to return us a 0 on LOG_SUCCESS
             if (!pack_info->server->auth.authenticate (pack_info)) {
-                cerver_log_msg (stdout, SUCCESS, CLIENT, "Client authenticated successfully!");
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, "Client authenticated successfully!");
 
                 if (pack_info->server->useSessions) {
                     // search for a client with a session id generated by the new credentials
@@ -345,7 +345,7 @@ void authenticateClient (void *data) {
                     // if we found one, register the new connection to him
                     if (found_client) {
                         if (client_registerNewConnection (found_client, pack_info->clientSock))
-                            cerver_log_msg (stderr, ERROR, CLIENT, "Failed to register new connection to client!");
+                            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to register new connection to client!");
 
                         i32 idx = getFreePollSpot (pack_info->server);
                         if (idx > 0) {
@@ -355,13 +355,13 @@ void authenticateClient (void *data) {
                         }
                         
                         // FIXME: how to better handle this error?
-                        else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to get new main poll idx!");
+                        else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to get new main poll idx!");
 
                         client_delete_data (removeOnHoldClient (pack_info->server, 
                             pack_info->client, pack_info->clientSock));
 
                         #ifdef CERVER_DEBUG
-                        cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
+                        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
                             c_string_create ("Registered a new connection to client with session id: %s",
                             pack_info->client->sessionID));
                         printf ("sessionId: %s\n", pack_info->client->sessionID);
@@ -375,13 +375,13 @@ void authenticateClient (void *data) {
 
                         // FIXME: better handle this error!
                         if (!got_client) {
-                            cerver_log_msg (stderr, ERROR, SERVER, "Failed to get client avl node data!");
+                            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to get client avl node data!");
                             return;
                         }
 
                         else {
                             #ifdef CERVER_DEBUG
-                            cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+                            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                                 "Got client data when removing an on hold avl node!");
                             #endif
                         }
@@ -402,7 +402,7 @@ void authenticateClient (void *data) {
                             if (server_sendPacket (pack_info->server, 
                                 pack_info->clientSock, pack_info->client->address,
                                 session_packet, packet_size))
-                                    cerver_log_msg (stderr, ERROR, PACKET, "Failed to send session token!");
+                                    cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to send session token!");
 
                             free (session_packet);
                         }
@@ -414,7 +414,7 @@ void authenticateClient (void *data) {
                 else client_registerToServer (pack_info->server, pack_info->client,
                     pack_info->clientSock);
 
-                // send a success authentication packet to the client as feedback
+                // send a LOG_SUCCESS authentication packet to the client as feedback
                 if (pack_info->server->type != WEB_SERVER) {
                     size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
                     void *successPacket = generatePacket (AUTHENTICATION, packetSize);
@@ -434,7 +434,7 @@ void authenticateClient (void *data) {
             // failed to authenticate
             else {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, ERROR, CLIENT, "Client failed to authenticate!");
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Client failed to authenticate!");
                 #endif
 
                 // FIXME: this should only be used when using default authentication
@@ -450,8 +450,8 @@ void authenticateClient (void *data) {
 
         // no authentication method -- clients are not able to interact to the server!
         else {
-            cerver_log_msg (stderr, ERROR, SERVER, "Server doesn't have an authenticate method!");
-            cerver_log_msg (stderr, ERROR, SERVER, "Clients are unable to interact with the server!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Server doesn't have an authenticate method!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Clients are unable to interact with the server!");
 
             // FIXME: correctly drop client and send error packet to the client!
             dropClient (pack_info->server, pack_info->client);
@@ -484,15 +484,15 @@ void handleOnHoldPacket (void *data) {
                 } break;
 
                 case TEST_PACKET: 
-                    cerver_log_msg (stdout, TEST, NO_TYPE, "Got a successful test packet!"); 
+                    cerver_log_msg (stdout, LOG_TEST, LOG_NO_TYPE, "Got a successful test packet!"); 
                     if (!sendTestPacket (pack_info->server, pack_info->clientSock, pack_info->client->address))
-                        cerver_log_msg (stdout, TEST, PACKET, "Success answering the test packet.");
+                        cerver_log_msg (stdout, LOG_TEST, LOG_PACKET, "LOG_SUCCESS answering the test packet.");
 
-                    else cerver_log_msg (stderr, ERROR, PACKET, "Failed to answer test packet!");
+                    else cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to answer test packet!");
                     break;
 
                 default: 
-                    cerver_log_msg (stderr, WARNING, PACKET, "Got a packet of incompatible type."); 
+                    cerver_log_msg (stderr, LOG_WARNING, LOG_PACKET, "Got a packet of incompatible type."); 
                     break;
             }
         }

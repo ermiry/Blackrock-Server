@@ -107,7 +107,7 @@ typedef struct PlayerAndData {
 
 } PlayerAndData;
 
-/*** GAME PACKETS ***/
+/*** LOG_GAME PACKETS ***/
 
 // 04/11/2018 -- 21:29 - to handle requests from players inside the lobby
 // primarilly game updates and messages
@@ -121,9 +121,9 @@ typedef struct GamePacketInfo {
 
 } GamePacketInfo;
 
-/*** GAME SERIALIZATION ***/
+/*** LOG_GAME SERIALIZATION ***/
 
-#pragma region GAME SERIALIZATION
+#pragma region LOG_GAME SERIALIZATION
 
 typedef int32_t SRelativePtr;
 struct _SArray;

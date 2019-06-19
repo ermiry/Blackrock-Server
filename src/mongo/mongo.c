@@ -45,7 +45,7 @@ int mongo_connect (void) {
     // register the app name -> for logging info
     mongoc_client_set_appname (mongo_client, APP_NAME);
 
-    return 0;       // success
+    return 0;       // LOG_SUCCESS
 
 }
 
@@ -72,7 +72,7 @@ int64_t mongo_count_docs (mongoc_collection_t *collection, bson_t *query) {
         bson_error_t error;
         retval = mongoc_collection_count_documents (collection, query, NULL, NULL, NULL, &error);
         if (retval < 0) {
-            cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("%s", error.message));
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, c_string_create ("%s", error.message));
             retval = 0;
         }
 
@@ -90,7 +90,7 @@ int mongo_insert_document (mongoc_collection_t *collection, bson_t *doc) {
     bson_error_t error;
 
     if (!mongoc_collection_insert_one (collection, doc, NULL, NULL, &error)) {
-        cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("%s", error.message));
+        cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, c_string_create ("%s", error.message));
         retval = 1;
     }
 
@@ -165,7 +165,7 @@ int mongo_update_one (mongoc_collection_t *collection, bson_t *query, bson_t *up
             retval = 0;
 
         else
-            cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("Failed to update doc: %s", error.message));
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, c_string_create ("Failed to update doc: %s", error.message));
 
         bson_destroy (query);
         bson_destroy (update);
@@ -184,7 +184,7 @@ int mongo_delete_one (mongoc_collection_t *collection, bson_t *query) {
         bson_error_t error;
 
         if (!mongoc_collection_delete_one (collection, query, NULL, NULL, &error)) {
-            cerver_log_msg (stderr, ERROR, NO_TYPE, c_string_create ("Delete failed: %s", error.message));
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, c_string_create ("Delete failed: %s", error.message));
             retval = 1;
         }
 

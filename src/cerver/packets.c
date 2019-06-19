@@ -153,7 +153,7 @@ u8 packet_check (Packet *packet) {
 
     /*if (packetSize < sizeof (PacketHeader)) {
         #ifdef CLIENT_DEBUG
-        cengine_log_msg (stderr, WARNING, NO_TYPE, "Recieved a to small packet!");
+        cengine_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, "Recieved a to small packet!");
         #endif
         return 1;
     } 
@@ -162,7 +162,7 @@ u8 packet_check (Packet *packet) {
 
     if (header->protocolID != PROTOCOL_ID) {
         #ifdef CLIENT_DEBUG
-        logMsg (stdout, WARNING, PACKET, "Packet with unknown protocol ID.");
+        logMsg (stdout, LOG_WARNING, LOG_PACKET, "Packet with unknown protocol ID.");
         #endif
         return 1;
     }
@@ -170,7 +170,7 @@ u8 packet_check (Packet *packet) {
     Version version = header->protocolVersion;
     if (version.major != PROTOCOL_VERSION.major) {
         #ifdef CLIENT_DEBUG
-        logMsg (stdout, WARNING, PACKET, "Packet with incompatible version.");
+        logMsg (stdout, LOG_WARNING, LOG_PACKET, "Packet with incompatible version.");
         #endif
         return 1;
     }
@@ -179,7 +179,7 @@ u8 packet_check (Packet *packet) {
     // that the client created 
     if (packetSize != header->packetSize) {
         #ifdef CLIENT_DEBUG
-        logMsg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
+        logMsg (stdout, LOG_WARNING, LOG_PACKET, "Recv packet size doesn't match header size.");
         #endif
         return 1;
     } 
@@ -188,7 +188,7 @@ u8 packet_check (Packet *packet) {
         // check if the packet is of the expected type
         if (header->packetType != expectedType) {
             #ifdef CLIENT_DEBUG
-            logMsg (stdout, WARNING, PACKET, "Packet doesn't match expected type.");
+            logMsg (stdout, LOG_WARNING, LOG_PACKET, "Packet doesn't match expected type.");
             #endif
             return 1;
         }
@@ -258,7 +258,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
 
     if (packetSize < sizeof (PacketHeader)) {
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stderr, WARNING, PACKET, "Recieved a to small packet!");
+        cerver_log_msg (stderr, LOG_WARNING, LOG_PACKET, "Recieved a to small packet!");
         #endif
         return 1;
     } 
@@ -268,7 +268,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
 
     if (header->protocolID != PROTOCOL_ID) {
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, WARNING, PACKET, "Packet with unknown protocol ID.");
+        cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, "Packet with unknown protocol ID.");
         #endif
         return 1;
     }
@@ -277,7 +277,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
     // Version version = header->protocolVersion;
     // if (version.major != PROTOCOL_VERSION.major) {
     //     #ifdef CERVER_DEBUG
-    //     cerver_log_msg (stdout, WARNING, PACKET, "Packet with incompatible version.");
+    //     cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, "Packet with incompatible version.");
     //     #endif
     //     return 1;
     // }
@@ -286,8 +286,8 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
     // that the client created 
     if ((u32) packetSize != header->packetSize) {
         #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, WARNING, PACKET, "Recv packet size doesn't match header size.");
-        cerver_log_msg (stdout, DEBUG_MSG, PACKET, 
+        cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, "Recv packet size doesn't match header size.");
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_PACKET, 
             c_string_create ("Recieved size: %i - Expected size %i", packetSize, header->packetSize));
         #endif
         return 1;
@@ -297,7 +297,7 @@ u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType) {
         // check if the packet is of the expected type
         if (header->packetType != expectedType) {
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, WARNING, PACKET, "Packet doesn't match expected type.");
+            cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, "Packet doesn't match expected type.");
             #endif
             return 1;
         }
@@ -560,14 +560,14 @@ void sendServerInfo (Server *server, i32 sock_fd, struct sockaddr_storage addres
 
             if (!server_sendPacket (server, sock_fd, address, server->serverInfo, packetSize)) {
                 #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Sent server info packet.");
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Sent server info packet.");
                 #endif
             }
         }
 
         else {
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, ERROR, SERVER, "No server info to send to client!");
+            cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "No server info to send to client!");
             #endif
         } 
     }

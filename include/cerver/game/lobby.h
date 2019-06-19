@@ -70,7 +70,7 @@ typedef struct _Lobby Lobby;
 
 // creates a list to manage the server lobbys
 // called when we init the game server
-// returns 0 on success, 1 on error
+// returns 0 on LOG_SUCCESS, 1 on error
 extern u8 game_init_lobbys (struct _GameServerData *game_data, u8 n_lobbys);
 
 // lobby constructor

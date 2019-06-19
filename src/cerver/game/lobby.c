@@ -26,17 +26,17 @@
 
 // creates a list to manage the server lobbys
 // called when we init the game server
-// returns 0 on success, 1 on error
+// returns 0 on LOG_SUCCESS, 1 on error
 u8 game_init_lobbys (GameServerData *game_data, u8 n_lobbys) {
 
     u8 retval = 1;
 
     if (game_data) {
-        if (game_data->currentLobbys) cerver_log_msg (stdout, WARNING, SERVER, "The server has already a list of lobbys.");
+        if (game_data->currentLobbys) cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "The server has already a list of lobbys.");
         else {
             game_data->currentLobbys = dlist_init (lobby_delete, lobby_comparator);
             if (game_data->currentLobbys) retval = 0;
-            else cerver_log_msg (stderr, ERROR, NO_TYPE, "Failed to init server's lobby list!");
+            else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init server's lobby list!");
         }
     }
 
@@ -91,7 +91,7 @@ static void lobby_default_handler (void *ptr) {
 
     // check we have the correct data
     if (!ptr) {
-        cerver_log_msg (stderr, ERROR, GAME, 
+        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
             "Can start lobby handler, neither server nor lobby can be null!");
         return;
     } 
@@ -101,13 +101,13 @@ static void lobby_default_handler (void *ptr) {
     Lobby *lobby = sl->lobby;
 
     if (!server || !lobby) {
-        cerver_log_msg (stderr, ERROR, GAME, 
+        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
             "Can start lobby handler, neither server nor lobby can be null!");
         return;
     } 
 
     // we are good to go...
-    cerver_log_msg (stdout, SUCCESS, SERVER, "Lobby has started!");
+    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Lobby has started!");
 
     int poll_retval;
     while (lobby->running) {
@@ -115,7 +115,7 @@ static void lobby_default_handler (void *ptr) {
 
         // poll failed
         if (poll_retval < 0) {
-            cerver_log_msg (stderr, ERROR, SERVER, 
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                 c_string_create ("Lobby %s poll failed!", lobby->id->str));
             #ifdef CERVER_DEBUG
             perror ("Error");
@@ -127,7 +127,7 @@ static void lobby_default_handler (void *ptr) {
         // if poll has timed out, just continue to the next loop... 
         if (poll_retval == 0) {
             // #ifdef CERVER_DEBUG
-            // cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
+            // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Poll timeout.");
             // #endif
             continue;
         }
@@ -142,12 +142,12 @@ static void lobby_default_handler (void *ptr) {
             if (server->fds[i].fd == server->serverSock) {
                 if (server_accept (server)) {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
+                    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, "LOG_SUCCESS accepting a new client!");
                     #endif
                 }
                 else {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to accept a new client!");
                     #endif
                 } 
             }
@@ -161,7 +161,7 @@ static void lobby_default_handler (void *ptr) {
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, 
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
         c_string_create ("Lobby %s handler has stopped!", lobby->id->str));
     #endif
 
@@ -382,7 +382,7 @@ u8 player_add_to_lobby (Server *server, Lobby *lobby, Player *player) {
                         return 0;
                     }
 
-                    else cerver_log_msg (stderr, ERROR, GAME, "Failed to get player from avl!");
+                    else cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to get player from avl!");
                 }
             }
         }
@@ -446,11 +446,11 @@ u8 lobby_start (Server *server, Lobby *lobby) {
             sl->server = server;
             sl->lobby = lobby;
             if (thpool_add_work (server->thpool, (void *) lobby->handler, sl) < 0)
-                cerver_log_msg (stderr, ERROR, GAME, "Failed to start lobby - failed to add to thpool!");
-            else retval = 0;        // success
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to start lobby - failed to add to thpool!");
+            else retval = 0;        // LOG_SUCCESS
         } 
 
-        else cerver_log_msg (stderr, ERROR, GAME, "Failed to start lobby - no reference to lobby handler.");
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to start lobby - no reference to lobby handler.");
     }
 
     return retval;
@@ -478,7 +478,7 @@ Lobby *lobby_create (Server *server, Player *owner, unsigned int max_players, Ac
                 }
 
                 else {
-                    cerver_log_msg (stderr, ERROR, GAME, "Failed to add owner to lobby!");
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to add owner to lobby!");
                     lobby_delete (lobby);
                     lobby = NULL;
                 }
@@ -486,13 +486,13 @@ Lobby *lobby_create (Server *server, Player *owner, unsigned int max_players, Ac
 
             else {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, ERROR, GAME, "Failed to init new lobby!");
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to init new lobby!");
                 #endif
             } 
         }  
 
         else {
-            cerver_log_msg (stderr, ERROR, GAME, 
+            cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
                 c_string_create ("Server %s doesn't have a reference to game data!", 
                 server->name->str));
         } 
@@ -523,13 +523,13 @@ u8 lobby_join (GameServerData *game_data, Lobby *lobby, Player *player) {
                     }
                 }
 
-                else cerver_log_msg (stdout, DEBUG_MSG, GAME, "A player tried to join a full lobby.");
+                else cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "A player tried to join a full lobby.");
             }
 
-            else cerver_log_msg (stdout, DEBUG_MSG, GAME, "A player tried to join a lobby that is in game.");
+            else cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "A player tried to join a lobby that is in game.");
         }
 
-        else cerver_log_msg (stderr, ERROR, GAME, "A player tries to join the same lobby he is in.");
+        else cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "A player tries to join the same lobby he is in.");
     }
 
     return retval;
@@ -599,7 +599,7 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
                     }
 
                     else 
-                        cerver_log_msg (stderr, ERROR, PACKET, "Failed to create lobby destroy packet!");
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to create lobby destroy packet!");
 
                     // this should stop the lobby poll thread
                     lobby->isRunning = false;
@@ -624,14 +624,14 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
                 }
 
                 else {
-                    cerver_log_msg (stdout, WARNING, GAME, "A lobby wasn't found in the current lobby list.");
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "A lobby wasn't found in the current lobby list.");
                     deleteLobby (lobby);   // destroy the lobby forever
                 } 
                 
-                return 0;   // success
+                return 0;   // LOG_SUCCESS
             }
 
-            else cerver_log_msg (stderr, ERROR, SERVER, "No game data found in the server!");
+            else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "No game data found in the server!");
         }
     }
 
@@ -683,7 +683,7 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
     //                     // we got a NULL player in the structures -> we don't expect this to happen!
     //                     else {
-    //                         cerver_log_msg (stdout, WARNING, GAME, 
+    //                         cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, 
     //                             "Got a NULL player when searching for new owner!");
     //                         lobby->players_fds[i].fd = -1;
     //                         lobby->compress_players = true; 
@@ -706,7 +706,7 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
     // else {
     //     #ifdef CERVER_DEBUG
-    //         cerver_log_msg (stderr, ERROR, GAME, "The player doesn't belong to the lobby!");
+    //         cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "The player doesn't belong to the lobby!");
     //     #endif
     // }
 
@@ -727,13 +727,13 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
     // perform some check here...
     if (!server) return NULL;
     if (server->type != GAME_SERVER) {
-        cerver_log_msg (stderr, ERROR, SERVER, "Can't search for lobbys in non game server.");
+        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't search for lobbys in non game server.");
         return NULL;
     }
     
     GameServerData *gameData = (GameServerData *) server->serverData;
     if (!gameData) {
-        cerver_log_msg (stderr, ERROR, SERVER, "NULL reference to game data in game server!");
+        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "NULL reference to game data in game server!");
         return NULL;
     }
 
@@ -766,7 +766,7 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 
     ConfigEntity *cfgEntity = config_get_entity_with_id (gameConfig, gameType);
 	if (!cfgEntity) {
-        cerver_log_msg (stderr, ERROR, GAME, "Problems with game settings config!");
+        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Problems with game settings config!");
         return NULL;
     } 
 
@@ -778,12 +778,12 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         free (playerTimeout);
     } 
     else {
-        cerver_log_msg (stdout, WARNING, GAME, "No player timeout found in cfg. Using default.");        
+        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No player timeout found in cfg. Using default.");        
         settings->playerTimeout = DEFAULT_PLAYER_TIMEOUT;
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("Player timeout: %i", settings->playerTimeout));
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("Player timeout: %i", settings->playerTimeout));
     #endif
 
     char *fps = config_get_entity_value (cfgEntity, "fps");
@@ -792,12 +792,12 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         free (fps);
     } 
     else {
-        cerver_log_msg (stdout, WARNING, GAME, "No fps found in cfg. Using default.");        
+        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No fps found in cfg. Using default.");        
         settings->fps = DEFAULT_FPS;
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("FPS: %i", settings->fps));
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("FPS: %i", settings->fps));
     #endif
 
     char *minPlayers = config_get_entity_value (cfgEntity, "minPlayers");
@@ -806,12 +806,12 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         free (minPlayers);
     } 
     else {
-        cerver_log_msg (stdout, WARNING, GAME, "No min players found in cfg. Using default.");        
+        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No min players found in cfg. Using default.");        
         settings->minPlayers = DEFAULT_MIN_PLAYERS;
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("Min players: %i", settings->minPlayers));
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("Min players: %i", settings->minPlayers));
     #endif
 
     char *maxPlayers = config_get_entity_value (cfgEntity, "maxPlayers");
@@ -820,12 +820,12 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
         free (maxPlayers);
     } 
     else {
-        cerver_log_msg (stdout, WARNING, GAME, "No max players found in cfg. Using default.");        
+        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No max players found in cfg. Using default.");        
         settings->maxPlayers = DEFAULT_MIN_PLAYERS;
     }
 
     #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, GAME, c_string_create ("Max players: %i", settings->maxPlayers));
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("Max players: %i", settings->maxPlayers));
     #endif
 
     return settings;
