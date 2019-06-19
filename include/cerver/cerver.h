@@ -165,7 +165,7 @@ extern u8 cerver_teardown (Cerver *cerver);
 // info from a recieved packet to be handle
 struct _PacketInfo {
 
-    Server *server;
+    Cerver *server;
     Client *client;
     i32 clientSock; 
     char *packetData;
@@ -174,81 +174,6 @@ struct _PacketInfo {
 };
 
 typedef struct _PacketInfo PacketInfo;
-
-typedef u32 ProtocolId;
-
-typedef struct Version {
-
-	u16 major;
-	u16 minor;
-	
-} Version;
-
-extern ProtocolId PROTOCOL_ID;
-extern Version PROTOCOL_VERSION;
-
-// this indicates what type of packet we are sending/recieving
-typedef enum PacketType {
-
-    SERVER_PACKET = 0,
-    CLIENT_PACKET,
-    ERROR_PACKET,
-	REQUEST,
-    AUTHENTICATION,
-    GAME_PACKET,
-
-    APP_ERROR_PACKET,
-    APP_PACKET,
-
-    TEST_PACKET = 100,
-    DONT_CHECK_TYPE,
-
-} PacketType;
-
-typedef struct PacketHeader {
-
-    ProtocolId protocolID;
-	Version protocolVersion;
-	PacketType packetType;
-    size_t packetSize;             // expected packet size
-
-} PacketHeader;
-
-// this indicates the data and more info about the packet type
-typedef enum RequestType {
-
-    SERVER_INFO = 0,
-    SERVER_TEARDOWN,
-
-    CLIENT_DISCONNET,
-
-    REQ_GET_FILE,
-    POST_SEND_FILE,
-    
-    REQ_AUTH_CLIENT,
-    CLIENT_AUTH_DATA,
-    SUCCESS_AUTH,
-
-    LOBBY_CREATE,
-    LOBBY_JOIN,
-    LOBBY_LEAVE,
-    LOBBY_UPDATE,
-    LOBBY_NEW_OWNER,
-    LOBBY_DESTROY,
-
-    GAME_INIT,      // prepares the game structures
-    GAME_START,     // strat running the game
-    GAME_INPUT_UPDATE,
-    GAME_SEND_MSG,
-
-} RequestType;
- 
-// here we can add things like file names or game types
-typedef struct RequestData {
-
-    RequestType type;
-
-} RequestData;
 
 typedef enum ErrorType {
 

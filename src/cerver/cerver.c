@@ -505,23 +505,23 @@ Cerver *cerver_new (Cerver *cerver) {
 
         // init with some values
         if (cerver) {
-            c->useIpv6 = cerver->useIpv6;
+            c->use_ipv6 = cerver->use_ipv6;
             c->protocol = cerver->protocol;
             c->port = cerver->port;
-            c->connectionQueue = cerver->connectionQueue;
-            c->pollTimeout = cerver->pollTimeout;
-            c->authRequired = cerver->authRequired;
+            c->connection_queue = cerver->connection_queue;
+            c->poll_timeout = cerver->poll_timeout;
+            c->auth_required = cerver->auth_required;
             c->type = cerver->type;
         }
 
         c->name = NULL;
-        c->destroyServerData = NULL;
+        c->delete_server_data = NULL;
 
         // by default the socket is assumed to be a blocking socket
         c->blocking = true;
 
-        c->authRequired = DEFAULT_REQUIRE_AUTH;
-        c->useSessions = DEFAULT_USE_SESSIONS;
+        c->auth_required = DEFAULT_REQUIRE_AUTH;
+        c->use_sessions = DEFAULT_USE_SESSIONS;
         
         c->isRunning = false;
     }
@@ -530,10 +530,10 @@ Cerver *cerver_new (Cerver *cerver) {
 
 }
 
+// TODO: what else do we want to delete here?
 void cerver_delete (Cerver *cerver) {
 
     if (cerver) {
-        // TODO: what else do we want to delete here?
         str_delete (cerver->name);
 
         free (cerver);
@@ -601,7 +601,8 @@ Cerver *cerver_restart (Cerver *cerver) {
 
         temp.name = str_new (cerver->name->str);
 
-        if (!cerver_teardown (cerver)) cerver_log_msg (stdout, SUCCESS, SERVER, "Done with cerver teardown");
+        if (!cerver_teardown (cerver)) 
+            cerver_log_msg (stdout, SUCCESS, SERVER, "Done with cerver teardown");
         else cerver_log_msg (stderr, ERROR, SERVER, "Failed to teardown the cerver!");
 
         // what ever the output, create a new cerver --> restart
@@ -620,10 +621,7 @@ Cerver *cerver_restart (Cerver *cerver) {
 
 }
 
-// TODO: handle logic when we have a load balancer --> that will be the one in charge to listen for
-// connections and accept them -> then it will send them to the correct cerver
-// TODO: 13/10/2018 -- we can only handle a tcp cerver
-// depending on the protocol, the logic of each cerver might change...
+// tell the cerver to start listening for connections and packets
 u8 cerver_start (Cerver *cerver) {
 
     if (cerver->isRunning) {
@@ -631,30 +629,34 @@ u8 cerver_start (Cerver *cerver) {
         return 1;
     }
 
+    u8 retval = 1;
+
     // one time only inits
     // if we have a game cerver, we might wanna load game data -> set by cerver admin
     if (cerver->type == GAME_SERVER) {
-        GameServerData *game_data = (GameServerData *) cerver->serverData;
+        GameServerData *game_data = (GameServerData *) cerver->server_data;
         if (game_data && game_data->load_game_data) {
             game_data->load_game_data (NULL);
         }
 
-        else cerver_log_msg (stdout, WARNING, GAME, "Game cerver doesn't have a reference to a game data!");
+        else {
+            cerver_log_msg (stdout, WARNING, GAME, 
+                "Game cerver doesn't have a reference to a game data!");
+        } 
     }
 
-    u8 retval = 1;
     switch (cerver->protocol) {
-        case IPPROTO_TCP: {
-            if (cerver->blocking == false) {
-                if (!listen (cerver->serverSock, cerver->connectionQueue)) {
+        case PROTOCOL_TCP: {
+            if (!cerver->blocking) {
+                if (!listen (cerver->sock, cerver->connection_queue)) {
                     // set up the initial listening socket     
-                    cerver->fds[cerver->nfds].fd = cerver->serverSock;
+                    cerver->fds[cerver->nfds].fd = cerver->sock;
                     cerver->fds[cerver->nfds].events = POLLIN;
                     cerver->nfds++;
 
                     cerver->isRunning = true;
 
-                    if (cerver->authRequired) cerver->holdingClients = false;
+                    if (cerver->auth_required) cerver->holdingClients = false;
 
                     server_poll (cerver);
 
@@ -662,24 +664,23 @@ u8 cerver_start (Cerver *cerver) {
                 }
 
                 else {
-                    cerver_log_msg (stderr, ERROR, SERVER, "Failed to listen in cerver socket!");
-                    close (cerver->serverSock);
-                    retval = 1;
+                    cerver_log_msg (stderr, ERROR, SERVER, 
+                        "Failed to listen in cerver socket!");
+                    close (cerver->sock);
                 }
             }
 
             else {
-                cerver_log_msg (stderr, ERROR, SERVER, "Cerver socket is not set to non blocking!");
-                retval = 1;
+                cerver_log_msg (stderr, ERROR, SERVER, 
+                    "Cerver socket is not set to non blocking!");
             }
             
         } break;
 
-        case IPPROTO_UDP: /* TODO: */ break;
+        case PROTOCOL_UDP: /* TODO: */ break;
 
         default: 
             cerver_log_msg (stderr, ERROR, SERVER, "Cant't start cerver! Unknown protocol!");
-            retval = 1;
             break;
     }
 
@@ -694,7 +695,7 @@ u8 cerver_shutdown (Cerver *cerver) {
         cerver->isRunning = false; 
 
         // close the cerver socket
-        if (!close (cerver->serverSock)) {
+        if (!close (cerver->sock)) {
             #ifdef CERVER_DEBUG
                 cerver_log_msg (stdout, DEBUG_MSG, SERVER, "The cerver socket has been closed.");
             #endif
@@ -728,7 +729,7 @@ static void cerver_destroy_clients (Cerver *cerver) {
     // avl_clear_tree (&cerver->clients->root, cerver->clients->destroy);
     avl_delete (cerver->clients);
 
-    if (cerver->authRequired) {
+    if (cerver->auth_required) {
         // send a packet to on hold clients
         broadcastToAllClients (cerver->onHoldClients->root, cerver, packet, packetSize);
         // destroy the tree
@@ -741,7 +742,7 @@ static void cerver_destroy_clients (Cerver *cerver) {
     }
 
     // the pool has only "empty" clients
-    pool_clear (cerver->clientsPool);
+    // pool_clear (cerver->clientsPool);
 
     free (packet);
 
@@ -761,12 +762,13 @@ u8 cerver_teardown (Cerver *cerver) {
 
     // TODO: what happens if we have a custom auth method?
     // clean cerver auth data
-    if (cerver->authRequired) 
-        if (cerver->auth.reqAuthPacket) free (cerver->auth.reqAuthPacket);
+    // FIXME:
+    // if (cerver->auth_required) 
+    //     if (cerver->auth.reqAuthPacket) free (cerver->auth.reqAuthPacket);
 
     // clean independent cerver type structs
     // if the cerver admin added a destroy cerver data action...
-    if (cerver->destroyServerData) cerver->destroyServerData (cerver);
+    if (cerver->delete_server_data) cerver->delete_server_data (cerver);
     else {
         // FIXME:
         // we use the default destroy cerver data function
@@ -812,9 +814,7 @@ u8 cerver_teardown (Cerver *cerver) {
     if (cerver->packetPool) pool_clear (cerver->packetPool);
     if (cerver->serverInfo) free (cerver->serverInfo);
 
-    if (cerver->name) free (cerver->name);
-
-    free (cerver);
+    cerver_delete (cerver);
 
     cerver_log_msg (stdout, SUCCESS, NO_TYPE, "Cerver teardown was successfull!");
 
