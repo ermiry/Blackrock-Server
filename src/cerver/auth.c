@@ -1,12 +1,37 @@
 #include <stdlib.h>
+#include <string.h>
 #include <poll.h>
 
 #include "cerver/types/types.h"
 
 #include "cerver/cerver.h"
+#include "cerver/auth.h"
 
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
+
+Auth *auth_new (void) {
+
+    Auth *auth = (Auth *) malloc (sizeof (Auth));
+    if (auth) {
+        memset (auth, 0, sizeof (Auth));
+        auth->req_auth_packet = NULL;
+        auth->authenticate = NULL;
+    }
+
+    return auth;
+
+}
+
+void auth_delete (Auth *auth) {
+
+    if (auth) {
+        if (auth->req_auth_packet) free (auth->req_auth_packet);
+        free (auth);
+    }
+
+}
+
 
 i32 getOnHoldIdx (Server *server) {
 

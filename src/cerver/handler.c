@@ -8,7 +8,7 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-static RecvdBufferData *rcvd_buffer_data_new (Server *server, i32 socket_fd, char *packet_buffer, size_t total_size, bool on_hold) {
+static RecvdBufferData *rcvd_buffer_data_new (Cerver *server, i32 socket_fd, char *packet_buffer, size_t total_size, bool on_hold) {
 
     RecvdBufferData *data = (RecvdBufferData *) malloc (sizeof (RecvdBufferData));
     if (data) {
@@ -35,7 +35,7 @@ void rcvd_buffer_data_delete (RecvdBufferData *data) {
 
 }
 
-i32 getFreePollSpot (Server *server) {
+i32 getFreePollSpot (Cerver *server) {
 
     if (server) 
         for (u32 i = 0; i < poll_n_fds; i++)
@@ -46,7 +46,7 @@ i32 getFreePollSpot (Server *server) {
 }
 
 // we remove any fd that was set to -1 for what ever reason
-static void compressClients (Server *server) {
+static void compressClients (Cerver *server) {
 
     if (server) {
         server->compress_clients = false;
@@ -124,7 +124,7 @@ void handlePacket (void *data) {
 }
 
 // TODO: move this from here! -> maybe create a server configuration section
-void cerver_set_handler_received_buffer (Server *server, Action handler) {
+void cerver_set_handler_received_buffer (Cerver *server, Action handler) {
 
     if (server) server->handle_recieved_buffer = handler;
 
@@ -190,10 +190,10 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 // TODO: add support for handling large files transmissions
 // what happens if my buffer isn't enough, for example a larger file?
 // recive all incoming data from the socket
-static void server_recieve (Server *server, i32 socket_fd, bool onHold) {
+static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
 
-    // if (onHold) cerver_log_msg (stdout, SUCCESS, PACKET, "server_recieve () - on hold client!");
-    // else cerver_log_msg (stdout, SUCCESS, PACKET, "server_recieve () - normal client!");
+    // if (onHold) cerver_log_msg (stdout, SUCCESS, PACKET, "cerver_recieve () - on hold client!");
+    // else cerver_log_msg (stdout, SUCCESS, PACKET, "cerver_recieve () - normal client!");
 
     ssize_t rc;
     char packetBuffer[MAX_UDP_PACKET_SIZE];
@@ -207,7 +207,7 @@ static void server_recieve (Server *server, i32 socket_fd, bool onHold) {
                 // as of 02/11/2018 -- we juts close the socket and if the client is hanging
                 // it will be removed with the client timeout function 
                 // this is to prevent an extra client_count -= 1
-                cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "server_recieve () - rc < 0");
+                cerver_log_msg (stdout, DEBUG_MSG, CLIENT, "cerver_recieve () - rc < 0");
 
                 close (socket_fd);  // close the client socket
             }
@@ -220,7 +220,7 @@ static void server_recieve (Server *server, i32 socket_fd, bool onHold) {
             // but in dgram it might mean something?
             perror ("Error:");
             cerver_log_msg (stdout, DEBUG_MSG, CLIENT, 
-                    "Ending client connection - server_recieve () - rc == 0");
+                    "Ending client connection - cerver_recieve () - rc == 0");
 
             close (socket_fd);  // close the client socket
 
@@ -264,7 +264,7 @@ static void server_recieve (Server *server, i32 socket_fd, bool onHold) {
 
 // FIXME: move this from here!!
 
-static i32 server_accept (Server *server) {
+static i32 cerver_accept (Cerver *server) {
 
     Client *client = NULL;
 
@@ -337,68 +337,77 @@ static i32 server_accept (Server *server) {
 }
 
 // server poll loop to handle events in the registered socket's fds
-static u8 server_poll (Server *server) {
+u8 cerver_poll (Cerver *cerver) {
 
-    if (!server) {
-        cerver_log_msg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
-        return 1;
-    }
+    u8 retval = 1;
 
-    int poll_retval;
+    if (cerver) {
+        cerver_log_msg (stdout, SUCCESS, SERVER, 
+            c_string_create ("Cerver %s has started!", cerver->name->str));
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
+        #endif
 
-    cerver_log_msg (stdout, SUCCESS, SERVER, "Server has started!");
-    #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Waiting for connections...");
-    #endif
+        int poll_retval = 0;
 
-    while (server->isRunning) {
-        poll_retval = poll (server->fds, poll_n_fds, server->pollTimeout);
+        while (cerver->isRunning) {
+            poll_retval = poll (cerver->fds, poll_n_fds, cerver->poll_timeout);
 
-        // poll failed
-        if (poll_retval < 0) {
-            cerver_log_msg (stderr, ERROR, SERVER, "Main server poll failed!");
-            perror ("Error");
-            server->isRunning = false;
-            break;
-        }
-
-        // if poll has timed out, just continue to the next loop... 
-        if (poll_retval == 0) {
-            // #ifdef CERVER_DEBUG
-            // cerver_log_msg (stdout, DEBUG_MSG, SERVER, "Poll timeout.");
-            // #endif
-            continue;
-        }
-
-        // one or more fd(s) are readable, need to determine which ones they are
-        for (u8 i = 0; i < poll_n_fds; i++) {
-            if (server->fds[i].revents == 0) continue;
-            if (server->fds[i].revents != POLLIN) continue;
-
-            // accept incoming connections that are queued
-            if (server->fds[i].fd == server->serverSock) {
-                if (server_accept (server)) {
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
-                    #endif
-                }
-                else {
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
-                    #endif
-                } 
+            // poll failed
+            if (poll_retval < 0) {
+                cerver_log_msg (stderr, ERROR, SERVER, 
+                    c_string_create ("Cerver %s main poll has failed!", cerver->name->str));
+                perror ("Error");
+                cerver->isRunning = false;
+                break;
             }
 
-            // TODO: maybe later add this directly to the thread pool
-            // not the server socket, so a connection fd must be readable
-            else server_recieve (server, server->fds[i].fd, false);
+            // if poll has timed out, just continue to the next loop... 
+            if (poll_retval == 0) {
+                // #ifdef CERVER_DEBUG
+                // cerver_log_msg (stdout, DEBUG_MSG, SERVER, 
+                //    c_string_create ("Cerver %s poll timeout", cerver->name->str));
+                // #endif
+                continue;
+            }
+
+            // one or more fd(s) are readable, need to determine which ones they are
+            for (u32 i = 0; i < poll_n_fds; i++) {
+                if (cerver->fds[i].revents == 0) continue;
+                if (cerver->fds[i].revents != POLLIN) continue;
+
+                // accept incoming connections that are queued
+                if (cerver->fds[i].fd == cerver->sock) {
+                    if (cerver_accept (cerver)) {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stdout, SUCCESS, CLIENT, "Success accepting a new client!");
+                        #endif
+                    }
+                    else {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stderr, ERROR, CLIENT, "Failed to accept a new client!");
+                        #endif
+                    } 
+                }
+
+                // TODO: maybe later add this directly to the thread pool
+                // not the server socket, so a connection fd must be readable
+                else cerver_recieve (cerver, cerver->fds[i].fd, false);
+            }
+
+            // if (server->compress_clients) compressClients (server);
         }
 
-        // if (server->compress_clients) compressClients (server);
+        #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, SERVER, NO_TYPE, 
+                c_string_create ("Cerver %s main poll has stopped!", cerver->name->str));
+        #endif
+
+        retval = 0;
     }
 
-    #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, SERVER, NO_TYPE, "Server main poll has stopped!");
-    #endif
+    else cerver_log_msg (stderr, ERROR, SERVER, "Can't listen for connections on a NULL server!");
+
+    return retval;
 
 }

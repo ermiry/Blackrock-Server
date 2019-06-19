@@ -62,18 +62,6 @@ typedef enum ServerType {
 
 } ServerType;
 
-// FIXME: move to auth.h and create constructors etc
-// info for the server to perfom a correct client authentication
-typedef struct Auth {
-
-    void *req_auth_packet;
-    size_t auth_packet_size;
-
-    u8 max_auth_tries;                // client's chances of auth before being dropped
-    delegate authenticate;            // authentication function
-
-} Auth;
-
 // this is the generic server struct, used to create different server types
 struct _Cerver {
 
