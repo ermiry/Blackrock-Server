@@ -62,43 +62,44 @@ typedef enum ServerType {
 
 } ServerType;
 
+// FIXME: move to auth.h and create constructors etc
 // info for the server to perfom a correct client authentication
 typedef struct Auth {
 
-    void *reqAuthPacket;
-    size_t authPacketSize;
-    u8 maxAuthTries;                // client's chances of auth before being dropped
-    delegate authenticate;          // authentication function
+    void *req_auth_packet;
+    size_t auth_packet_size;
+
+    u8 max_auth_tries;                // client's chances of auth before being dropped
+    delegate authenticate;            // authentication function
 
 } Auth;
 
 // this is the generic server struct, used to create different server types
-struct _Server {
+struct _Cerver {
 
-    i32 serverSock;         // server socket
-    u8 useIpv6;  
-    u8 protocol;            // we only support either tcp or udp
+    i32 sock;               // server socket
+    u8 use_ipv6;  
+    Protocol protocol;            // we only support either tcp or udp
     u16 port; 
-    u16 connectionQueue;    // each server can handle connection differently
+    u16 connection_queue;   // each server can handle connection differently
 
     bool isRunning;         // he server is recieving and/or sending packetss
     bool blocking;          // sokcet fd is blocking?
 
     ServerType type;
-    void *serverData;
-    Action destroyServerData;
+    void *server_data;
+    Action delete_server_data;
 
-    // do web servers need this?
     AVLTree *clients;                   // connected clients
-    Pool *clientsPool;       
+    Pool *client_pool;       
 
     // TODO: option to make this dynamic
     struct pollfd fds[poll_n_fds];
     u16 nfds;                           // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
-    u32 pollTimeout;           
+    u32 poll_timeout;           
 
-    bool authRequired;      // does the server requires authentication?
+    bool auth_required;      // does the server requires authentication?
     Auth auth;              // server auth info
 
     // on hold clients         
@@ -117,7 +118,7 @@ struct _Server {
     Action sendServerInfo;      // method to send server into to the client              
 
     // allow the clients to use sessions (have multiple connections)
-    bool useSessions;  
+    bool use_sessions;  
     // admin defined function to generate session ids bassed on usernames, etc             
     Action generateSessionID; 
 
@@ -133,39 +134,39 @@ struct _Server {
 
 };
 
-typedef struct _Server Server;
+typedef struct _Cerver Cerver;
 
 /*** Cerver Configuration ***/
 
-extern void cerver_set_auth_method (Server *server, delegate authMethod);
+extern void cerver_set_auth_method (Cerver *cerver, delegate authMethod);
 
-extern void cerver_set_handler_received_buffer (Server *server, Action handler);
+extern void cerver_set_handler_received_buffer (Cerver *cerver, Action handler);
 
-extern void session_set_id_generator (Server *server, Action idGenerator);
+extern void session_set_id_generator (Cerver *server, Action idGenerator);
 extern char *session_default_generate_id (i32 fd, const struct sockaddr_storage address);
 
 /*** Cerver Methods ***/
 
 // cerver constructor, with option to init with some values
-extern Server *cerver_new (Server *cerver);
-extern void cerver_delete (Server *cerver);
+extern Server *cerver_new (Cerver *cerver);
+extern void cerver_delete (Cerver *cerver);
 
 // creates a new cerver of the specified type and with option for a custom name
 // also has the option to take another cerver as a paramater
 // if no cerver is passed, configuration will be read from config/server.cfg
-extern Server *cerver_create (ServerType type, const char *name, Server *cerver);
+extern Cerver *cerver_create (ServerType type, const char *name, Cerver *cerver);
 
 // teardowns the cerver and creates a fresh new one with the same parameters
-extern Server *cerver_restart (Server *server);
+extern Cerver *cerver_restart (Cerver *cerver);
 
 // starts the cerver
-extern u8 cerver_start (Server *server);
+extern u8 cerver_start (Cerver *cerver);
 
 // disable socket I/O in both ways and stop any ongoing job
-extern u8 cerver_shutdown (Server *server);
+extern u8 cerver_shutdown (Cerver *cerver);
 
 // teardown a server -> stop the server and clean all of its data
-extern u8 cerver_teardown (Server *server);
+extern u8 cerver_teardown (Cerver *cerver);
 
 #pragma endregion
 

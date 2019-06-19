@@ -73,16 +73,3 @@ void cerver_log_msg (FILE *__restrict __stream, LogMsgType firstType, LogMsgType
     if (message) free (message);
 
 }
-
-void log_server (Server *server) {
-
-    if (server) {
-        switch (server->type) {
-            case FILE_SERVER: cerver_log_msg (stdout, SUCCESS, SERVER, "Created a new file server!"); break;
-            case WEB_SERVER: cerver_log_msg (stdout, SUCCESS, SERVER, "Created a web server!"); break;
-            case GAME_SERVER: cerver_log_msg (stdout, SUCCESS, SERVER, "Created a game server!"); break;
-            default: break;
-        }
-    }
-
-}
