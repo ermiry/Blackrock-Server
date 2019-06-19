@@ -11,7 +11,7 @@
 #include "cerver/types/string.h"
 
 #include "cerver/network.h"
-#include "cerver/client.h"
+#include "cerver/auth.h"
 
 #include "cerver/game/game.h"
 
@@ -27,11 +27,11 @@
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
 
-#define DEFAULT_REQUIRE_AUTH            0   // by default, a server does not requires authentication
+#define DEFAULT_REQUIRE_AUTH            false   // by default, a server does not requires authentication
 #define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
 #define DEFAULT_AUTH_CODE               0x4CA140FF
 
-#define DEFAULT_USE_SESSIONS            0   // by default, a server does not support client sessions
+#define DEFAULT_USE_SESSIONS            false   // by default, a server does not support client sessions
 
 #define DEFAULT_TH_POOL_INIT            4
 
@@ -88,15 +88,16 @@ struct _Cerver {
     u32 poll_timeout;           
 
     bool auth_required;      // does the server requires authentication?
-    Auth auth;              // server auth info
+    Auth *auth;              // server auth info
 
     // on hold clients         
-    AVLTree *onHoldClients;                 // hold on the clients until they authenticate
-    // TODO: option to make this dynamic
+    AVLTree *on_hold_clients;                 // hold on the clients until they authenticate
+    // FIXME: make this dynamic using max_on_hold_clients as the parameter
     struct pollfd hold_fds[poll_n_fds];
-    u16 hold_nfds;
+    u32 max_on_hold_clients;
+    u16 current_on_hold_nfds;
     bool compress_hold_clients;              // compress the hold fds array?
-    bool holdingClients;
+    bool holding_clients;
 
     Pool *packetPool;
 
@@ -108,7 +109,7 @@ struct _Cerver {
     // allow the clients to use sessions (have multiple connections)
     bool use_sessions;  
     // admin defined function to generate session ids bassed on usernames, etc             
-    Action generateSessionID; 
+    Action session_id_generator; 
 
     // the admin can define a function to handle the recieve buffer if they are using a custom protocol
     // otherwise, it will be set to the default one
@@ -117,7 +118,7 @@ struct _Cerver {
     // server info/stats
     // TODO: use this in the thpool names
     String *name;
-    u32 connectedClients;
+    u32 n_connected_clients;
     u32 n_hold_clients;
 
 };
@@ -129,9 +130,6 @@ typedef struct _Cerver Cerver;
 extern void cerver_set_auth_method (Cerver *cerver, delegate authMethod);
 
 extern void cerver_set_handler_received_buffer (Cerver *cerver, Action handler);
-
-extern void session_set_id_generator (Cerver *server, Action idGenerator);
-extern char *session_default_generate_id (i32 fd, const struct sockaddr_storage address);
 
 /*** Cerver Methods ***/
 

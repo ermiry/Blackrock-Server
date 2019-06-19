@@ -3,8 +3,11 @@
 #include <errno.h>
 
 #include "cerver/types/types.h"
+
 #include "cerver/cerver.h"
 #include "cerver/handler.h"
+#include "cerver/auth.h"
+
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
@@ -343,7 +346,7 @@ u8 cerver_poll (Cerver *cerver) {
 
     if (cerver) {
         cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
-            c_string_create ("Cerver %s has started!", cerver->name->str));
+            c_string_create ("Cerver %s main handler has started!", cerver->name->str));
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Waiting for connections...");
         #endif

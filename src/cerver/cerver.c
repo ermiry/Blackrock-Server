@@ -17,6 +17,7 @@
 
 #include "cerver/network.h"
 #include "cerver/packets.h"
+#include "cerver/handler.h"
 #include "cerver/cerver.h"
 #include "cerver/game/game.h"
 
@@ -27,58 +28,6 @@
 #include "cerver/utils/log.h"
 #include "cerver/utils/config.h"
 #include "cerver/utils/utils.h"
-#include "cerver/utils/sha-256.h"
-
-/*** Sessions ***/
-
-#pragma region Sessions
-
-// create a unique session id for each client based on connection values
-char *session_default_generate_id (i32 fd, const struct sockaddr_storage address) {
-
-    char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
-    u16 port = sock_ip_port ((const struct sockaddr *) &address);
-
-    if (ipstr && (port > 0)) {
-        #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
-                c_string_create ("Client connected form IP address: %s -- Port: %i", 
-                ipstr, port));
-        #endif
-
-        // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
-        char *connection_values = c_string_create ("%s-%i", ipstr, port);
-
-        uint8_t hash[32];
-        char hash_string[65];
-
-        sha_256_calc (hash, connection_values, strlen (connection_values));
-        sha_256_hash_to_string (hash_string, hash);
-
-        char *retval = c_string_create ("%s", hash_string);
-
-        return retval;
-    }
-
-    return NULL;
-
-}
-
-// the cerver admin can define a custom session id generator
-void session_set_id_generator (Cerver *cerver, Action idGenerator) {
-
-    if (cerver && idGenerator) {
-        if (cerver->useSessions) 
-            cerver->generateSessionID = idGenerator;
-
-        else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Cerver is not set to use sessions!");
-    }
-
-}
-
-#pragma endregion
-
-/*** LOG_CERVER ***/
 
 // TODO: handle ipv6 configuration
 // TODO: create some helpful timestamps
@@ -97,14 +46,15 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
 
         cerver->client_pool = pool_init (destroyClient);
 
-        cerver->packetPool = pool_init (destroyPacketInfo);
+        // FIXME: are we still using the packet pool? -- 19/06/2019
+        // cerver->packetPool = pool_init ();
         // by default init the packet pool with some members
-        PacketInfo *info = NULL;
+        /* PacketInfo *info = NULL;
         for (u8 i = 0; i < 3; i++) {
             info = (PacketInfo *) malloc (sizeof (PacketInfo));
             info->packetData = NULL;
             pool_push (cerver->packetPool, info);
-        } 
+        }  */
 
         // initialize pollfd structures
         memset (cerver->fds, 0, sizeof (cerver->fds));
@@ -114,7 +64,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
         // set all fds as available spaces
         for (u16 i = 0; i < poll_n_fds; i++) cerver->fds[i].fd = -1;
 
-        if (cerver->authRequired) {
+        if (cerver->auth_required) {
             cerver->onHoldClients = avl_init (client_comparator_clientID, destroyClient);
 
             memset (cerver->hold_fds, 0, sizeof (cerver->hold_fds));
@@ -133,7 +83,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
             return 1;
         } 
 
-        switch (type) {
+        switch (cerver->type) {
             case FILE_SERVER: break;
             case WEB_SERVER: break;
             case GAME_SERVER: {
@@ -326,10 +276,12 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
             "No auth option found. No authentication required by default.");
     }
 
+    // FIXME: 19/06/2019 -- we are not getting auth values form cfg
+    // we might need to set them directly suing a function!!
     if (cerver->auth_required) {
         char *tries = config_get_entity_value (cfgEntity, "authTries");
         if (tries) {
-            cerver->auth.max_auth_tries = atoi (tries);
+            cerver->auth->max_auth_tries = atoi (tries);
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                 c_string_create ("Max auth tries set to: %i.", cerver->auth.max_auth_tries));
@@ -337,9 +289,9 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
             free (tries);
         }
         else {
-            cerver->auth.max_auth_tries = DEFAULT_AUTH_TRIES;
+            cerver->auth->max_auth_tries = DEFAULT_AUTH_TRIES;
             cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
-                c_string_create ("Max auth tries set to default: %i.", cerver->auth.max_auth_tries));
+                c_string_create ("Max auth tries set to default: %i.", cerver->auth->max_auth_tries));
         }
     }
 
@@ -520,6 +472,7 @@ Cerver *cerver_new (Cerver *cerver) {
         // by default the socket is assumed to be a blocking socket
         c->blocking = true;
 
+        c->auth = NULL;
         c->auth_required = DEFAULT_REQUIRE_AUTH;
         c->use_sessions = DEFAULT_USE_SESSIONS;
         
@@ -656,9 +609,10 @@ u8 cerver_start (Cerver *cerver) {
 
                     cerver->isRunning = true;
 
-                    if (cerver->auth_required) cerver->holdingClients = false;
+                    // cerver is not holding clients if there is not new connections
+                    if (cerver->auth_required) cerver->holding_clients = false;
 
-                    server_poll (cerver);
+                    cerver_poll (cerver);
 
                     retval = 0;
                 }
