@@ -28,6 +28,9 @@ typedef struct Auth {
 extern Auth *auth_new (void);
 extern void auth_delete (Auth *auth);
 
+// generates an authentication packet with client auth request
+extern Packet *auth_packet_generate (void);
+
 // if the cerver requires authentication, we send the newly connected clients to an on hold
 // structure until they authenticate, if not, they are just dropped by the cerver
 void client_on_hold (Cerver *cerver, Client *client, i32 fd);

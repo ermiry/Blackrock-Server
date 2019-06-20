@@ -6,6 +6,7 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
+#include "cerver/network.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 
@@ -94,12 +95,16 @@ typedef struct Packet {
     struct _Server *server;
     struct _Client *client;
 
+    i32 sock_fd;
+    Protocol protocol;
+
     PacketType packet_type;
     String *custom_type;
 
     // serilized data
     size_t data_size;
     void *data;
+    char *data_end;
 
     // the actual packet to be sent
     PacketHeader *header;
@@ -112,13 +117,37 @@ extern Packet *packet_new (void);
 
 extern void packet_delete (void *ptr);
 
+// create a new packet with the option to pass values directly
+// data is copied into packet buffer and can be safely freed
+extern Packet *packet_create (PacketType type, void *data, size_t data_size);
+
+// sets the pakcet destinatary is directed to and the protocol to use
+extern void packet_set_network_values (Packet *packet, 
+    i32 sock_fd, Protocol protocol);
+
+// appends the data to the end if the packet already has data
+// if the packet is empty, creates a new buffer
+// it creates a new copy of the data and the original can be safely freed
+extern u8 packet_append_data (Packet *packet, void *data, size_t data_size);
+
 // prepares the packet to be ready to be sent
 extern u8 packet_generate (Packet *packet);
 
-// sends a packet using the tcp protocol
-extern u8 packet_send_tcp (i32 socket_fd, const void *packet, size_t packet_size, int flags);
+// generates a simple request packet of the requested type reday to be sent, 
+// and with option to pass some data
+extern Packet *packet_generate_request (PacketType packet_type, RequestType req_type, 
+    void *data, size_t data_size);
+
+// sends a packet using the tcp protocol and the packet sock fd
+// returns 0 on success, 1 on error
+extern u8 packet_send_tcp (const Packet *packet, int flags);
 
 // sends a packet using the udp protocol
+// returns 0 on success, 1 on error
 extern u8 packet_send_udp (const void *packet, size_t packet_size);
+
+// sends a packet using its network values
+// returns 0 on success, 1 on error
+extern u8 packet_send (const Packet *packet, int flags);
 
 #endif

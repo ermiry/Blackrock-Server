@@ -115,7 +115,7 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
         if (cerver->auth) {
             cerver->auth->max_auth_tries = max_auth_tries;
             cerver->auth->authenticate = authenticate;
-            // FIXME: generate auth req packet
+            cerver->auth->auth_packet = auth_packet_generate ();
 
             // FIXME:
             if (cerver->auth_required) {

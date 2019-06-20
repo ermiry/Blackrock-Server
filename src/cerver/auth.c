@@ -77,6 +77,13 @@ void auth_delete (Auth *auth) {
 
 }
 
+// generates an authentication packet with client auth request
+Packet *auth_packet_generate (void) { 
+    
+    return packet_generate_request (AUTH_PACKET, REQ_AUTH_CLIENT, NULL, 0); 
+    
+}
+
 static i32 clients_on_hold_get_free_idx (Cerver *cerver) {
 
     if (cerver && cerver->auth_required) 
