@@ -18,7 +18,6 @@
 #include "cerver/collections/dllist.h"
 #include "cerver/collections/avl.h"
 
-#include "cerver/utils/objectPool.h"
 #include "cerver/utils/config.h"
 #include "cerver/utils/thpool.h"
 
@@ -27,28 +26,12 @@
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
 
-#define DEFAULT_REQUIRE_AUTH            false   // by default, a server does not requires authentication
-#define DEFAULT_AUTH_TRIES              3   // by default, a client can try 3 times to authenticate 
-#define DEFAULT_AUTH_CODE               0x4CA140FF
-
-#define DEFAULT_USE_SESSIONS            false   // by default, a server does not support client sessions
-
 #define DEFAULT_TH_POOL_INIT            4
 
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515
 
-#define poll_n_fds      100           // n of fds for the pollfd array
-
-#ifdef RUN_FROM_MAKE
-    #define SERVER_CFG          "./config/server.cfg"
-
-#elif RUN_FROM_BIN
-    #define SERVER_CFG          "../config/server.cfg" 
-
-#else
-    #define SERVER_CFG          ""
-#endif  
+#define poll_n_fds              100           // n of fds for the pollfd array
 
 typedef enum ServerType {
 
@@ -61,43 +44,39 @@ typedef enum ServerType {
 // this is the generic server struct, used to create different server types
 struct _Cerver {
 
-    i32 sock;               // server socket
+    i32 sock;                           // server socket
     u8 use_ipv6;  
-    Protocol protocol;            // we only support either tcp or udp
+    Protocol protocol;                  // we only support either tcp or udp
     u16 port; 
-    u16 connection_queue;   // each server can handle connection differently
+    u16 connection_queue;               // each server can handle connection differently
 
-    bool isRunning;         // he server is recieving and/or sending packetss
-    bool blocking;          // sokcet fd is blocking?
+    bool isRunning;                     // the server is recieving and/or sending packetss
+    bool blocking;                      // sokcet fd is blocking?
 
     ServerType type;
     void *server_data;
     Action delete_server_data;
 
-    AVLTree *clients;                   // connected clients
-    Pool *client_pool;       
+    threadpool thpool;
 
-    // TODO: option to make this dynamic
-    struct pollfd fds[poll_n_fds];
-    u16 nfds;                           // n of active fds in the pollfd array
+    AVLTree *clients;                   // connected clients    
+
+    /*** auth ***/
+    struct pollfd *fds;
+    u32 max_n_fds;                      // current max n fds in pollfd
+    u16 current_n_fds;                  // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
     u32 poll_timeout;           
 
-    bool auth_required;      // does the server requires authentication?
-    Auth *auth;              // server auth info
-
-    // on hold clients         
-    AVLTree *on_hold_clients;                 // hold on the clients until they authenticate
-    // FIXME: make this dynamic using max_on_hold_clients as the parameter
-    struct pollfd hold_fds[poll_n_fds];
+    bool auth_required;                 // does the server requires authentication?
+    Auth *auth;                         // server auth info
+     
+    AVLTree *on_hold_clients;           // hold on the clients until they authenticate
+    struct pollfd *hold_fds;
     u32 max_on_hold_clients;
     u16 current_on_hold_nfds;
-    bool compress_hold_clients;              // compress the hold fds array?
+    bool compress_hold_clients;         // compress the hold fds array?
     bool holding_clients;
-
-    Pool *packetPool;
-
-    threadpool thpool;
 
     // allow the clients to use sessions (have multiple connections)
     bool use_sessions;  
@@ -108,11 +87,10 @@ struct _Cerver {
     // otherwise, it will be set to the default one
     // Action handle_recieved_buffer;
 
-    // server info/stats
-    // TODO: use this in the thpool names
+    /*** server info/stats ***/
     String *name;
-    String *welcome_msg;                    // this msg is sent to the client when it first connects
-    Packet *cerver_info_packet;             // useful info that we can send to clients 
+    String *welcome_msg;                 // this msg is sent to the client when it first connects
+    Packet *cerver_info_packet;          // useful info that we can send to clients 
     u32 n_connected_clients;
     u32 n_hold_clients;
 
@@ -127,12 +105,15 @@ extern Server *cerver_new (Cerver *cerver);
 extern void cerver_delete (void *ptr);
 
 // sets the cerver msg to be sent when a client connects
-extern void cerver_set_welcome_msg (Cerver *cerver, const char *msg);
+// retuns 0 on success, 1 on error
+extern u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg);
 
 // configures the cerver to require client authentication upon new client connections
+// retuns 0 on success, 1 on error
 extern u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate);
 
 // configures the cerver to use client sessions
+// retuns 0 on success, 1 on error
 extern u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator);
 
 // creates a new cerver of the specified type and with option for a custom name

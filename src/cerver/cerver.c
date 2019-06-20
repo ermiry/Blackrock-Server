@@ -59,8 +59,8 @@ Cerver *cerver_new (Cerver *cerver) {
         c->blocking = true;
 
         c->auth = NULL;
-        c->auth_required = DEFAULT_REQUIRE_AUTH;
-        c->use_sessions = DEFAULT_USE_SESSIONS;
+        c->auth_required = false;
+        c->use_sessions = false;
         
         c->isRunning = false;
     }
@@ -83,17 +83,29 @@ void cerver_delete (void *ptr) {
 
 }
 
+// sets the cerver poll timeout
+void cerver_set_poll_time_out (Cerver *cerver, u32 poll_timeout) {
+
+    if (cerver) cerver->poll_timeout = poll_timeout;
+
+}
+
 // sets the cerver msg to be sent when a client connects
-void cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
+// retuns 0 on success, 1 on error
+u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
 
     if (cerver) {
         str_delete (cerver->welcome_msg);
         cerver->welcome_msg = msg ? str_new (msg) : NULL;
+        return 0;
     }
+
+    return 1;
 
 }
 
 // configures the cerver to require client authentication upon new client connections
+// retuns 0 on success, 1 on error
 u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
 
     u8 retval = 1;
@@ -104,6 +116,19 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
             cerver->auth->max_auth_tries = max_auth_tries;
             cerver->auth->authenticate = authenticate;
             // FIXME: generate auth req packet
+
+            // FIXME:
+            if (cerver->auth_required) {
+                cerver->on_hold_clients = avl_init (client_comparator_clientID, destroyClient);
+
+                memset (cerver->hold_fds, 0, sizeof (cerver->hold_fds));
+                cerver->current_on_hold_nfds = 0;
+                cerver->compress_hold_clients = false;
+
+                cerver->n_hold_clients = 0;
+
+                for (u16 i = 0; i < poll_n_fds; i++) cerver->hold_fds[i].fd = -1;
+            }
         }
     }
 
@@ -112,6 +137,7 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
 }
 
 // configures the cerver to use client sessions
+// retuns 0 on success, 1 on error
 u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator) {
 
     u8 retval = 1;
@@ -120,6 +146,7 @@ u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator) {
         if (session_id_generator) {
             cerver->session_id_generator = session_id_generator;
             cerver->use_sessions = true;
+            // FIXME: regenerate avl with new client comparator
         }
     }
 
@@ -127,79 +154,69 @@ u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator) {
 
 }
 
-// FIXME: packets and check that the data structures have been created correctly!
+// FIXME: game data
 static u8 cerver_init_data_structures (Cerver *cerver) {
 
     u8 retval = 1;
 
     if (cerver) {
-        if (cerver->use_sessions) cerver->clients = avl_init (client_comparator_sessionID, destroyClient);
-        else cerver->clients = avl_init (client_comparator_clientID, destroyClient);
+        cerver->clients = avl_init (client_comparator_clientID, destroyClient);
 
-        cerver->client_pool = pool_init (destroyClient);
+        // initialize main pollfd structures
+        cerver->fds = (struct pollfd *) calloc (poll_n_fds, sizeof (struct pollfd));
+        if (cerver->fds) {
+            memset (cerver->fds, 0, sizeof (cerver->fds));
+            // set all fds as available spaces
+            for (u32 i = 0; i < poll_n_fds; i++) cerver->fds[i].fd = -1;
 
-        // FIXME: are we still using the packet pool? -- 19/06/2019
-        // cerver->packetPool = pool_init ();
-        // by default init the packet pool with some members
-        /* PacketInfo *info = NULL;
-        for (u8 i = 0; i < 3; i++) {
-            info = (PacketInfo *) malloc (sizeof (PacketInfo));
-            info->packetData = NULL;
-            pool_push (cerver->packetPool, info);
-        }  */
+            cerver->max_n_fds = poll_n_fds;
+            cerver->current_n_fds = 0;
+            cerver->compress_clients = false;
+            cerver->poll_timeout = DEFAULT_POLL_TIMEOUT;
 
-        // initialize pollfd structures
-        memset (cerver->fds, 0, sizeof (cerver->fds));
-        cerver->nfds = 0;
-        cerver->compress_clients = false;
+            // initialize cerver's own thread pool
+            cerver->thpool = thpool_init (DEFAULT_TH_POOL_INIT);
+            if (cerver->thpool) {
+                switch (cerver->type) {
+                    case FILE_SERVER: break;
+                    case WEB_SERVER: break;
+                    case GAME_SERVER: {
+                        // FIXME: correctly init the game cerver!!
+                        // GameServerData *gameData = (GameServerData *) malloc (sizeof (GameServerData));
 
-        // set all fds as available spaces
-        for (u16 i = 0; i < poll_n_fds; i++) cerver->fds[i].fd = -1;
+                        // // init the lobbys with n inactive in the pool
+                        // if (game_init_lobbys (gameData, GS_LOBBY_POOL_INIT)) {
+                        //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver lobbys!");
+                        //     return 1;
+                        // }
 
-        if (cerver->auth_required) {
-            cerver->onHoldClients = avl_init (client_comparator_clientID, destroyClient);
+                        // // init the players with n inactive in the pool
+                        // if (game_init_players (gameData, GS_PLAYER_POOL_INT)) {
+                        //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver players!");
+                        //     return 1;
+                        // }
 
-            memset (cerver->hold_fds, 0, sizeof (cerver->hold_fds));
-            cerver->hold_nfds = 0;
-            cerver->compress_hold_clients = false;
+                        // cerver->serverData = gameData;
+                    } break;
+                    default: break;
+                }
+            }
 
-            cerver->n_hold_clients = 0;
-
-            for (u16 i = 0; i < poll_n_fds; i++) cerver->hold_fds[i].fd = -1;
+            else {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                    c_string_create ("Failed to init cerver %s thpool!", cerver->name));
+                #endif
+            }
         }
 
-        // initialize cerver's own thread pool
-        cerver->thpool = thpool_init (DEFAULT_TH_POOL_INIT);
-        if (!cerver->thpool) {
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to init cerver's thread pool!");
-            return 1;
-        } 
-
-        switch (cerver->type) {
-            case FILE_SERVER: break;
-            case WEB_SERVER: break;
-            case GAME_SERVER: {
-                // FIXME: correctly init the game cerver!!
-                // GameServerData *gameData = (GameServerData *) malloc (sizeof (GameServerData));
-
-                // // init the lobbys with n inactive in the pool
-                // if (game_init_lobbys (gameData, GS_LOBBY_POOL_INIT)) {
-                //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver lobbys!");
-                //     return 1;
-                // }
-
-                // // init the players with n inactive in the pool
-                // if (game_init_players (gameData, GS_PLAYER_POOL_INT)) {
-                //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver players!");
-                //     return 1;
-                // }
-
-                // cerver->serverData = gameData;
-            } break;
-            default: break;
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to allocate cerver main fds!");
+            #endif
         }
 
-        retval = 0;     // LOG_SUCCESS!!
+        retval = 0;     // success!!
     }
 
     return retval;
