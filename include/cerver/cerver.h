@@ -40,10 +40,6 @@
 
 #define poll_n_fds      100           // n of fds for the pollfd array
 
-/*** SEVER ***/
-
-#pragma region LOG_CERVER
-
 #ifdef RUN_FROM_MAKE
     #define SERVER_CFG          "./config/server.cfg"
 
@@ -103,9 +99,6 @@ struct _Cerver {
 
     threadpool thpool;
 
-    void *serverInfo;           // useful info that we can send to clients 
-    Action sendServerInfo;      // method to send server into to the client              
-
     // allow the clients to use sessions (have multiple connections)
     bool use_sessions;  
     // admin defined function to generate session ids bassed on usernames, etc             
@@ -113,11 +106,13 @@ struct _Cerver {
 
     // the admin can define a function to handle the recieve buffer if they are using a custom protocol
     // otherwise, it will be set to the default one
-    Action handle_recieved_buffer;
+    // Action handle_recieved_buffer;
 
     // server info/stats
     // TODO: use this in the thpool names
     String *name;
+    String *welcome_msg;                    // this msg is sent to the client when it first connects
+    Packet *cerver_info_packet;             // useful info that we can send to clients 
     u32 n_connected_clients;
     u32 n_hold_clients;
 
@@ -125,17 +120,20 @@ struct _Cerver {
 
 typedef struct _Cerver Cerver;
 
-/*** Cerver Configuration ***/
-
-extern void cerver_set_auth_method (Cerver *cerver, delegate authMethod);
-
-extern void cerver_set_handler_received_buffer (Cerver *cerver, Action handler);
-
 /*** Cerver Methods ***/
 
 // cerver constructor, with option to init with some values
 extern Server *cerver_new (Cerver *cerver);
-extern void cerver_delete (Cerver *cerver);
+extern void cerver_delete (void *ptr);
+
+// sets the cerver msg to be sent when a client connects
+extern void cerver_set_welcome_msg (Cerver *cerver, const char *msg);
+
+// configures the cerver to require client authentication upon new client connections
+extern u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate);
+
+// configures the cerver to use client sessions
+extern u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator);
 
 // creates a new cerver of the specified type and with option for a custom name
 // also has the option to take another cerver as a paramater
@@ -154,99 +152,28 @@ extern u8 cerver_shutdown (Cerver *cerver);
 // teardown a server -> stop the server and clean all of its data
 extern u8 cerver_teardown (Cerver *cerver);
 
-#pragma endregion
+/*** Serialization ***/
 
-/*** PACKETS ***/
+// serialized cerver structure
+typedef struct SCerver {
 
-#pragma region PACKETS
-
-// info from a recieved packet to be handle
-struct _PacketInfo {
-
-    Cerver *server;
-    Client *client;
-    i32 clientSock; 
-    char *packetData;
-    size_t packetSize;
-
-};
-
-typedef struct _PacketInfo PacketInfo;
-
-typedef enum ErrorType {
-
-    ERR_SERVER_ERROR = 0,   // internal server error, like no memory
-
-    ERR_CREATE_LOBBY = 1,
-    ERR_JOIN_LOBBY,
-    ERR_LEAVE_LOBBY,
-    ERR_FIND_LOBBY,
-
-    ERR_GAME_INIT,
-
-    ERR_FAILED_AUTH,
-
-} ErrorType;
-
-typedef struct ErrorData {
-
-    ErrorType type;
-    char msg[256];
-
-} ErrorData;
-
-extern void initPacketHeader (void *header, PacketType type, u32 packetSize);
-extern void *generatePacket (PacketType packetType, size_t packetSize);
-extern u8 checkPacket (size_t packetSize, char *packetData, PacketType expectedType);
-
-extern PacketInfo *newPacketInfo (Server *server, Client *client, i32 clientSock,
-    char *packetData, size_t packetSize);
-
-extern i8 tcp_sendPacket (i32 socket_fd, const void *begin, size_t packetSize, int flags);
-extern i8 udp_sendPacket (Server *server, const void *begin, size_t packetSize, 
-    const struct sockaddr_storage address);
-extern u8 server_sendPacket (Server *server, i32 socket_fd, struct sockaddr_storage address, 
-    const void *packet, size_t packetSize);
-
-extern void *generateErrorPacket (ErrorType type, const char *msg);
-extern u8 sendErrorPacket (Server *server, i32 sock_fd, struct sockaddr_storage address,
-    ErrorType type, const char *msg);
-
-#pragma endregion
-
-/*** SERIALIZATION ***/
-
-#pragma region SERIALIZATION
-
-// 24/10/2018 -- lets try how this works --> our goal with serialization is to send 
-// a packet without our data structures but whitout any ptrs
-
-// 17/11/2018 - send useful server info to the client trying to connect
-typedef struct SServer {
-
-    u8 useIpv6;  
-    u8 protocol;            // we only support either tcp or udp
+    bool use_ipv6;  
+    Protocol protocol;
     u16 port; 
 
+    char name[32];
     ServerType type;
-    bool authRequired;      // authentication required by the server
+    bool auth_required;
 
-} SServer;
+    bool uses_sessions;
 
-// default auth data to use by default auth function
-typedef struct DefAuthData {
-
-    u32 code;
-
-} DefAuthData;
+} SCerver;
 
 // session id - token
 typedef struct Token {
 
-    char token[65];
+    char token[64];
 
 } Token;
-
-#pragma endregion
 
 #endif

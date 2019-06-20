@@ -126,13 +126,6 @@ void handlePacket (void *data) {
 
 }
 
-// TODO: move this from here! -> maybe create a server configuration section
-void cerver_set_handler_received_buffer (Cerver *server, Action handler) {
-
-    if (server) server->handle_recieved_buffer = handler;
-
-}
-
 // split the entry buffer in packets of the correct size
 void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 

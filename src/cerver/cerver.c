@@ -17,23 +17,115 @@
 
 #include "cerver/network.h"
 #include "cerver/packets.h"
+#include "cerver/auth.h"
 #include "cerver/handler.h"
 #include "cerver/cerver.h"
 #include "cerver/game/game.h"
 
+#include "cerver/collections/dllist.h"
 #include "cerver/collections/avl.h" 
-#include "cerver/collections/vector.h"
 
 #include "cerver/utils/thpool.h"
 #include "cerver/utils/log.h"
 #include "cerver/utils/config.h"
 #include "cerver/utils/utils.h"
 
-// TODO: handle ipv6 configuration
-// TODO: create some helpful timestamps
-// TODO: add the option to log our output to a .log file
+static DoubleList *cervers = NULL;
 
-const char welcome[64] = "Welcome to cerver!";
+// cerver constructor, with option to init with some values
+Cerver *cerver_new (Cerver *cerver) {
+
+    Cerver *c = (Cerver *) malloc (sizeof (Cerver));
+    if (c) {
+        memset (c, 0, sizeof (Cerver));
+
+        // init with some values
+        if (cerver) {
+            c->use_ipv6 = cerver->use_ipv6;
+            c->protocol = cerver->protocol;
+            c->port = cerver->port;
+            c->connection_queue = cerver->connection_queue;
+            c->poll_timeout = cerver->poll_timeout;
+            c->auth_required = cerver->auth_required;
+            c->type = cerver->type;
+        }
+
+        c->name = NULL;
+        c->welcome_msg = NULL;
+
+        c->delete_server_data = NULL;
+
+        // by default the socket is assumed to be a blocking socket
+        c->blocking = true;
+
+        c->auth = NULL;
+        c->auth_required = DEFAULT_REQUIRE_AUTH;
+        c->use_sessions = DEFAULT_USE_SESSIONS;
+        
+        c->isRunning = false;
+    }
+
+    return c;
+
+}
+
+// deletes a cerver
+void cerver_delete (void *ptr) {
+
+    if (ptr) {
+        Cerver *cerver = (Cerver *) ptr;
+
+        str_delete (cerver->name);
+        str_delete (cerver->welcome_msg);
+
+        free (cerver);
+    }
+
+}
+
+// sets the cerver msg to be sent when a client connects
+void cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
+
+    if (cerver) {
+        str_delete (cerver->welcome_msg);
+        cerver->welcome_msg = msg ? str_new (msg) : NULL;
+    }
+
+}
+
+// configures the cerver to require client authentication upon new client connections
+u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
+
+    u8 retval = 1;
+
+    if (cerver) {
+        cerver->auth = auth_new ();
+        if (cerver->auth) {
+            cerver->auth->max_auth_tries = max_auth_tries;
+            cerver->auth->authenticate = authenticate;
+            // FIXME: generate auth req packet
+        }
+    }
+
+    return retval;
+
+}
+
+// configures the cerver to use client sessions
+u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator) {
+
+    u8 retval = 1;
+
+    if (cerver) {
+        if (session_id_generator) {
+            cerver->session_id_generator = session_id_generator;
+            cerver->use_sessions = true;
+        }
+    }
+
+    return retval;
+
+}
 
 // FIXME: packets and check that the data structures have been created correctly!
 static u8 cerver_init_data_structures (Cerver *cerver) {
@@ -120,30 +212,15 @@ static u8 cerver_init_values (Cerver *cerver) {
     u8 retval = 1;
 
     if (cerver) {
-        cerver->handle_recieved_buffer = default_handle_recieved_buffer;
-
-        if (cerver->authRequired) {
-            cerver->auth.reqAuthPacket = createClientAuthReqPacket ();
-            cerver->auth.authPacketSize = sizeof (PacketHeader) + sizeof (RequestData);
-
-            cerver->auth.authenticate = defaultAuthMethod;
-        }
-
-        else {
-            cerver->auth.reqAuthPacket = NULL;
-            cerver->auth.authPacketSize = 0;
-        }
-
-        if (cerver->use_sessions) 
-            cerver->generateSessionID = (void *) session_default_generate_id;
-
-        cerver->serverInfo = generateServerInfoPacket (cerver);
+        // cerver->handle_recieved_buffer = default_handle_recieved_buffer;
+        // FIXME:
+        cerver->cerver_info_packet = generateServerInfoPacket (cerver);
 
         switch (cerver->type) {
             case FILE_SERVER: break;
             case WEB_SERVER: break;
             case GAME_SERVER: {
-                GameServerData *data = (GameServerData *) cerver->serverData;
+                GameServerData *data = (GameServerData *) cerver->server_data;
 
                 // FIXME:
                 // get game modes info from a config file
@@ -157,8 +234,6 @@ static u8 cerver_init_values (Cerver *cerver) {
             } break;
             default: break;
         }
-
-        cerver->connectedClients = 0;
 
         retval = 0;     // LOG_SUCCESS!!
     }
@@ -198,7 +273,6 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
         else cerver->protocol = PROTOCOL_UDP;
 
         free (tcp);
-
     }
 
     // set to default (tcp) if we don't found a value
@@ -259,55 +333,6 @@ static u8 cerver_get_cfg_values (Cerver *cerver, ConfigEntity *cfgEntity) {
         cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
             c_string_create ("Poll timeout no specified. Setting it to default: %i", 
                 DEFAULT_POLL_TIMEOUT));
-    }
-
-    char *auth = config_get_entity_value (cfgEntity, "authentication");
-    if (auth) {
-        cerver->auth_required = atoi (auth);
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, cerver->auth_required == 1 ? 
-            "Cerver requires client authentication" : "Cerver does not requires client authentication");
-        #endif
-        free (auth);
-    }
-    else {
-        cerver->auth_required = DEFAULT_REQUIRE_AUTH;
-        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
-            "No auth option found. No authentication required by default.");
-    }
-
-    // FIXME: 19/06/2019 -- we are not getting auth values form cfg
-    // we might need to set them directly suing a function!!
-    if (cerver->auth_required) {
-        char *tries = config_get_entity_value (cfgEntity, "authTries");
-        if (tries) {
-            cerver->auth->max_auth_tries = atoi (tries);
-            #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-                c_string_create ("Max auth tries set to: %i.", cerver->auth.max_auth_tries));
-            #endif
-            free (tries);
-        }
-        else {
-            cerver->auth->max_auth_tries = DEFAULT_AUTH_TRIES;
-            cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
-                c_string_create ("Max auth tries set to default: %i.", cerver->auth->max_auth_tries));
-        }
-    }
-
-    char *sessions = config_get_entity_value (cfgEntity, "sessions");
-    if (sessions) {
-        cerver->use_sessions = atoi (sessions);
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, cerver->use_sessions == 1 ? 
-            "Cerver supports client sessions." : "Cerver does not support client sessions.");
-        #endif
-        free (sessions);
-    }
-    else {
-        cerver->use_sessions = DEFAULT_USE_SESSIONS;
-        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
-            "No sessions option found. No support for client sessions by default.");
     }
 
     return 0;
@@ -445,52 +470,6 @@ static u8 cerver_init (Cerver *cerver, Config *cfg, ServerType type) {
     }
 
     return retval;
-
-}
-
-// cerver constructor, with option to init with some values
-Cerver *cerver_new (Cerver *cerver) {
-
-    Cerver *c = (Cerver *) malloc (sizeof (Cerver));
-    if (c) {
-        memset (c, 0, sizeof (Cerver));
-
-        // init with some values
-        if (cerver) {
-            c->use_ipv6 = cerver->use_ipv6;
-            c->protocol = cerver->protocol;
-            c->port = cerver->port;
-            c->connection_queue = cerver->connection_queue;
-            c->poll_timeout = cerver->poll_timeout;
-            c->auth_required = cerver->auth_required;
-            c->type = cerver->type;
-        }
-
-        c->name = NULL;
-        c->delete_server_data = NULL;
-
-        // by default the socket is assumed to be a blocking socket
-        c->blocking = true;
-
-        c->auth = NULL;
-        c->auth_required = DEFAULT_REQUIRE_AUTH;
-        c->use_sessions = DEFAULT_USE_SESSIONS;
-        
-        c->isRunning = false;
-    }
-
-    return c;
-
-}
-
-// TODO: what else do we want to delete here?
-void cerver_delete (Cerver *cerver) {
-
-    if (cerver) {
-        str_delete (cerver->name);
-
-        free (cerver);
-    }
 
 }
 

@@ -53,18 +53,6 @@ char *session_default_generate_id (i32 fd, const struct sockaddr_storage address
 
 }
 
-// the cerver admin can define a custom session id generator
-void session_set_id_generator (Cerver *cerver, Action id_generator) {
-
-    if (cerver) {
-        if (cerver->use_sessions) 
-            cerver->session_id_generator = id_generator;
-
-        else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Cerver is not set to use sessions!");
-    }
-
-}
-
 #pragma endregion
 
 Auth *auth_new (void) {
@@ -72,7 +60,7 @@ Auth *auth_new (void) {
     Auth *auth = (Auth *) malloc (sizeof (Auth));
     if (auth) {
         memset (auth, 0, sizeof (Auth));
-        auth->req_auth_packet = NULL;
+        auth->auth_packet = NULL;
         auth->authenticate = NULL;
     }
 
@@ -83,7 +71,7 @@ Auth *auth_new (void) {
 void auth_delete (Auth *auth) {
 
     if (auth) {
-        if (auth->req_auth_packet) free (auth->req_auth_packet);
+        packet_delete (auth->auth_packet);
         free (auth);
     }
 
@@ -568,11 +556,5 @@ void handleOnHoldPacket (void *data) {
         // FIXME: send the packet to the pool
         destroyPacketInfo (pack_info);
     }
-
-}
-
-void cerver_set_auth_method (Cerver *cerver, delegate authMethod) {
-
-    if (cerver) cerver->auth.authenticate = authMethod;
 
 }
