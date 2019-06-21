@@ -99,6 +99,11 @@ struct _Cerver {
     u32 n_connected_clients;
     u32 n_hold_clients;
 
+    // TODO:
+    // add time started
+    // add uptime
+    // maybe a function to be executed every x time -> as an update
+
 };
 
 typedef struct _Cerver Cerver;
