@@ -5,17 +5,18 @@
 #include "cerver/types/types.h"
 
 #include "cerver/cerver.h"
+#include "cerver/client.h"
 #include "cerver/handler.h"
 #include "cerver/auth.h"
 
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-static RecvdBufferData *rcvd_buffer_data_new (Cerver *server, i32 socket_fd, char *packet_buffer, size_t total_size, bool on_hold) {
+static RecvdBufferData *rcvd_buffer_data_new (Cerver *cerver, i32 socket_fd, char *packet_buffer, size_t total_size, bool on_hold) {
 
     RecvdBufferData *data = (RecvdBufferData *) malloc (sizeof (RecvdBufferData));
     if (data) {
-        data->server = server;
+        data->cerver = cerver;
         data->sock_fd = socket_fd;
 
         data->buffer = (char *) calloc (total_size, sizeof (char));
@@ -38,29 +39,33 @@ void rcvd_buffer_data_delete (RecvdBufferData *data) {
 
 }
 
-i32 getFreePollSpot (Cerver *server) {
+// get a free index in the main cerver poll strcuture
+i32 cerver_poll_get_free_idx (Cerver *cerver) {
 
-    if (server) 
-        for (u32 i = 0; i < poll_n_fds; i++)
-            if (server->fds[i].fd == -1) return i;
+    if (cerver) {
+        for (u32 i = 0; i < cerver->max_n_fds; i++)
+            if (cerver->fds[i].fd == -1) return i;
+
+        return 0;
+    }
 
     return -1;
 
 }
 
 // we remove any fd that was set to -1 for what ever reason
-static void compressClients (Cerver *server) {
+static void compressClients (Cerver *cerver) {
 
-    if (server) {
-        server->compress_clients = false;
+    if (cerver) {
+        cerver->compress_clients = false;
 
-        for (u16 i = 0; i < server->nfds; i++) {
-            if (server->fds[i].fd == -1) {
-                for (u16 j = i; j < server->nfds; j++) 
-                    server->fds[j].fd = server->fds[j + 1].fd;
+        for (u16 i = 0; i < cerver->nfds; i++) {
+            if (cerver->fds[i].fd == -1) {
+                for (u16 j = i; j < cerver->nfds; j++) 
+                    cerver->fds[j].fd = cerver->fds[j + 1].fd;
 
                 i--;
-                server->nfds--;
+                cerver->nfds--;
             }
         }
     }  
@@ -83,7 +88,7 @@ void handlePacket (void *data) {
                     switch (reqdata->type) {
                         /* case CLIENT_DISCONNET: 
                             cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Ending client connection - client_disconnect ()");
-                            client_closeConnection (packet->server, packet->client); 
+                            client_closeConnection (packet->cerver, packet->client); 
                             break; */
                         default: break;
                     }
@@ -105,7 +110,7 @@ void handlePacket (void *data) {
                 case TEST_PACKET: 
                     cerver_log_msg (stdout, LOG_TEST, LOG_NO_TYPE, "Got a successful test packet!"); 
                     // send a test packet back to the client
-                    if (!sendTestPacket (packet->server, packet->clientSock, packet->client->address))
+                    if (!sendTestPacket (packet->cerver, packet->clientSock, packet->client->address))
                         cerver_log_msg (stdout, LOG_DEBUG, LOG_PACKET, "LOG_SUCCESS answering the test packet.");
 
                     else cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to answer test packet!");
@@ -120,7 +125,7 @@ void handlePacket (void *data) {
         // FIXME: 22/11/2018 - error with packet pool!!! seg fault always the second time 
         // a client sends a packet!!
         // no matter what, we send the packet to the pool after using it
-        // pool_push (packet->server->packetPool, data);
+        // pool_push (packet->cerver->packetPool, data);
         destroyPacketInfo (packet);
     }
 
@@ -153,18 +158,18 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
                     for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                         packet_data[i] = data->buffer[buffer_idx];
 
-                    Client *c = data->onHold ? getClientBySocket (data->server->onHoldClients->root, data->sock_fd) :
-                        getClientBySocket (data->server->clients->root, data->sock_fd);
+                    Client *c = data->onHold ? getClientBySocket (data->cerver->onHoldClients->root, data->sock_fd) :
+                        getClientBySocket (data->cerver->clients->root, data->sock_fd);
 
                     if (!c) {
                         cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to get client by socket!");
                         return;
                     }
 
-                    info = newPacketInfo (data->server, c, data->sock_fd, packet_data, packet_size);
+                    info = newPacketInfo (data->cerver, c, data->sock_fd, packet_data, packet_size);
 
                     if (info)
-                        thpool_add_work (data->server->thpool, data->onHold ?
+                        thpool_add_work (data->cerver->thpool, data->onHold ?
                             (void *) handleOnHoldPacket : (void *) handlePacket, info);
 
                     else {
@@ -186,7 +191,7 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 // TODO: add support for handling large files transmissions
 // what happens if my buffer isn't enough, for example a larger file?
 // recive all incoming data from the socket
-static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
+static void cerver_recieve (Cerver *cerver, i32 socket_fd, bool onHold) {
 
     // if (onHold) cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - on hold client!");
     // else cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - normal client!");
@@ -221,22 +226,22 @@ static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
             close (socket_fd);  // close the client socket
 
             if (onHold) 
-                 removeOnHoldClient (server, 
-                    getClientBySocket (server->onHoldClients->root, socket_fd), socket_fd);  
+                 removeOnHoldClient (cerver, 
+                    getClientBySocket (cerver->onHoldClients->root, socket_fd), socket_fd);  
 
             else {
                 // remove the socket from the main poll
                 for (u32 i = 0; i < poll_n_fds; i++) {
-                    if (server->fds[i].fd == socket_fd) {
-                        server->fds[i].fd = -1;
-                        server->fds[i].events = -1;
+                    if (cerver->fds[i].fd == socket_fd) {
+                        cerver->fds[i].fd = -1;
+                        cerver->fds[i].events = -1;
                     }
                 } 
 
-                Client *c = getClientBySocket (server->clients->root, socket_fd);
+                Client *c = getClientBySocket (cerver->clients->root, socket_fd);
                 if (c) 
                     if (c->n_active_cons <= 1) 
-                        client_closeConnection (server, c);
+                        client_closeConnection (cerver, c);
 
                 else {
                     #ifdef CERVER_DEBUG
@@ -250,89 +255,104 @@ static void cerver_recieve (Cerver *server, i32 socket_fd, bool onHold) {
         }
 
         else {
-            // pass the necessary data to the server buffer handler
-            RecvdBufferData *data = rcvd_buffer_data_new (server, socket_fd, packetBuffer, rc, onHold);
-            server->handle_recieved_buffer (data);
+            // pass the necessary data to the cerver buffer handler
+            RecvdBufferData *data = rcvd_buffer_data_new (cerver, socket_fd, packetBuffer, rc, onHold);
+            cerver->handle_recieved_buffer (data);
         }
     // } while (true);
 
 }
 
-// FIXME: move this from here!!
+static void *cerver_accept (void *ptr) {
 
-static i32 cerver_accept (Cerver *server) {
+    if (ptr) {
+        Cerver *cerver = (Cerver *) ptr;
 
-    Client *client = NULL;
+        // accept the new connection
+        struct sockaddr_storage client_address;
+        memset (&client_address, 0, sizeof (struct sockaddr_storage));
+        socklen_t socklen = sizeof (struct sockaddr_storage);
 
-	struct sockaddr_storage clientAddress;
-	memset (&clientAddress, 0, sizeof (struct sockaddr_storage));
-    socklen_t socklen = sizeof (struct sockaddr_storage);
+        i32 new_fd = accept (cerver->sock, (struct sockaddr *) &client_address, &socklen);
+        if (new_fd > 0) {
+            #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Accepted a new client connection.");
+            #endif
 
-    i32 newfd = accept (server->serverSock, (struct sockaddr *) &clientAddress, &socklen);
+            Client *client = client_create (new_fd, client_address);
+            if (client) {
+                bool failed = false;
 
-    if (newfd < 0) {
-        // if we get EWOULDBLOCK, we have accepted all connections
-        if (errno != EWOULDBLOCK) cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Accept failed!");
-        return -1;
-    }
+                // if we requiere authentication, we send the client to the on hold structure
+                if (cerver->auth_required) client_on_hold (cerver, client, new_fd);
 
-    #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Accepted a new client connection.");
-    #endif
+                // if not, just register to the cerver as new client
+                else {
+                    // if we need to generate session ids...
+                    if (cerver->use_sessions) {
+                        char *session_id = (char *) cerver->session_id_generator (client);
+                        if (session_id) {
+                            #ifdef CERVER_DEBUG
+                            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
+                                c_string_create ("Generated client session id: %s", session_id));
+                            #endif
+                            client_set_session_id (client, session_id);
 
-    // get client values to use as default id in avls
-    char *connection_values = client_getConnectionValues (newfd, clientAddress);
-    if (!connection_values) {
-        cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to get client connection values.");
-        close (newfd);
-        return -1;
-    }
+                            client_register_to_cerver (cerver, client);
+                        }
 
-    else {
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
-            c_string_create ("Connection values: %s", connection_values));
-        #endif
-    } 
+                        else {
+                            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                                "Failed to generate client session id!");
+                            // TODO: do we want to drop the client connection?
+                            failed = true;
+                        }
+                    }
 
-    client = newClient (server, newfd, clientAddress, connection_values);
+                    // just register the client to the cerver
+                    else client_register_to_cerver (cerver, client);
+                } 
 
-    // if we requiere authentication, we send the client to on hold structure
-    if (server->authRequired) onHoldClient (server, client, newfd);
+                if (!failed) {
+                    // send cerver info packet
+                    if (cerver->type != WEB_SERVER) {
+                        if (packet_send (cerver->cerver_info_packet, 0)) {
+                            cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
+                                c_string_create ("Failed to send cerver %s info packet!", cerver->name->str));
+                        }   
+                    }
+                    
+                    // trigger cerver on client connected action
+                    if (cerver->on_client_connected) 
+                        cerver->on_client_connected (cerver->on_client_connected_data);
+                        
+                }
 
-    // if not, just register to the server as new client
-    else {
-        // if we need to generate session ids...
-        if (server->useSessions) {
-            // FIXME: change to the custom generate session id action in server->generateSessionID
-            char *session_id = session_default_generate_id (newfd, clientAddress);
-            if (session_id) {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
-                    c_string_create ("Generated client session id: %s", session_id));
+                    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
+                        c_string_create ("A new client connected to cerver %s!", cerver->name->str));
                 #endif
-
-                client_set_sessionID (client, session_id);
             }
-            
-            else cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to generate session id!");
+
+            else {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_ERROR, LOG_CLIENT, "Failed to create a new client!");
+                #endif
+            }
         }
 
-        client_registerToServer (server, client, newfd);
-    } 
-
-    // FIXME: add the option to select which connection values to send!!!
-    // if (server->type != WEB_SERVER) sendServerInfo (server, newfd, clientAddress);
-   
-    #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "A new client connected to the server!");
-    #endif
-
-    return newfd;
+        else {
+            // if we get EWOULDBLOCK, we have accepted all connections
+            if (errno != EWOULDBLOCK) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Accept failed!");
+                perror ("Error");
+            } 
+        }
+    }
 
 }
 
-// server poll loop to handle events in the registered socket's fds
+// cerver poll loop to handle events in the registered socket's fds
 u8 cerver_poll (Cerver *cerver) {
 
     u8 retval = 1;
@@ -347,7 +367,7 @@ u8 cerver_poll (Cerver *cerver) {
         int poll_retval = 0;
 
         while (cerver->isRunning) {
-            poll_retval = poll (cerver->fds, poll_n_fds, cerver->poll_timeout);
+            poll_retval = poll (cerver->fds, cerver->current_n_fds, cerver->poll_timeout);
 
             // poll failed
             if (poll_retval < 0) {
@@ -387,11 +407,11 @@ u8 cerver_poll (Cerver *cerver) {
                 }
 
                 // TODO: maybe later add this directly to the thread pool
-                // not the server socket, so a connection fd must be readable
+                // not the cerver socket, so a connection fd must be readable
                 else cerver_recieve (cerver, cerver->fds[i].fd, false);
             }
 
-            // if (server->compress_clients) compressClients (server);
+            // if (cerver->compress_clients) compressClients (cerver);
         }
 
         #ifdef CERVER_DEBUG
@@ -402,7 +422,7 @@ u8 cerver_poll (Cerver *cerver) {
         retval = 0;
     }
 
-    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't listen for connections on a NULL server!");
+    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't listen for connections on a NULL cerver!");
 
     return retval;
 

@@ -21,6 +21,7 @@
 
 #pragma region Sessions
 
+// FIXME: take a client to get values
 // TODO: refactor to use timestamps to generate the token
 // create a unique session id for each client based on connection values
 char *session_default_generate_id (i32 fd, const struct sockaddr_storage address) {

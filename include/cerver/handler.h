@@ -22,6 +22,9 @@ typedef struct RecvdBufferData {
 
 extern void rcvd_buffer_data_delete (RecvdBufferData *data);
 
+// get a free index in the main cerver poll strcuture
+extern i32 cerver_poll_get_free_idx (Cerver *cerver);
+
 // server poll loop to handle events in the registered socket's fds
 extern u8 cerver_poll (Cerver *cerver);
 

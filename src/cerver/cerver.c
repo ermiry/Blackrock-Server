@@ -196,7 +196,7 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
 
 // configures the cerver to use client sessions
 // retuns 0 on success, 1 on error
-u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator) {
+u8 cerver_set_sessions (Cerver *cerver, void *(*session_id_generator) (void *)) {
 
     u8 retval = 1;
 

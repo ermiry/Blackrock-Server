@@ -74,6 +74,9 @@ typedef struct _Client Client;
 extern Client *client_new (void);
 extern void client_delete (void *ptr);
 
+// creates a new client and registers a new connection
+extern Client *client_create (const i32 sock_fd, const struct sockaddr_storage address);
+
 // sets the client's session id
 extern void client_set_session_id (Client *client, const char *session_id);
 
@@ -86,30 +89,7 @@ extern int client_comparator_client_id (const void *a, const void *b);
 // compare clients based on their session ids
 extern int client_comparator_session_id (const void *a, const void *b);
 
-
-extern Client *newClient (struct _Cerver *cerver, i32 clientSock, struct sockaddr_storage address,
-    char *connection_values);
-extern void destroyClient (void *data);
-extern void client_delete_data (Client *client);
-
-extern u8 client_registerNewConnection (Client *client, i32 socket_fd);
-extern u8 client_unregisterConnection (Client *client, i32 socket_fd);
-
-extern char *client_getConnectionValues (i32 fd, const struct sockaddr_storage address);
-
-extern void client_set_sessionID (Client *client, const char *sessionID);
-
-extern Client *getClientBySocket (AVLNode *node, i32 socket_fd);
-extern Client *getClientBySession (AVLTree *clients, char *sessionID);
-
-extern void client_registerToServer (struct _Cerver *cerver, Client *client, i32);
-extern Client *client_unregisterFromServer (struct _Cerver *cerver, Client *client);
-
-extern void client_closeConnection (struct _Cerver *cerver, Client *client);
-
-// disconnect the client from the cerver by a socket -- usefull for http servers
-extern int client_disconnect_by_socket (struct _Cerver *cerver, const int sock_fd);
-
-extern void client_checkTimeouts (struct _Cerver *cerver);
+// registers a client to the cerver
+extern u8 client_register_to_cerver (struct _Cerver *cerver, Client *client);
 
 #endif

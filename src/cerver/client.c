@@ -8,9 +8,11 @@
 
 #include "cerver/network.h"
 #include "cerver/cerver.h"
+#include "cerver/handler.h"
 #include "cerver/client.h"
 
 #include "cerver/collections/avl.h"
+#include "cerver/collections/dllist.h"
 
 #include "cerver/utils/log.h"
 #include "cerver/utils/utils.h"
@@ -174,6 +176,25 @@ void client_delete (void *ptr) {
 
 }
 
+// TODO: create connected time stamp
+// creates a new client and registers a new connection
+Client *client_create (const i32 sock_fd, const struct sockaddr_storage address) {
+
+    Client *client = client_new ();
+    if (client) {
+        Connection *connection = client_connection_create (sock_fd, address);
+        if (connection) client_connection_register (client, connection);
+        else {
+            // failed to create a new connection
+            client_delete (client);
+            client = NULL;
+        }
+    }
+
+    return client;
+
+}
+
 // sets the client's session id
 void client_set_session_id (Client *client, const char *session_id) {
 
@@ -210,14 +231,57 @@ int client_comparator_session_id (const void *a, const void *b) {
 
 }
 
-// FIXME:
-// TODO: create connected time stamp
-Client *client_create (const i32 sock_fd, const struct sockaddr_storage address) {
+// TODO: realloc cerver main poll if full!!
+// registers a client to the cerver
+u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
-    Client *client = client_new ();
-    if (client) {
+    u8 retval = 1;
 
+    if (cerver && client) {
+        // register all the client connections to the cerver poll
+        Connection *connection = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            connection = (Connection *) le->data;
+
+            i32 idx = cerver_poll_get_free_idx (cerver);
+            if (idx > 0) {
+                cerver->fds[idx].fd = connection->sock_fd;
+                cerver->fds[idx].events = POLLIN;
+                cerver->current_n_fds++;
+
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+                    c_string_create ("Added new sock fd to cerver %s main poll, idx: %i", 
+                    cerver->name->str, idx));
+                #endif
+            }
+
+            else {
+                // FIXME: realloc cerver poll
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                    c_string_create ("Cerver %s main poll is full!", cerver->name->str));
+                #endif
+            }
+        }
+
+        // register the client to the cerver client's
+        avl_insert_node (cerver->clients, client);
+
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
+            c_string_create ("Registered a new client to cerver %s.", cerver->name->str));
+        #endif
+        
+        cerver->n_connected_clients++;
+        #ifdef CERVER_STATS
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+            c_string_create ("Connected clients to cerver %s: %i.", 
+            cerver->name->str, cerver->n_connected_clients));
+        #endif
     }
+
+    return retval;
 
 }
 
@@ -265,46 +329,6 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
     }
 
     return NULL;
-
-}
-
-// FIXME: what is the max number of clients that a cerver can handle?
-// registers a NEW client to the cerver
-void client_registerToServer (Cerver *cerver, Client *client, i32 newfd) {
-
-    if (cerver && client) {
-        // add the new sock fd to the cerver main poll
-        i32 idx = getFreePollSpot (cerver);
-        if (idx > 0) {
-            cerver->fds[idx].fd = newfd;
-            cerver->fds[idx].events = POLLIN;
-            cerver->nfds++;
-
-            printf ("client_registerToServer () - idx: %i\n", idx);
-
-            // insert the new client into the cerver's clients
-            avl_insert_node (cerver->clients, client);
-
-            cerver->connectedClients++;
-
-            #ifdef CERVER_STATS
-                cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
-                c_string_create ("New client registered to cerver. Connected clients: %i.", 
-                cerver->connectedClients));
-            #endif
-        }
-
-        // TODO: how to better handle this error?
-        else {
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                "Failed to get a free main poll idx. Is the cerver full?");
-            // just drop the client connection
-            close (newfd);
-
-            // if it was the only client connection, drop it
-            if (client->n_active_cons <= 1) client_closeConnection (cerver, client);
-        } 
-    }
 
 }
 
