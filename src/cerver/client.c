@@ -15,6 +15,65 @@
 #include "cerver/utils/log.h"
 #include "cerver/utils/utils.h"
 
+void client_connection_get_values (Connection *connection);
+
+Connection *client_connection_new (void) {
+
+    Connection *connection = (Connection *) malloc (sizeof (Connection));
+    if (connection) {
+        memset (connection, 0, sizeof (Connection));
+        connection->ip = NULL;
+    }
+
+    return connection;
+
+}
+
+// FIXME: pass time stamp
+Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_storage address) {
+
+    Connection *connection = client_connection_new ();
+    if (connection) {
+        memcpy (&connection->address, &address, sizeof (struct sockaddr_storage));
+        client_connection_get_values (connection);
+    }
+
+}
+
+void client_connection_delete (void *ptr) {
+
+    if (ptr) {
+        Connection *connection = (Connection *) ptr;
+        str_delete (connection->ip);
+        free (connection);
+    }
+
+}
+
+// compare two connections by their socket fds
+int client_connection_comparator (const void *a, const void *b) {
+
+    if (a && b) {
+        Connection *con_a = (Connection *) a;
+        Connection *con_b = (Connection *) b;
+
+        if (con_a->sock_fd < con_b->sock_fd) return -1;
+        else if (con_a->sock_fd == con_b->sock_fd) return 0;
+        else return 1; 
+    }
+
+}
+
+// get from where the client is connecting
+void client_connection_get_values (Connection *connection) {
+
+    if (connection) {
+        connection->ip = str_new (sock_ip_to_string ((const struct sockaddr *) &connection->address));
+        connection->port = sock_ip_port ((const struct sockaddr *) &connection->address);
+    }
+
+}
+
 Client *client_new (void) {
 
     Client *client = (Client *) malloc (sizeof (Client));
@@ -22,12 +81,14 @@ Client *client_new (void) {
         memset (client, 0, sizeof (Client));
 
         client->client_id = NULL;
-        client->ip = NULL;
         client->session_id = NULL;
 
-        client->active_connections = NULL;
+        client->connections = dlist_init (client_connection_delete, client_connection_comparator);
 
         client->drop_client = false;
+
+        client->data = NULL;
+        client->delete_data = NULL;
     }
 
     return client;
@@ -40,22 +101,16 @@ void client_delete (void *ptr) {
         Client *client = (Client *) ptr;
 
         str_delete (client->client_id);
-        str_delete (client->ip);
         str_delete (client->session_id);
 
-        if (client->active_connections) free (client->active_connections);
+        dlist_destroy (client->connections);
+
+        if (client->data) {
+            if (client->delete_data) client->delete_data (client->data);
+            else free (client->data);
+        }
 
         free (client);
-    }
-
-}
-
-// get from where the client is connecting
-void client_get_connection_values (Client *client) {
-
-    if (client) {
-        client->ip = str_new (sock_ip_to_string ((const struct sockaddr *) &client->address));
-        client->port = sock_ip_port ((const struct sockaddr *) &client->address);
     }
 
 }
@@ -70,26 +125,47 @@ void client_set_session_id (Client *client, const char *session_id) {
 
 }
 
+// sets client's data and a way to destroy it
+void client_set_data (Client *client, void *data, Action delete_data) {
+
+    if (client) {
+        client->data = data;
+        client->delete_data = delete_data;
+    }
+
+}
+
+// compare clients based on their client ids
+int client_comparator_client_id (const void *a, const void *b) {
+
+    if (a && b) 
+        return str_compare (((Client *) a)->client_id, ((Client *) b)->client_id);
+
+}
+
+// compare clients based on their session ids
+int client_comparator_session_id (const void *a, const void *b) {
+
+    if (a && b) 
+        return str_compare (((Client *) a)->session_id, ((Client *) b)->session_id);
+
+}
+
+// FIXME:
+// TODO: create connected time stamp
+Client *client_create (const i32 sock_fd, const struct sockaddr_storage address) {
+
+    Client *client = client_new ();
+    if (client) {
+
+    }
+
+}
 
 Client *newClient (Cerver *cerver, i32 clientSock, struct sockaddr_storage address,
     char *connection_values) {
 
     Client *client = NULL;
-
-    client = (Client *) malloc (sizeof (Client));
-    client->clientID = NULL;
-    client->sessionID = NULL;
-    // client->active_connections = NULL;
-
-    // if (cerver->clientsPool) client = pool_pop (cerver->clientsPool);
-
-    // if (!client) {
-    //     client = (Client *) malloc (sizeof (Client));
-    //     client->sessionID = NULL;
-    //     client->active_connections = NULL;
-    // } 
-
-    memcpy (&client->address, &address, sizeof (struct sockaddr_storage));
 
     // printf ("address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
     // printf ("client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
@@ -129,64 +205,6 @@ Client *newClient (Cerver *cerver, i32 clientSock, struct sockaddr_storage addre
     } 
 
     return client;
-
-}
-
-// FIXME: what happens with the idx in the poll structure?
-// deletes a client forever
-void destroyClient (void *data) {
-
-    if (data) {
-        Client *client = (Client *) data;
-
-        if (client->active_connections) {
-            // close all the client's active connections
-            // for (u8 i = 0; i < client->n_active_cons; i++)
-            //     close (client->active_connections[i]);
-
-            free (client->active_connections);
-        }
-
-        if (client->clientID) free (client->clientID);
-        if (client->sessionID) free (client->sessionID);
-
-        free (client);
-    }
-
-}
-
-// destroy client without closing his connections
-void client_delete_data (Client *client) {
-
-    if (client) {
-        if (client->clientID) free (client->clientID);
-        if (client->sessionID) free (client->sessionID);
-        if (client->active_connections) free (client->active_connections);
-    }
-
-}
-
-// compare clients based on their client ids
-int client_comparator_client_id (const void *a, const void *b) {
-
-    if (a && b) {
-        Client *client_a = (Client *) a;
-        Client *client_b = (Client *) b;
-
-        return strcmp (client_a->clientID, client_b->clientID);
-    }
-
-}
-
-// compare clients based on their session ids
-int client_comparator_session_id (const void *a, const void *b) {
-
-    if (a && b) {
-        Client *client_a = (Client *) a;
-        Client *client_b = (Client *) b;
-
-        return strcmp (client_a->sessionID, client_b->sessionID);
-    }
 
 }
 

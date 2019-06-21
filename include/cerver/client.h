@@ -14,7 +14,29 @@
 
 struct _Cerver;
 
-#define DEFAULT_CLIENT_MAX_CONNECTS         3
+// a connection from a client
+typedef struct Connection {
+
+    // connection values
+    i32 sock_fd;
+    u16 port;
+    String *ip;
+    struct sockaddr_storage address;
+    time_t connected_time_stamp;
+
+    // authentication
+    u8 auth_tries;           // remaining attemps to authenticate
+
+} Connection;
+
+extern Connection *client_connection_new (void);
+extern void client_connection_delete (void *ptr);
+
+// compare two connections by their socket fds
+extern int client_connection_comparator (const void *a, const void *b);
+
+// get from where the client is connecting
+extern void client_connection_get_values (Connection *connection);
 
 // anyone that connects to the cerver
 struct _Client {
@@ -22,24 +44,15 @@ struct _Client {
     // generated using connection values
     String *client_id;
 
-    // connection values
-    u16 port;
-    String *ip;
-    struct sockaddr_storage address;
-    time_t connected_time_stamp;
+    DoubleList *connections;
 
+    // multiple connections can be associated with the same client using the same session id
     String *session_id;
 
-    // FIXME: 20/06/19 --- how can we better manage these?
-    // a client may need to have multiple connections at the same time...
-    // client connections associated with the same session id
-    u8 n_active_cons;
-    u8 curr_max_cons;
-    i32 *active_connections;
-
-    // authentication
-    u8 auth_tries;           // remaining attemps to authenticate
     bool drop_client;        // client failed to authenticate
+
+    void *data;
+    Action delete_data;
 
 };
 
@@ -48,11 +61,11 @@ typedef struct _Client Client;
 extern Client *client_new (void);
 extern void client_delete (void *ptr);
 
-// get from where the client is connecting
-extern void client_get_connection_values (Client *client);
-
 // sets the client's session id
 extern void client_set_session_id (Client *client, const char *session_id);
+
+// sets client's data and a way to destroy it
+extern void client_set_data (Client *client, void *data, Action delete_data);
 
 // compare clients based on their client ids
 extern int client_comparator_client_id (const void *a, const void *b);
