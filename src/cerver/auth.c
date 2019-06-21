@@ -151,7 +151,7 @@ static u8 clients_on_hold_poll (void *ptr) {
             }
 
             // one or more fd(s) are readable, need to determine which ones they are
-            for (u16 i = 0; i < cerver->current_hold_nfds; i++) {
+            for (u16 i = 0; i < cerver->current_on_hold_nfds; i++) {
                 if (cerver->hold_fds[i].revents == 0) continue;
                 if (cerver->hold_fds[i].revents != POLLIN) continue;
 

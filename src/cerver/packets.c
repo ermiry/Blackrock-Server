@@ -360,35 +360,6 @@ void recievePackets (void) {
 
 }
 
-// just creates an erro packet -> used directly when broadcasting to many players
-void *generateErrorPacket (ErrorType type, const char *msg) {
-
-    size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
-    
-    void *begin = generatePacket (ERROR_PACKET, packetSize);
-    char *end = begin + sizeof (PacketHeader); 
-
-    ErrorData *edata = (ErrorData *) end;
-    edata->type = type;
-    if (msg) {
-        if (strlen (msg) > sizeof (edata->msg)) {
-            // clamp the value to fit inside edata->msg
-            u16 i = 0;
-            while (i < sizeof (edata->msg) - 1) {
-                edata->msg[i] = msg[i];
-                i++;
-            }
-
-            edata->msg[i] = '\0';
-        }
-
-        else strcpy (edata->msg, msg);
-    }
-
-    return begin;
-
-}
-
 // broadcast a packet/msg to all clients inside a client's tree
 void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 

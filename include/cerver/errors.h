@@ -29,8 +29,11 @@ typedef struct Error {
 
 } Error;
 
-// handles error packets
-extern void error_packet_handler (Packet *packet);
+extern Error *error_new (ErrorType error_type, const char *msg);
+extern void error_delete (void *ptr);
+
+// creates an error packet ready to be sent
+extern Packet *error_packet_generate (ErrorType error_type, const char *msg);
 
 // serialized error data
 typedef struct SError {
@@ -39,3 +42,5 @@ typedef struct SError {
     char msg[64];
 
 } SError;
+
+#endif
