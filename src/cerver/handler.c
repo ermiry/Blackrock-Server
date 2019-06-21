@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
@@ -12,66 +13,64 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-static RecvdBufferData *rcvd_buffer_data_new (Cerver *cerver, i32 socket_fd, char *packet_buffer, size_t total_size, bool on_hold) {
+// FIXME:
+// handle packet based on type
+static void cerver_packet_handler (void *ptr) {
 
-    RecvdBufferData *data = (RecvdBufferData *) malloc (sizeof (RecvdBufferData));
-    if (data) {
-        data->cerver = cerver;
-        data->sock_fd = socket_fd;
+    if (ptr) {
+        Packet *packet = (Packet *) ptr;
+        if (!packet_check (packet)) {
+            switch (packet->header->packet_type) {
+                // handles cerver type packets
+                case SERVER_PACKET: cerver_packet_handler (packet); break;
 
-        data->buffer = (char *) calloc (total_size, sizeof (char));
-        memcpy (data->buffer, packet_buffer, total_size);
-        data->total_size = total_size;
+                // handles an error from the server
+                case ERROR_PACKET: error_packet_handler (packet); break;
 
-        data->onHold = on_hold;
-    }
+                // handles authentication packets
+                case AUTH_PACKET: auth_packet_handler (packet); break;
 
-    return data;
+                // handles a request made from the server
+                case REQUEST_PACKET: break;
 
-}
+                // handle a game packet sent from the server
+                case GAME_PACKET: break;
 
-void rcvd_buffer_data_delete (RecvdBufferData *data) {
+                // FIXME:
+                // user set handler to handle app specific errors
+                case APP_ERROR_PACKET: 
+                    // if (pack_info->client->appErrorHandler)  
+                    //     pack_info->client->appErrorHandler (pack_info);
+                    break;
 
-    if (data) {
-        if (data->buffer) free (data->buffer);
-        free (data);
-    }
+                // FIXME:
+                // user set handler to handler app specific packets
+                case APP_PACKET:
+                    // if (pack_info->client->appPacketHandler)
+                    //     pack_info->client->appPacketHandler (pack_info);
+                    break;
 
-}
+                // custom packet hanlder
+                case CUSTOM_PACKET: break;
 
-// get a free index in the main cerver poll strcuture
-i32 cerver_poll_get_free_idx (Cerver *cerver) {
+                // FIXME:
+                // handles test packets
+                case TEST_PACKET: break;
 
-    if (cerver) {
-        for (u32 i = 0; i < cerver->max_n_fds; i++)
-            if (cerver->fds[i].fd == -1) return i;
-
-        return 0;
-    }
-
-    return -1;
-
-}
-
-// we remove any fd that was set to -1 for what ever reason
-static void compressClients (Cerver *cerver) {
-
-    if (cerver) {
-        cerver->compress_clients = false;
-
-        for (u16 i = 0; i < cerver->nfds; i++) {
-            if (cerver->fds[i].fd == -1) {
-                for (u16 j = i; j < cerver->nfds; j++) 
-                    cerver->fds[j].fd = cerver->fds[j + 1].fd;
-
-                i--;
-                cerver->nfds--;
+                default:
+                    #ifdef CLIENT_DEBUG
+                    cengine_log_msg (stdout, WARNING, NO_TYPE, "Got a packet of unknown type.");
+                    #endif
+                    break;
             }
         }
-    }  
+
+        packet_delete (packet);
+    }
 
 }
 
+// FIXME: old!
 // called with the th pool to handle a new packet
 void handlePacket (void *data) {
 
@@ -131,6 +130,7 @@ void handlePacket (void *data) {
 
 }
 
+// FIXME: old!
 // split the entry buffer in packets of the correct size
 void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 
@@ -188,9 +188,93 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 
 }
 
+static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd, 
+    char *buffer, size_t buffer_size) {
+
+    if (buffer && (buffer_size > 0)) {
+        u32 buffer_idx = 0;
+        char *end = buffer;
+
+        PacketHeader *header = NULL;
+        u32 packet_size;
+        char *packet_data = NULL;
+
+        while (buffer_idx < buffer_size) {
+            header = (PacketHeader *) end;
+
+            // check the packet size
+            packet_size = header->packet_size;
+            if (packet_size > 0) {
+                // copy the content of the packet from the buffer
+                packet_data = (char *) calloc (packet_size, sizeof (char));
+                for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
+                    packet_data[i] = buffer[buffer_idx];
+
+                Packet *packet = packet_new ();
+                if (packet) {
+                    // FIXME:
+                    // packet->connection = client_connection_get_by_socket (client, socket_fd);
+                    // packet->header = header;
+                    // packet->packet_size = packet_size;
+                    // packet->packet = packet_data;
+
+                    // thpool_add_work (client->thpool, (void *) client_packet_handler, packet);
+                }
+
+                end += packet_size;
+            }
+
+            else break;
+        }
+    }
+
+}
+
+// FIXME: correctly end client connection on error
 // TODO: add support for handling large files transmissions
-// what happens if my buffer isn't enough, for example a larger file?
-// recive all incoming data from the socket
+// receive all incoming data from the socket
+static void cerver_receive (Cerver *cerver, i32 sock_fd, bool on_hold) {
+
+    ssize_t rc;
+    char packet_buffer[MAX_UDP_PACKET_SIZE];
+    memset (packet_buffer, 0, MAX_UDP_PACKET_SIZE);
+
+    // do {
+        rc = recv (sock_fd, packet_buffer, sizeof (packet_buffer), 0);
+        
+        if (rc < 0) {
+            if (errno != EWOULDBLOCK) {     // no more data to read 
+                #ifdef CERVER_DEBUG 
+                cerver_log_msg (stderr, ERROR, NO_TYPE, "cerver_recieve () - rc < 0");
+                perror ("Error ");
+                #endif
+            }
+
+            // /break;
+        }
+
+        else if (rc == 0) {
+            // man recv -> steam socket perfomed an orderly shutdown
+            // but in dgram it might mean something?
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, DEBUG_MSG, NO_TYPE, "cerver_recieve () - rc == 0");
+            #endif
+            // break;
+        }
+        
+        else {
+            char *buffer_data = (char *) calloc (rc, sizeof (char));
+            if (buffer_data) {
+                memcpy (buffer_data, packet_buffer, rc);
+                cerver_handle_receive_buffer (cerver, sock_fd, buffer_data, rc);
+            }
+        }
+        
+    // } while (true);
+
+}
+
+// FIXME: old!
 static void cerver_recieve (Cerver *cerver, i32 socket_fd, bool onHold) {
 
     // if (onHold) cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - on hold client!");
@@ -352,6 +436,38 @@ static void *cerver_accept (void *ptr) {
 
 }
 
+// get a free index in the main cerver poll strcuture
+i32 cerver_poll_get_free_idx (Cerver *cerver) {
+
+    if (cerver) {
+        for (u32 i = 0; i < cerver->max_n_fds; i++)
+            if (cerver->fds[i].fd == -1) return i;
+
+        return 0;
+    }
+
+    return -1;
+
+}
+
+// we remove any fd that was set to -1 for what ever reason
+static void cerver_poll_compress_clients (Cerver *cerver) {
+
+    if (cerver) {
+        cerver->compress_clients = false;
+
+        for (u32 i = 0; i < cerver->max_n_fds; i++) {
+            if (cerver->fds[i].fd == -1) {
+                for (u32 j = i; j < cerver->max_n_fds - 1; j++) 
+                    cerver->fds[j].fd = cerver->fds[j + 1].fd;
+                    
+            }
+        }
+    }  
+
+}
+
+// TODO: cerver_accept and cerver_recieve created in new threads
 // cerver poll loop to handle events in the registered socket's fds
 u8 cerver_poll (Cerver *cerver) {
 
