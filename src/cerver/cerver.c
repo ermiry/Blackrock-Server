@@ -20,6 +20,7 @@
 #include "cerver/auth.h"
 #include "cerver/handler.h"
 #include "cerver/cerver.h"
+#include "cerver/client.h"
 #include "cerver/game/game.h"
 
 #include "cerver/collections/dllist.h"
@@ -46,21 +47,39 @@ Cerver *cerver_new (Cerver *cerver) {
             c->port = cerver->port;
             c->connection_queue = cerver->connection_queue;
             c->poll_timeout = cerver->poll_timeout;
-            c->auth_required = cerver->auth_required;
             c->type = cerver->type;
         }
+
+        else {
+            c->use_ipv6 = 0;
+            c->protocol = PROTOCOL_TCP;
+        }
+
+        // by default the socket is assumed to be a blocking socket
+        c->blocking = true;
+        
+        c->server_data = NULL;
+        c->delete_server_data = NULL;
+
+        c->thpool = NULL;
+
+        c->clients = NULL;
+        c->on_client_connected = NULL;
+        c->on_client_connected_data = NULL;
+        c->delete_on_client_connected_data = NULL;
+
+        c->fds = NULL;
+
+        c->on_hold_clients = NULL;
+        c->hold_fds = NULL;
 
         c->name = NULL;
         c->welcome_msg = NULL;
 
-        c->delete_server_data = NULL;
-
-        // by default the socket is assumed to be a blocking socket
-        c->blocking = true;
-
         c->auth = NULL;
         c->auth_required = false;
         c->use_sessions = false;
+        c->session_id_generator = NULL;
         
         c->isRunning = false;
     }
@@ -77,6 +96,12 @@ void cerver_delete (void *ptr) {
 
         str_delete (cerver->name);
         str_delete (cerver->welcome_msg);
+
+        if (cerver->on_client_connected_data) {
+            if (cerver->delete_on_client_connected_data)
+                cerver->delete_on_client_connected_data (cerver->on_client_connected_data);
+            else free (cerver->on_client_connected_data);
+        }
 
         free (cerver);
     }
@@ -104,6 +129,50 @@ u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
 
 }
 
+// sets an action to be performed by the cerver when a new client connects
+u8 cerver_set_on_client_connected  (Cerver *cerver, 
+    Action on_client_connected, void *data, Action delete_data) {
+
+    if (cerver) {
+        cerver->on_client_connected = on_client_connected;
+        cerver->on_client_connected_data = data;
+        cerver->delete_on_client_connected_data = delete_data;
+        return 0;
+    }
+
+    return 1;
+
+}
+
+// init on hold client on hold structures and values
+static u8 cerver_on_hold_init (Cerver *cerver) {
+
+    u8 retval = 1;
+
+    if (cerver) {
+        // FIXME: we dont want to fully destroy the clients!!
+        cerver->on_hold_clients = avl_init (client_comparator_client_id, destroyClient);
+        if (cerver->on_hold_clients) {
+            cerver->hold_fds = (struct pollfd *) calloc (poll_n_fds, sizeof (struct pollfd));
+            if (cerver->hold_fds) {
+                memset (cerver->hold_fds, 0, sizeof (cerver->hold_fds));
+                cerver->max_on_hold_clients = poll_n_fds;
+                cerver->current_n_fds = 0;
+                for (u32 i = 0; i < cerver->max_on_hold_clients; i++)
+                    cerver->hold_fds[i].fd = -1;
+
+                cerver->compress_hold_clients = false;
+                cerver->holding_clients = false;
+
+                retval = 0;
+            }
+        }
+    }
+
+    return 1;
+
+}
+
 // configures the cerver to require client authentication upon new client connections
 // retuns 0 on success, 1 on error
 u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
@@ -117,18 +186,7 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
             cerver->auth->authenticate = authenticate;
             cerver->auth->auth_packet = auth_packet_generate ();
 
-            // FIXME:
-            if (cerver->auth_required) {
-                cerver->on_hold_clients = avl_init (client_comparator_clientID, destroyClient);
-
-                memset (cerver->hold_fds, 0, sizeof (cerver->hold_fds));
-                cerver->current_on_hold_nfds = 0;
-                cerver->compress_hold_clients = false;
-
-                cerver->n_hold_clients = 0;
-
-                for (u16 i = 0; i < poll_n_fds; i++) cerver->hold_fds[i].fd = -1;
-            }
+            retval = cerver_on_hold_init (cerver);
         }
     }
 
@@ -160,7 +218,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
     u8 retval = 1;
 
     if (cerver) {
-        cerver->clients = avl_init (client_comparator_clientID, destroyClient);
+        cerver->clients = avl_init (client_comparator_client_id, destroyClient);
 
         // initialize main pollfd structures
         cerver->fds = (struct pollfd *) calloc (poll_n_fds, sizeof (struct pollfd));
@@ -594,14 +652,16 @@ u8 cerver_start (Cerver *cerver) {
         } 
     }
 
+    cerver->cerver_info_packet = cerver_packet_generate (cerver);
+
     switch (cerver->protocol) {
         case PROTOCOL_TCP: {
             if (!cerver->blocking) {
                 if (!listen (cerver->sock, cerver->connection_queue)) {
                     // set up the initial listening socket     
-                    cerver->fds[cerver->nfds].fd = cerver->sock;
-                    cerver->fds[cerver->nfds].events = POLLIN;
-                    cerver->nfds++;
+                    cerver->fds[cerver->current_n_fds].fd = cerver->sock;
+                    cerver->fds[cerver->current_n_fds].events = POLLIN;
+                    cerver->current_n_fds++;
 
                     cerver->isRunning = true;
 
@@ -698,6 +758,7 @@ static void cerver_destroy_clients (Cerver *cerver) {
 
 }
 
+// FIXME:
 // teardown a cerver -> stop the cerver and clean all of its data
 u8 cerver_teardown (Cerver *cerver) {
 
@@ -761,13 +822,66 @@ u8 cerver_teardown (Cerver *cerver) {
     } 
 
     // destroy any other cerver data
-    if (cerver->packetPool) pool_clear (cerver->packetPool);
-    if (cerver->serverInfo) free (cerver->serverInfo);
+    // if (cerver->packetPool) pool_clear (cerver->packetPool);
+    // if (cerver->serverInfo) free (cerver->serverInfo);
 
     cerver_delete (cerver);
 
     cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE, "Cerver teardown was successfull!");
 
     return 0;
+
+}
+
+/*** serialization ***/
+
+static inline SCerver *scerver_new (void) {
+
+    SCerver *scerver = (SCerver *) malloc (sizeof (SCerver));
+    if (scerver) memset (scerver, 0, sizeof (SCerver));
+    return scerver;
+
+}
+
+static inline void scerver_delete (void *ptr) { if (ptr) free (ptr); }
+
+// srealizes the cerver 
+static SCerver *cerver_serliaze (Cerver *cerver) {
+
+    if (cerver) {
+        SCerver *scerver = scerver_new ();
+        if (scerver) {
+            scerver->use_ipv6 = cerver->use_ipv6;
+            scerver->protocol = cerver->protocol;
+            scerver->port = cerver->port;
+
+            strncpy (scerver->name, cerver->name, 32);
+            scerver->type = cerver->type;
+            scerver->auth_required = cerver->auth_required;
+            scerver->uses_sessions = cerver->use_sessions;
+        }
+
+        return scerver;
+    }
+
+    return NULL;
+
+}
+
+// creates a cerver info packet ready to be sent
+Packet *cerver_packet_generate (Cerver *cerver) {
+
+    Packet *packet = NULL;
+
+    if (cerver) {
+        SCerver *scerver = cerver_serliaze (cerver);
+        if (scerver) {
+            packet = packet_create (SERVER_INFO, &scerver, sizeof (SCerver));
+            packet_generate (packet);
+            scerver_delete (scerver);
+        }
+    }
+
+    return packet;
 
 }

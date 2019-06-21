@@ -27,29 +27,49 @@ void error_delete (void *ptr) {
 
 }
 
-SError error_serialize (Error *error) {
+static inline SError *serror_new (void) { 
+
+    SError *serror = (SError *) malloc (sizeof (SError));
+    if (serror) memset (serror, 0, sizeof (SError));
+    return serror;
+
+}
+
+static inline serror_delete (void *ptr) { if (ptr) free (ptr); }
+
+static SError *error_serialize (Error *error) {
 
     if (error) {
-        SError serror;
-        serror.error_type = error->error_type;
-        memset (serror.msg, 0, 64);
-        strncpy (serror.msg, error->msg, 64);
+        SError *serror = serror_new ();
+        serror->error_type = error->error_type;
+        memset (serror->msg, 0, 64);
+        strncpy (serror->msg, error->msg, 64);
 
         return serror;
     }
+
+    return NULL;
 
 }
 
 // creates an error packet ready to be sent
 Packet *error_packet_generate (ErrorType error_type, const char *msg) {
 
+    Packet *packet = NULL;
+
     Error *error = error_new (error_type, msg);
-    SError serror = error_serialize (error);
+    if (error) {
+        SError *serror = error_serialize (error);
+        if (serror) {
+            packet = packet_create (ERROR_PACKET, serror, sizeof (SError));
+            packet_generate (packet);
 
-    Packet *packet = packet_create (ERROR_PACKET, &serror, sizeof (SError));
+            serror_delete (serror);
+        }
 
-    error_delete (error);
-    
+        error_delete (error);
+    }
+
     return packet;
 
 }

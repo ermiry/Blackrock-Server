@@ -38,8 +38,8 @@ extern Client *newClient (struct _Server *server, i32 clientSock, struct sockadd
 extern void destroyClient (void *data);
 extern void client_delete_data (Client *client);
 
-extern int client_comparator_clientID (const void *a, const void *b);
-extern int client_comparator_sessionID (const void *a, const void *b);
+extern int client_comparator_client_id (const void *a, const void *b);
+extern int client_comparator_session_id (const void *a, const void *b);
 
 extern u8 client_registerNewConnection (Client *client, i32 socket_fd);
 extern u8 client_unregisterConnection (Client *client, i32 socket_fd);

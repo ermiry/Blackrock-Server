@@ -157,6 +157,12 @@ u8 packet_generate (Packet *packet) {
     u8 retval = 0;
 
     if (packet) {
+        if (packet->packet) {
+            free (packet->packet);
+            packet->packet = NULL;
+            packet->packet_size = 0;
+        }   
+
         packet->packet_size = sizeof (PacketHeader) + packet->data_size;
         packet->header = packet_header_new (packet->packet_type, packet->packet_size);
 
@@ -380,59 +386,3 @@ void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t 
     }
 
 }
-
-void *generateServerInfoPacket (Server *server) {
-
-    if (server) {
-        size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
-        void *packet = generatePacket (SERVER_PACKET, packetSize);
-         (packet + sizeof (RequestData));
-        if (packet) {
-            char *end = packet + sizeof (PacketHeader);
-            RequestData *reqdata = (RequestData *) end;
-            reqdata->type = SERVER_INFO;
-
-            end += sizeof (RequestData);
-
-            SServer *sinfo = (SServer *) end;
-            sinfo->authRequired = server->authRequired;
-            sinfo->port = server->port;
-            sinfo->protocol = server->protocol;
-            sinfo->type = server->type;
-            sinfo->useIpv6 = server->useIpv6;
-
-            return packet;
-        }
-    }
-
-    return NULL;
-
-}
-
-// send useful server info to the client
-void sendServerInfo (Server *server, i32 sock_fd, struct sockaddr_storage address) {
-
-    if (server) {
-        if (server->serverInfo) {
-            size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) + sizeof (SServer);
-
-            if (!server_sendPacket (server, sock_fd, address, server->serverInfo, packetSize)) {
-                #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Sent server info packet.");
-                #endif
-            }
-        }
-
-        else {
-            #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "No server info to send to client!");
-            #endif
-        } 
-    }
-
-}
-
-// FIXME:
-// TODO: move this from here to the config section
-// set an action to be executed when a client connects to the server
-void server_set_send_server_info () {}

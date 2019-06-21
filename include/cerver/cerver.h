@@ -11,6 +11,7 @@
 #include "cerver/types/string.h"
 
 #include "cerver/network.h"
+#include "cerver/packets.h"
 #include "cerver/auth.h"
 
 #include "cerver/game/game.h"
@@ -59,7 +60,11 @@ struct _Cerver {
 
     threadpool thpool;
 
-    AVLTree *clients;                   // connected clients    
+    AVLTree *clients;                   // connected clients 
+    // action to be performed when a new client connects
+    Action on_client_connected;   
+    void *on_client_connected_data;
+    Action delete_on_client_connected_data;
 
     /*** auth ***/
     struct pollfd *fds;
@@ -108,6 +113,10 @@ extern void cerver_delete (void *ptr);
 // retuns 0 on success, 1 on error
 extern u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg);
 
+// sets an action to be performed by the cerver when a new client connects
+extern u8 cerver_set_on_client_connected  (Cerver *cerver, 
+    Action on_client_connected, void *data, Action delete_data);
+
 // configures the cerver to require client authentication upon new client connections
 // retuns 0 on success, 1 on error
 extern u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate);
@@ -149,6 +158,9 @@ typedef struct SCerver {
     bool uses_sessions;
 
 } SCerver;
+
+// creates a cerver info packet ready to be sent
+extern Packet *cerver_packet_generate (Cerver *cerver);
 
 // session id - token
 typedef struct Token {

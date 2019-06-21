@@ -134,7 +134,7 @@ void client_delete_data (Client *client) {
 }
 
 // compare clients based on their client ids
-int client_comparator_clientID (const void *a, const void *b) {
+int client_comparator_client_id (const void *a, const void *b) {
 
     if (a && b) {
         Client *client_a = (Client *) a;
@@ -146,7 +146,7 @@ int client_comparator_clientID (const void *a, const void *b) {
 }
 
 // compare clients based on their session ids
-int client_comparator_sessionID (const void *a, const void *b) {
+int client_comparator_session_id (const void *a, const void *b) {
 
     if (a && b) {
         Client *client_a = (Client *) a;
