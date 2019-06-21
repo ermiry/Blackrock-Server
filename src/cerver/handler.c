@@ -376,7 +376,7 @@ u8 cerver_poll (Cerver *cerver) {
                 if (cerver->fds[i].fd == cerver->sock) {
                     if (cerver_accept (cerver)) {
                         #ifdef CERVER_DEBUG
-                        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, "LOG_SUCCESS accepting a new client!");
+                        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, "Accepted a new client!");
                         #endif
                     }
                     else {

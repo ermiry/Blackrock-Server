@@ -27,6 +27,8 @@ typedef struct Connection {
     // authentication
     u8 auth_tries;           // remaining attemps to authenticate
 
+    bool active;
+
 } Connection;
 
 extern Connection *client_connection_new (void);
@@ -37,6 +39,17 @@ extern int client_connection_comparator (const void *a, const void *b);
 
 // get from where the client is connecting
 extern void client_connection_get_values (Connection *connection);
+
+// ends a client connection
+extern void client_connection_end (Connection *connection);
+
+// registers a new connection to a client
+// returns 0 on success, 1 on error
+extern u8 client_connection_register (Client *client, Connection *connection);
+
+// unregisters a connection from a client and stops and deletes it
+// returns 0 on success, 1 on error
+extern u8 client_unregister_connection (Client *client, Connection *connection);
 
 // anyone that connects to the cerver
 struct _Client {

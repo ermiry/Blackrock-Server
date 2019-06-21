@@ -23,6 +23,7 @@ Connection *client_connection_new (void) {
     if (connection) {
         memset (connection, 0, sizeof (Connection));
         connection->ip = NULL;
+        connection->active = false;
     }
 
     return connection;
@@ -71,6 +72,64 @@ void client_connection_get_values (Connection *connection) {
         connection->ip = str_new (sock_ip_to_string ((const struct sockaddr *) &connection->address));
         connection->port = sock_ip_port ((const struct sockaddr *) &connection->address);
     }
+
+}
+
+// ends a client connection
+void client_connection_end (Connection *connection) {
+
+    if (connection) {
+        close (connection->sock_fd);
+        connection->sock_fd = -1;
+        connection->active = false;
+    }
+
+}
+
+// registers a new connection to a client
+// returns 0 on success, 1 on error
+u8 client_connection_register (Client *client, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (client && connection) {
+        if (dlist_insert_after (client->connections, dlist_end (client->connections), connection)) {
+            connection->active = true;
+            retval = 0;
+        }
+
+        // failed to register connection
+        else {
+            client_connection_end (connection);
+            client_connection_delete (connection);
+        }
+    }
+
+    return retval;
+
+}
+
+// unregisters a connection from a client and stops and deletes it
+// returns 0 on success, 1 on error
+u8 client_unregister_connection (Client *client, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (client && connection) {
+        Connection *con = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            con = (Connection *) le->data;
+            if (connection->sock_fd == con->sock_fd) {
+                client_connection_end (connection);
+                client_connection_delete (dlist_remove_element (client->connections, le));
+
+                retval = 0;
+                break;
+            }
+        }
+    }
+
+    return retval;
 
 }
 
@@ -162,52 +221,6 @@ Client *client_create (const i32 sock_fd, const struct sockaddr_storage address)
 
 }
 
-Client *newClient (Cerver *cerver, i32 clientSock, struct sockaddr_storage address,
-    char *connection_values) {
-
-    Client *client = NULL;
-
-    // printf ("address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) &address));
-    // printf ("client address ip: %s\n", sock_ip_to_string ((const struct sockaddr *) & client->address));
-
-    if (connection_values) {
-        if (client->clientID) free (client->clientID);
-
-        client->clientID = c_string_create ("%s", connection_values);
-        free (connection_values);
-    }
-
-    client->sessionID = NULL;
-
-    if (cerver->authRequired) {
-        client->authTries = cerver->auth.maxAuthTries;
-        client->dropClient = false;
-    } 
-
-    client->n_active_cons = 0;
-    if (client->active_connections) 
-        for (u8 i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++)
-            client->active_connections[i] = -1;
-
-    else {
-        client->active_connections = (i32 *) calloc (DEFAULT_CLIENT_MAX_CONNECTS, sizeof (i32));
-        for (u8 i = 0; i < DEFAULT_CLIENT_MAX_CONNECTS; i++)
-            client->active_connections[i] = -1;
-    }
-
-    client->curr_max_cons = DEFAULT_CLIENT_MAX_CONNECTS;
-    
-    // add the fd to the active connections
-    if (client->active_connections) {
-        client->active_connections[client->n_active_cons] = clientSock;
-        printf ("client->active_connections[%i] = %i\n", client->n_active_cons, clientSock);
-        client->n_active_cons++;
-    } 
-
-    return client;
-
-}
-
 // recursively get the client associated with the socket
 Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
 
@@ -252,68 +265,6 @@ Client *getClientBySession (AVLTree *clients, char *sessionID) {
     }
 
     return NULL;
-
-}
-
-// the client made a new connection to the cerver
-u8 client_registerNewConnection (Client *client, i32 socket_fd) {
-
-    if (client) {
-        if (client->active_connections) {
-            u8 new_active_cons = client->n_active_cons + 1;
-
-            if (new_active_cons <= client->curr_max_cons) {
-                // search for a free spot
-                for (int i = 0; i < client->curr_max_cons; i++) {
-                    if (client->active_connections[i] == -1) {
-                        client->active_connections[i] = socket_fd;
-                        printf ("client->active_connections[%i] = %i\n", client->n_active_cons, socket_fd);
-                        client->n_active_cons++;
-                        printf ("client->n_active_cons: %i\n", client->n_active_cons);
-                        return 0;
-                    }
-                }
-            }
-
-            // we need to add more space
-            else {
-                client->active_connections = (i32 *) realloc (client->active_connections, 
-                    client->n_active_cons * sizeof (i32));
-
-                // add the connection at the end
-                client->active_connections[new_active_cons] = socket_fd;
-                client->n_active_cons++;
-
-                client->curr_max_cons++;
-                
-                return 0;
-            }
-        }
-    }
-
-    return 1;
-
-}
-
-// removes an active connection from a client
-u8 client_unregisterConnection (Client *client, i32 socket_fd) {
-
-    if (client) {
-        if (client->active_connections) {
-            if (client->active_connections > 0) {
-                // search the socket fd
-                for (u8 i = 0; i < client->n_active_cons; i++) {
-                    if (client->active_connections[i] == socket_fd) {
-                        client->active_connections[i] = -1;
-                        client->n_active_cons--;
-                        return 0;
-                    }
-                }
-            }
-        }
-    }
-
-    return 1;
 
 }
 
