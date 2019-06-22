@@ -27,7 +27,7 @@
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
 
-#define DEFAULT_TH_POOL_INIT            4
+#define DEFAULT_TH_POOL_INIT            8
 
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515

@@ -43,7 +43,7 @@ Packet *packet_new (void) {
     Packet *packet = (Packet *) malloc (sizeof (Packet));
     if (packet) {
         memset (packet, 0, sizeof (Packet));
-        packet->server = NULL;
+        packet->cerver = NULL;
         packet->client = NULL;
 
         packet->custom_type = NULL;
@@ -78,7 +78,7 @@ void packet_delete (void *ptr) {
     if (ptr) {
         Packet *packet = (Packet *) ptr;
 
-        packet->server = NULL;
+        packet->cerver = NULL;
         packet->client = NULL;
 
         str_delete (packet->custom_type);

@@ -36,8 +36,8 @@ typedef enum PacketType {
     AUTH_PACKET,
     GAME_PACKET,
 
-    APP_ERROR_PACKET,
     APP_PACKET,
+    APP_ERROR_PACKET,
 
     CUSTOM_PACKET = 70,
 
