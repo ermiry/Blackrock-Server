@@ -10,7 +10,7 @@
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 
-struct _Server;
+struct _Cerver;
 struct _Client;
 
 typedef u32 ProtocolID;
@@ -92,7 +92,7 @@ typedef struct RequestData {
 typedef struct Packet {
 
     // the cerver and client the packet is from
-    struct _Server *server;
+    struct _Cerver *cerver;
     struct _Client *client;
 
     i32 sock_fd;

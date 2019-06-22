@@ -231,8 +231,9 @@ int client_comparator_session_id (const void *a, const void *b) {
 
 }
 
+// FIXME: map the client with the socket fds
 // TODO: realloc cerver main poll if full!!
-// registers a client to the cerver
+// registers a client to the cerver --> add it to cerver's structures
 u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
     u8 retval = 1;
@@ -285,50 +286,57 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
 }
 
-// recursively get the client associated with the socket
-Client *getClientBySocket (AVLNode *node, i32 socket_fd) {
+// TODO:
+// unregisters a client from a cerver -- removes it from cerver's structures
+u8 client_unregister_from_cerver (Cerver *cerver, Client *client) {
 
-    if (node) {
-        Client *client = NULL;
+    u8 retval = 1;
 
-        client = getClientBySocket (node->right, socket_fd);
+    if (cerver && client) {
 
-        if (!client) {
-            if (node->id) {
-                client = (Client *) node->id;
-                
-                // search the socket fd in the clients active connections
-                for (int i = 0; i < client->n_active_cons; i++)
-                    if (socket_fd == client->active_connections[i])
-                        return client;
-
-            }
-        }
-
-        if (!client) client = getClientBySocket (node->left, socket_fd);
-
-        return client;
     }
 
-    return NULL;
+    return retval;
 
 }
 
-Client *getClientBySession (AVLTree *clients, char *sessionID) {
+// gets the client associated with a sock fd using the client-sock fd map
+Client *client_get_by_sock_fd (Cerver *cerver, i32 sock_fd) {
 
-    if (clients && sessionID) {
-        Client temp;
-        temp.sessionID = c_string_create ("%s", sessionID);
-        
-        void *data = avl_get_node_data (clients, &temp);
-        if (data) return (Client *) data;
-        else 
-            cerver_log_msg (stderr, LOG_WARNING, LOG_CERVER, 
-                c_string_create ("Couldn't find a client associated with the session ID: %s.", 
-                sessionID));
+    Client *client = NULL;
+
+    if (cerver) {
+        const i32 *key = &sock_fd;
+        size_t client_size = sizeof (Client);
+        void *client_data = htab_get_data (cerver->client_sock_fd_map, 
+            key, sizeof (i32), &client_size);
+        if (client_data) client = (Client *) client_data;
     }
 
-    return NULL;
+    return client;
+
+}
+
+// searches the avl tree to get the client associated with the session id
+// the cerver must support sessions
+Client *client_get_by_session_id (Cerver *cerver, char *session_id) {
+
+    Client *client = NULL;
+
+    if (session_id) {
+        // create our search query
+        Client *client_query = client_new ();
+        if (client_query) {
+            client_set_session_id (client_query, session_id);
+
+            void *data = avl_get_node_data (cerver->clients, client_query);
+            if (data) client = (Client *) data;     // found
+
+            client_delete (client_query);
+        }
+    }
+
+    return client;
 
 }
 

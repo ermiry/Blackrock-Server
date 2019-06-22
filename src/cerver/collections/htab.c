@@ -129,7 +129,7 @@ int htab_insert (Htab *ht, const void *key, size_t key_size, const void *val,
 
 }
 
-void *htab_getData (Htab *ht, const void *key, size_t key_size, size_t *val_size) {
+void *htab_get_data (Htab *ht, const void *key, size_t key_size, size_t *val_size) {
 
     size_t index;
     HtabNode *node = NULL;  

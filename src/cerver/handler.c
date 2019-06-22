@@ -210,15 +210,27 @@ static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd,
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
-                Packet *packet = packet_new ();
-                if (packet) {
-                    // FIXME:
-                    // packet->connection = client_connection_get_by_socket (client, socket_fd);
-                    // packet->header = header;
-                    // packet->packet_size = packet_size;
-                    // packet->packet = packet_data;
+                Client *client = client_get_by_sock_fd (cerver, sock_fd);
+                if (client) {
+                    Packet *packet = packet_new ();
+                    if (packet) {
+                        packet->cerver = cerver;
+                        packet->client = client;
+                        packet->header = header;
+                        packet->packet_size = packet_size;
+                        packet->packet = packet_data;
 
-                    // thpool_add_work (client->thpool, (void *) client_packet_handler, packet);
+                        // FIXME: actual handle the packet depending if it is on hold or not!
+                        // thpool_add_work (client->thpool, (void *) client_packet_handler, packet);
+                    }
+                }
+
+                else {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                        c_string_create ("Failed to get client associated with sock: %i.", sock_fd));
+                    #endif
+                    // TODO: no client - discard the data!
                 }
 
                 end += packet_size;

@@ -16,8 +16,8 @@
 
 #include "cerver/game/game.h"
 
-#include "cerver/collections/dllist.h"
 #include "cerver/collections/avl.h"
+#include "cerver/collections/htab.h"
 
 #include "cerver/utils/config.h"
 #include "cerver/utils/thpool.h"
@@ -61,6 +61,7 @@ struct _Cerver {
     threadpool thpool;
 
     AVLTree *clients;                   // connected clients 
+    Htab *client_sock_fd_map;           // direct indexing by sokcet fd as key
     // action to be performed when a new client connects
     Action on_client_connected;   
     void *on_client_connected_data;

@@ -41,6 +41,6 @@ extern int htab_get (Htab *ht, const void *key, size_t ksz, void **val, size_t *
 extern bool htab_contains_key (Htab *ht, const void *key, size_t key_size);
 extern int htab_remove (Htab *ht, const void *key, size_t key_size);
 
-extern void *htab_getData (Htab *ht, const void *key, size_t key_size, size_t *val_size);
+extern void *htab_get_data (Htab *ht, const void *key, size_t key_size, size_t *val_size);
 
 #endif
