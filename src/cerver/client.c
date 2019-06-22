@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include <time.h>
+
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
@@ -17,6 +19,7 @@
 #include "cerver/utils/log.h"
 #include "cerver/utils/utils.h"
 
+void client_connection_set_time (Connection *connection);
 void client_connection_get_values (Connection *connection);
 
 Connection *client_connection_new (void) {
@@ -26,17 +29,18 @@ Connection *client_connection_new (void) {
         memset (connection, 0, sizeof (Connection));
         connection->ip = NULL;
         connection->active = false;
+        connection->time_info = NULL;
     }
 
     return connection;
 
 }
 
-// FIXME: pass time stamp
 Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_storage address) {
 
     Connection *connection = client_connection_new ();
     if (connection) {
+        client_connection_set_time (connection);
         memcpy (&connection->address, &address, sizeof (struct sockaddr_storage));
         client_connection_get_values (connection);
     }
@@ -48,6 +52,7 @@ void client_connection_delete (void *ptr) {
     if (ptr) {
         Connection *connection = (Connection *) ptr;
         str_delete (connection->ip);
+        if (connection->time_info) free (connection->time_info);
         free (connection);
     }
 
@@ -64,6 +69,24 @@ int client_connection_comparator (const void *a, const void *b) {
         else if (con_a->sock_fd == con_b->sock_fd) return 0;
         else return 1; 
     }
+
+}
+
+// sets the connection time stamp
+void client_connection_set_time (Connection *connection) {
+
+    if (connection) {
+        time (&connection->raw_time);
+        connection->time_info = localtime (&connection->raw_time);
+    }
+
+}
+
+// returns connection time stamp in a string that should be deleted
+const String *client_connection_get_time (const Connection *connection) {
+
+    if (connection) return str_new (asctime (connection->time_info));
+    else return NULL;
 
 }
 

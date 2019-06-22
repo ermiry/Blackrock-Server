@@ -37,7 +37,7 @@ static CerverReceive *cerver_receive_new (Cerver *cerver, i32 sock_fd, bool on_h
 
 }
 
-static inline cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
+static inline void cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
 
 // sends back a test packet to the client!
 static void cerver_test_packet_handler (Packet *packet) {
@@ -283,6 +283,80 @@ static void *cerver_receive (void *ptr) {
 
 }
 
+static void cerver_register_new_connection (const Cerver *cerver, 
+    const i32 new_fd, const struct sockaddr_storage client_address) {
+
+    Connection *connection = client_connection_create (new_fd, client_address);
+    if (connection) {
+        bool failed = false;
+
+        // if the cerver requires auth, we put the connection on hold
+        if (cerver->auth_required) {
+            // FIXME: client_on_hold (cerver, client, new_fd);
+        }
+
+        // if not, we create a new client and we register the connection
+        else {
+            Client *client = client_new ();
+            if (client) {
+                client_connection_register (client, connection);
+
+                // if we need to generate session ids...
+                if (cerver->use_sessions) {
+                    char *session_id = (char *) cerver->session_id_generator (client);
+                    if (session_id) {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
+                            c_string_create ("Generated client session id: %s", session_id));
+                        #endif
+                        client_set_session_id (client, session_id);
+
+                        client_register_to_cerver (cerver, client);
+
+                        // trigger cerver on client connected action
+                        if (cerver->on_client_connected) 
+                            cerver->on_client_connected (cerver->on_client_connected_data);
+                    }
+
+                    else {
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                            "Failed to generate client session id!");
+                        // TODO: do we want to drop the client connection?
+                        failed = true;
+                    }
+                }
+
+                // just register the client to the cerver
+                else client_register_to_cerver (cerver, client);
+            }
+        }
+
+        if (!failed) {
+            // send cerver info packet
+            if (cerver->type != WEB_SERVER) {
+                packet_set_network_values (cerver->cerver_info_packet, new_fd, cerver->protocol);
+                if (packet_send (cerver->cerver_info_packet, 0)) {
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
+                        c_string_create ("Failed to send cerver %s info packet!", cerver->name->str));
+                }   
+            }
+        }
+
+        #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
+                c_string_create ("New connection to cerver %s!", cerver->name->str));
+        #endif
+    }
+
+    else {
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, LOG_ERROR, LOG_CLIENT, "Failed to create a new connection!");
+        #endif
+    }
+
+}
+
+// accepst a new connection to the cerver
 static void *cerver_accept (void *ptr) {
 
     if (ptr) {
@@ -296,69 +370,10 @@ static void *cerver_accept (void *ptr) {
         i32 new_fd = accept (cerver->sock, (struct sockaddr *) &client_address, &socklen);
         if (new_fd > 0) {
             #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Accepted a new client connection.");
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Accepted a new connection.");
             #endif
 
-            Client *client = client_create (new_fd, client_address);
-            if (client) {
-                bool failed = false;
-
-                // if we requiere authentication, we send the client to the on hold structure
-                if (cerver->auth_required) client_on_hold (cerver, client, new_fd);
-
-                // if not, just register to the cerver as new client
-                else {
-                    // if we need to generate session ids...
-                    if (cerver->use_sessions) {
-                        char *session_id = (char *) cerver->session_id_generator (client);
-                        if (session_id) {
-                            #ifdef CERVER_DEBUG
-                            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
-                                c_string_create ("Generated client session id: %s", session_id));
-                            #endif
-                            client_set_session_id (client, session_id);
-
-                            client_register_to_cerver (cerver, client);
-                        }
-
-                        else {
-                            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
-                                "Failed to generate client session id!");
-                            // TODO: do we want to drop the client connection?
-                            failed = true;
-                        }
-                    }
-
-                    // just register the client to the cerver
-                    else client_register_to_cerver (cerver, client);
-                } 
-
-                if (!failed) {
-                    // send cerver info packet
-                    if (cerver->type != WEB_SERVER) {
-                        if (packet_send (cerver->cerver_info_packet, 0)) {
-                            cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
-                                c_string_create ("Failed to send cerver %s info packet!", cerver->name->str));
-                        }   
-                    }
-                    
-                    // trigger cerver on client connected action
-                    if (cerver->on_client_connected) 
-                        cerver->on_client_connected (cerver->on_client_connected_data);
-                        
-                }
-
-                #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
-                        c_string_create ("A new client connected to cerver %s!", cerver->name->str));
-                #endif
-            }
-
-            else {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_ERROR, LOG_CLIENT, "Failed to create a new client!");
-                #endif
-            }
+            cerver_register_new_connection (cerver, new_fd, client_address);
         }
 
         else {

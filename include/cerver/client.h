@@ -13,6 +13,7 @@
 #include "collections/avl.h"
 
 struct _Cerver;
+struct _Client;
 
 // a connection from a client
 typedef struct Connection {
@@ -22,7 +23,9 @@ typedef struct Connection {
     u16 port;
     String *ip;
     struct sockaddr_storage address;
-    time_t connected_time_stamp;
+
+    time_t raw_time;
+    struct tm *time_info;
 
     // authentication
     u8 auth_tries;           // remaining attemps to authenticate
@@ -34,22 +37,32 @@ typedef struct Connection {
 extern Connection *client_connection_new (void);
 extern void client_connection_delete (void *ptr);
 
+// creates a new lcient connection with the specified values
+Connection *client_connection_create (const i32 sock_fd, 
+    const struct sockaddr_storage address);
+
 // compare two connections by their socket fds
 extern int client_connection_comparator (const void *a, const void *b);
 
+// sets the connection time stamp
+extern void client_connection_set_time (Connection *connection);
+
 // get from where the client is connecting
 extern void client_connection_get_values (Connection *connection);
+
+// returns connection time stamp in a string that should be deleted
+extern const String *client_connection_get_time (const Connection *connection);
 
 // ends a client connection
 extern void client_connection_end (Connection *connection);
 
 // registers a new connection to a client
 // returns 0 on success, 1 on error
-extern u8 client_connection_register (Client *client, Connection *connection);
+extern u8 client_connection_register (struct _Client *client, Connection *connection);
 
 // unregisters a connection from a client and stops and deletes it
 // returns 0 on success, 1 on error
-extern u8 client_unregister_connection (Client *client, Connection *connection);
+extern u8 client_unregister_connection (struct _Client *client, Connection *connection);
 
 // anyone that connects to the cerver
 struct _Client {
