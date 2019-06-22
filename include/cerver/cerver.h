@@ -168,11 +168,4 @@ typedef struct SCerver {
 // creates a cerver info packet ready to be sent
 extern Packet *cerver_packet_generate (Cerver *cerver);
 
-// session id - token
-typedef struct Token {
-
-    char token[64];
-
-} Token;
-
 #endif

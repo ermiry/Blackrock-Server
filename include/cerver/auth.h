@@ -6,16 +6,10 @@
 #include "cerver/types/types.h"
 
 #include "cerver/packets.h"
+#include "cerver/cerver.h"
 #include "cerver/client.h"
 
 struct _Cerver;
-
-/*** Sessions ***/
-
-// create a unique session id for each client based on connection values
-extern char *session_default_generate_id (i32 fd, const struct sockaddr_storage address);
-
-/*** Auth ***/
 
 // info for the server to perfom a correct client authentication
 typedef struct Auth {
@@ -33,8 +27,12 @@ extern void auth_delete (Auth *auth);
 // generates an authentication packet with client auth request
 extern Packet *auth_packet_generate (void);
 
-// if the cerver requires authentication, we send the newly connected clients to an on hold
-// structure until they authenticate, if not, they are just dropped by the cerver
-void client_on_hold (struct _Cerver *cerver, Client *client, i32 fd);
+// handles an packet from an on hold connection
+extern void on_hold_packet_handler (void *ptr);
+
+// if the cerver requires authentication, we put the connection on hold
+// until it has a sucess authentication or it failed to, so it is dropped
+// returns 0 on success, 1 on error
+extern u8 on_hold_connection (struct _Cerver *cerver, Connection *connection);
 
 #endif

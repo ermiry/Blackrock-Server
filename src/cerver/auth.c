@@ -16,6 +16,9 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
+static i32 on_hold_poll_get_idx_by_sock_fd (const Cerver *cerver, i32 sock_fd);
+static void on_hold_connection_drop (Cerver *cerver, const i32 sock_fd);
+
 Auth *auth_new (void) {
 
     Auth *auth = (Auth *) malloc (sizeof (Auth));
@@ -43,26 +46,6 @@ Packet *auth_packet_generate (void) {
     
     return packet_generate_request (AUTH_PACKET, REQ_AUTH_CLIENT, NULL, 0); 
     
-}
-
-// FIXME: when do we want to use this?
-// FIXME: make available the on hold idx!!
-// drops a client from the on hold structure because he was unable to authenticate
-void dropClient (Cerver *cerver, Client *client) {
-
-    if (cerver && client) {
-        // destroy client should unregister the socket from the client
-        // and from the on hold poll structure
-        avl_remove_node (cerver->on_hold_clients, client);
-
-        // cerver->compress_hold_clients = true;
-
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-            "Client removed from on hold structure. Failed to authenticate");
-        #endif
-    }   
-
 }
 
 Client *removeOnHoldClient (Cerver *cerver, Client *client, i32 socket_fd) {
@@ -347,53 +330,117 @@ void authenticateClient (void *data) {
 
 }
 
-// we don't want on hold clients to make any other request
-void handleOnHoldPacket (void *data) {
+// FIXME:
+// try to authenticate a connection using the values he sent to use
+static void auth_try (Packet *packet) {
 
-    if (data) {
-        PacketInfo *pack_info = (PacketInfo *) data;
+    if (packet) {
+        if (packet->cerver->auth->authenticate) {
 
-        if (!checkPacket (pack_info->packetSize, pack_info->packetData, DONT_CHECK_TYPE))  {
-            PacketHeader *header = (PacketHeader *) pack_info->packetData;
-
-            switch (header->packetType) {
-                // handles an error from the client
-                case ERROR_PACKET: break;
-
-                // a client is trying to authenticate himself
-                case AUTHENTICATION: {
-                    RequestData *reqdata = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
-
-                    switch (reqdata->type) {
-                        case CLIENT_AUTH_DATA: authenticateClient (pack_info); break;
-                        default: break;
-                    }
-                } break;
-
-                case TEST_PACKET: 
-                    cerver_log_msg (stdout, LOG_TEST, LOG_NO_TYPE, "Got a successful test packet!"); 
-                    if (!sendTestPacket (pack_info->cerver, pack_info->clientSock, pack_info->client->address))
-                        cerver_log_msg (stdout, LOG_TEST, LOG_PACKET, "LOG_SUCCESS answering the test packet.");
-
-                    else cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to answer test packet!");
-                    break;
-
-                default: 
-                    cerver_log_msg (stderr, LOG_WARNING, LOG_PACKET, "Got a packet of incompatible type."); 
-                    break;
-            }
         }
 
-        // FIXME: send the packet to the pool
-        destroyPacketInfo (pack_info);
+        // no authentication method -- clients are not able to interact to the cerver!
+        else {
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                c_string_create ("Cerver %s does not have an authenticate method!",
+                packet->cerver->name->str));
+
+            // close the on hold connection assocaited with sock fd 
+            // and remove it from the cerver
+            on_hold_connection_drop (packet->cerver, packet->sock_fd);
+        }
     }
 
 }
 
+// handle an auth packet
+static void cerver_auth_packet_handler (Packet *packet) {
 
+    if (packet) {
+        if (packet->packet_size >= (sizeof (PacketHeader) + sizeof (RequestData))) {
+            char *end = packet->packet;
+            RequestData *req = (RequestData *) (end += sizeof (PacketHeader));
 
+            switch (req->type) {
+                // the client sent use its data to authenticate itself
+                case CLIENT_AUTH_DATA: auth_try (packet); break;
 
+                default: break;
+            }
+        }
+    }
 
+}
+
+// handles an packet from an on hold connection
+void on_hold_packet_handler (void *ptr) {
+
+    if (ptr) {
+        Packet *packet = (Packet *) ptr;
+        if (!packet_check (packet)) {
+            switch (packet->header->packet_type) {
+                // handles an error from the client
+                case ERROR_PACKET: /* TODO: */ break;
+
+                // handles authentication packets
+                case AUTH_PACKET: cerver_auth_packet_handler (packet); break;
+
+                // acknowledge the client we have received his test packet
+                case TEST_PACKET: cerver_test_packet_handler (packet); break;
+
+                default:
+                    #ifdef CERVER_DEBUG
+                    cengine_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
+                        c_string_create ("Got an on hold packet of unknown type in cerver %s.", 
+                        packet->cerver->name->str));
+                    #endif
+                    break;
+            }
+        }
+
+        packet_delete (packet);
+    }
+
+}
+
+// reallocs on hold cerver poll fds
+// returns 0 on success, 1 on error
+static u8 cerver_realloc_on_hold_poll_fds (Cerver *cerver) {
+
+    u8 retval = 1;
+
+    if (cerver) {
+        cerver->max_on_hold_connections = cerver->max_on_hold_connections * 2;
+        cerver->hold_fds = realloc (cerver->hold_fds, 
+            cerver->max_on_hold_connections * sizeof (struct pollfd));
+        if (cerver->hold_fds) retval = 0;
+    }
+
+    return retval;
+
+}
+
+static i32 on_hold_get_free_idx (Cerver *cerver) {
+
+    if (cerver) {
+        for (u32 i = 0; i < cerver->max_on_hold_connections; i++)
+            if (cerver->hold_fds[i].fd == -1) return i;
+    }
+
+    return -1;
+
+}
+
+static i32 on_hold_poll_get_idx_by_sock_fd (const Cerver *cerver, i32 sock_fd) {
+
+    if (cerver) {
+        for (u32 i = 0; i < cerver->max_on_hold_connections; i++)
+            if (cerver->hold_fds[i].fd == sock_fd) return i;
+    }
+
+    return -1;
+
+}
 
 // we remove any fd that was set to -1 for what ever reason
 static void cerver_on_hold_poll_compress (Cerver *cerver) {
@@ -478,34 +525,6 @@ static u8 on_hold_poll (void *ptr) {
 
 }
 
-// reallocs on hold cerver poll fds
-// returns 0 on success, 1 on error
-static u8 cerver_realloc_on_hold_poll_fds (Cerver *cerver) {
-
-    u8 retval = 1;
-
-    if (cerver) {
-        cerver->max_on_hold_connections = cerver->max_on_hold_connections * 2;
-        cerver->hold_fds = realloc (cerver->hold_fds, 
-            cerver->max_on_hold_connections * sizeof (struct pollfd));
-        if (cerver->hold_fds) retval = 0;
-    }
-
-    return retval;
-
-}
-
-static i32 on_hold_get_free_idx (Cerver *cerver) {
-
-    if (cerver) {
-        for (u32 i = 0; i < cerver->max_on_hold_connections; i++)
-            if (cerver->hold_fds[i].fd == -1) return i;
-    }
-
-    return -1;
-
-}
-
 // if the cerver requires authentication, we put the connection on hold
 // until it has a sucess authentication or it failed to, so it is dropped
 // returns 0 on success, 1 on error
@@ -546,6 +565,8 @@ u8 on_hold_connection (Cerver *cerver, Connection *connection) {
                         c_string_create ("Cerver %s current on hold connections: %i.", 
                         cerver->name->str, cerver->n_hold_clients));
                 #endif
+
+                retval = 0;
             }
 
             else {
@@ -559,10 +580,74 @@ u8 on_hold_connection (Cerver *cerver, Connection *connection) {
                         c_string_create ("Failed to realloc cerver %s on hold poll fds!", 
                         cerver->name->str));
                 }
+
+                else retval = on_hold_connection (cerver, connection);
             }
         }
     }
 
     return retval;
+
+}
+
+// close the on hold connection assocaited with sock fd 
+// and remove it from the cerver
+static void on_hold_connection_drop (Cerver *cerver, const i32 sock_fd) {
+
+    // remove the connection associated to the sock fd
+    Connection *query = client_connection_new ();
+    query->sock_fd = sock_fd;
+    void *connection_data = avl_remove_node (cerver->on_hold_connections, query);
+    if (connection_data) {
+        Connection *connection = (Connection *) connection_data;
+
+        // close the connection socket
+        client_connection_end (connection);
+
+        // unregister the fd from the on hold structures
+        i32 idx = on_hold_poll_get_idx_by_sock_fd (cerver, sock_fd);
+        if (idx) {
+            cerver->hold_fds[idx].fd = -1;
+            cerver->hold_fds[idx].events = -1;
+            cerver->current_on_hold_nfds--;
+
+           #ifdef CERVER_STATS
+                cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
+                    c_string_create ("Cerver %s current on hold connections: %i.", 
+                    cerver->name->str, cerver->n_hold_clients));
+            #endif
+
+            // check if we are holding any more connections, if not, we stop the on hold poll
+            if (cerver->current_on_hold_nfds <= 0) {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER,
+                    c_string_create ("Stoping cerver's %s on hold poll.",
+                    cerver->name->str));
+                #endif
+                cerver->holding_connections = false;
+            }
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Couldn't find %i sock fd in cerver's %s on hold poll fds.",
+                sock_fd, cerver->name->str));
+            #endif
+        }
+
+        // we can now safely delete the connection
+        client_connection_delete (connection);
+    }
+
+    else {
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+            c_string_create ("Couldn't find a connection associated with %i sock fd in cerver's %s on hold connections tree.",
+            sock_fd, cerver->name->str));
+        #endif
+
+        close (sock_fd);        // just close the socket
+    }
 
 }

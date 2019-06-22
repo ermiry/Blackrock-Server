@@ -24,6 +24,9 @@ extern inline void cerver_receive_delete (void *ptr);
 // receive all incoming data from the socket
 extern void *cerver_receive (void *ptr);
 
+// sends back a test packet to the client!
+extern void cerver_test_packet_handler (Packet *packet);
+
 // reallocs main cerver poll fds
 // returns 0 on success, 1 on error
 extern u8 cerver_realloc_main_poll_fds (struct _Cerver *cerver);

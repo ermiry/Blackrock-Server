@@ -32,7 +32,7 @@ CerverReceive *cerver_receive_new (Cerver *cerver, i32 sock_fd, bool on_hold) {
 inline void cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
 
 // sends back a test packet to the client!
-static void cerver_test_packet_handler (Packet *packet) {
+void cerver_test_packet_handler (Packet *packet) {
 
     if (packet) {
         #ifdef CERVER_DEBUG
@@ -93,7 +93,7 @@ static void cerver_packet_handler (void *ptr) {
                 // custom packet hanlder
                 case CUSTOM_PACKET: break;
 
-                // acknoledge the client we have received his test packet
+                // acknowledge the client we have received his test packet
                 case TEST_PACKET: cerver_test_packet_handler (packet); break;
 
                 default:
@@ -198,6 +198,7 @@ static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd,
                     if (packet) {
                         packet->cerver = cerver;
                         packet->client = client;
+                        packet->sock_fd = sock_fd;
                         packet->header = header;
                         packet->packet_size = packet_size;
                         packet->packet = packet_data;
@@ -289,9 +290,8 @@ static void cerver_register_new_connection (const Cerver *cerver,
         bool failed = false;
 
         // if the cerver requires auth, we put the connection on hold
-        if (cerver->auth_required) {
-            // FIXME: client_on_hold (cerver, client, new_fd);
-        }
+        if (cerver->auth_required) 
+            on_hold_connection (cerver, connection);
 
         // if not, we create a new client and we register the connection
         else {
