@@ -3,19 +3,18 @@
 #include <poll.h>
 
 #include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
 #include "cerver/network.h"
 #include "cerver/packets.h"
+#include "cerver/handler.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 #include "cerver/auth.h"
 
-#include "collections/avl.h"
-
 #include "cerver/utils/thpool.h"
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
-#include "cerver/utils/sha-256.h"
 
 /*** Sessions ***/
 
@@ -83,143 +82,6 @@ Packet *auth_packet_generate (void) {
     
     return packet_generate_request (AUTH_PACKET, REQ_AUTH_CLIENT, NULL, 0); 
     
-}
-
-static i32 clients_on_hold_get_free_idx (Cerver *cerver) {
-
-    if (cerver && cerver->auth_required) 
-        for (u32 i = 0; i < poll_n_fds; i++)
-            if (cerver->hold_fds[i].fd == -1) return i;
-
-    return -1;
-
-}
-
-// we remove any fd that was set to -1 for what ever reason
-static void clients_on_hold_compress (Cerver *cerver) {
-
-    if (cerver) {
-        cerver->compress_hold_clients = false;
-        
-        for (u16 i = 0; i < cerver->current_on_hold_nfds; i++) {
-            if (cerver->hold_fds[i].fd == -1) {
-                for (u16 j = i; j < cerver->current_on_hold_nfds; j++) 
-                    cerver->hold_fds[j].fd = cerver->hold_fds[j + 1].fd;
-
-                i--;
-                cerver->current_on_hold_nfds--;
-            }
-        }
-    }
-
-}
-
-// handles packets from the on hold clients until they authenticate
-static u8 clients_on_hold_poll (void *ptr) {
-
-    u8 retval = 1;
-
-    if (ptr) {
-        Cerver *cerver = (Cerver *) ptr;
-
-        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
-            c_string_create ("Cerver %s on hold handler has started!", cerver->name->str));
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Waiting for connections to put on hold...");
-        #endif
-
-        int poll_retval = 0;
-        while (cerver->isRunning && cerver->holding_clients) {
-            poll_retval = poll (cerver->hold_fds, cerver->max_on_hold_clients, cerver->poll_timeout);
-
-            // poll failed
-            if (poll_retval < 0) {
-                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                    c_string_create ("Cerver %s on hold poll has failed!", cerver->name->str));
-                perror ("Error");
-                cerver->holding_clients = false;
-                cerver->isRunning = false;
-                break;
-            }
-
-            // if poll has timed out, just continue to the next loop... 
-            if (poll_retval == 0) {
-                // #ifdef CERVER_DEBUG
-                // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-                //    c_string_create ("Cerver %s on hold poll timeout", cerver->name->str));
-                // #endif
-                continue;
-            }
-
-            // one or more fd(s) are readable, need to determine which ones they are
-            for (u16 i = 0; i < cerver->current_on_hold_nfds; i++) {
-                if (cerver->hold_fds[i].revents == 0) continue;
-                if (cerver->hold_fds[i].revents != POLLIN) continue;
-
-                // TODO: maybe later add this directly to the thread pool
-                server_recieve (cerver, cerver->hold_fds[i].fd, true);
-            }
-        }
-
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
-            c_string_create ("Cerver %s on hold poll has stopped!", cerver->name->str));
-        #endif
-
-        retval = 0;
-    }
-
-    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't handle on hold clients on a NULL cerver!");
-
-    return retval;
-
-}
-
-// if the cerver requires authentication, we send the newly connected clients to an on hold
-// structure until they authenticate, if not, they are just dropped by the cerver
-void client_on_hold (Cerver *cerver, Client *client, i32 fd) {
-
-    // add the client to the on hold structres -> avl and poll
-    if (cerver && client) {
-        if (cerver->on_hold_clients) {
-            i32 idx = clients_on_hold_get_free_idx (cerver);
-
-            if (idx >= 0) {
-                cerver->hold_fds[idx].fd = fd;
-                cerver->hold_fds[idx].events = POLLIN;
-                cerver->current_on_hold_nfds++; 
-
-                cerver->n_hold_clients++;
-
-                avl_insert_node (cerver->on_hold_clients, client);
-
-                if (cerver->holding_clients == false) {
-                    thpool_add_work (cerver->thpool, (void *) clients_on_hold_poll, cerver);
-                    cerver->holding_clients = true;
-                }          
-
-                #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-                        "Added a new client to the on hold structures.");
-                #endif
-
-                #ifdef CERVER_STATS
-                    cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
-                        c_string_create ("Current on hold clients: %i.", cerver->n_hold_clients));
-                #endif
-            }
-
-            // TODO: make the on hold fds array dynamic!!!
-            // FIXME: better handle this error!
-            else {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                    "New on hold idx = -1. Is the cerver full?");
-                #endif
-            }
-        }
-    }
-
 }
 
 // FIXME: when do we want to use this?
@@ -564,5 +426,182 @@ void handleOnHoldPacket (void *data) {
         // FIXME: send the packet to the pool
         destroyPacketInfo (pack_info);
     }
+
+}
+
+
+
+
+
+
+// we remove any fd that was set to -1 for what ever reason
+static void cerver_on_hold_poll_compress (Cerver *cerver) {
+
+    if (cerver) {
+        cerver->compress_on_hold = false;
+
+        for (u32 i = 0; i < cerver->max_on_hold_connections; i++) {
+            if (cerver->hold_fds[i].fd == -1) {
+                for (u32 j = i; j < cerver->max_on_hold_connections - 1; j++) 
+                    cerver->hold_fds[j].fd = cerver->hold_fds[j + 1].fd;
+                    
+            }
+        }
+    }  
+
+}
+
+// handles packets from the on hold clients until they authenticate
+static u8 on_hold_poll (void *ptr) {
+
+    u8 retval = 1;
+
+    if (ptr) {
+        Cerver *cerver = (Cerver *) ptr;
+
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
+            c_string_create ("Cerver %s on hold handler has started!", cerver->name->str));
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Waiting for connections to put on hold...");
+        #endif
+
+        int poll_retval = 0;
+        while (cerver->isRunning && cerver->holding_connections) {
+            poll_retval = poll (cerver->hold_fds, 
+                cerver->max_on_hold_connections, cerver->poll_timeout);
+
+            // poll failed
+            if (poll_retval < 0) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                    c_string_create ("Cerver %s on hold poll has failed!", cerver->name->str));
+                perror ("Error");
+                cerver->holding_connections = false;
+                cerver->isRunning = false;
+                break;
+            }
+
+            // if poll has timed out, just continue to the next loop... 
+            if (poll_retval == 0) {
+                // #ifdef CERVER_DEBUG
+                // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
+                //    c_string_create ("Cerver %s on hold poll timeout", cerver->name->str));
+                // #endif
+                continue;
+            }
+
+            // one or more fd(s) are readable, need to determine which ones they are
+            for (u16 i = 0; i < cerver->current_on_hold_nfds; i++) {
+                if (cerver->hold_fds[i].revents == 0) continue;
+                if (cerver->hold_fds[i].revents != POLLIN) continue;
+
+                if (thpool_add_work (cerver->thpool, cerver_receive, 
+                    cerver_receive_new (cerver, cerver->fds[i].fd, false))) {
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                        c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
+                        cerver->name->str));
+                }
+            }
+        }
+
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
+            c_string_create ("Cerver %s on hold poll has stopped!", cerver->name->str));
+        #endif
+
+        retval = 0;
+    }
+
+    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't handle on hold clients on a NULL cerver!");
+
+    return retval;
+
+}
+
+// reallocs on hold cerver poll fds
+// returns 0 on success, 1 on error
+static u8 cerver_realloc_on_hold_poll_fds (Cerver *cerver) {
+
+    u8 retval = 1;
+
+    if (cerver) {
+        cerver->max_on_hold_connections = cerver->max_on_hold_connections * 2;
+        cerver->hold_fds = realloc (cerver->hold_fds, 
+            cerver->max_on_hold_connections * sizeof (struct pollfd));
+        if (cerver->hold_fds) retval = 0;
+    }
+
+    return retval;
+
+}
+
+static i32 on_hold_get_free_idx (Cerver *cerver) {
+
+    if (cerver) {
+        for (u32 i = 0; i < cerver->max_on_hold_connections; i++)
+            if (cerver->hold_fds[i].fd == -1) return i;
+    }
+
+    return -1;
+
+}
+
+// if the cerver requires authentication, we put the connection on hold
+// until it has a sucess authentication or it failed to, so it is dropped
+// returns 0 on success, 1 on error
+u8 on_hold_connection (Cerver *cerver, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (cerver && connection) {
+        if (cerver->on_hold_connections) {
+            i32 idx = on_hold_get_free_idx (cerver);
+            if (idx >= 0) {
+                cerver->hold_fds[idx].fd = connection->sock_fd;
+                cerver->hold_fds[idx].events = POLLIN;
+                cerver->current_on_hold_nfds++; 
+
+                cerver->n_hold_clients++;
+
+                avl_insert_node (cerver->on_hold_connections, connection);
+
+                if (cerver->holding_connections == false) {
+                    cerver->holding_connections = true;
+                    if (thpool_add_work (cerver->thpool, (void *) on_hold_poll, cerver)) {
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                            c_string_create ("Failed to add on_hold_poll () to cerver's %s thpool!", 
+                            cerver->name->str));
+                        cerver->holding_connections = false;
+                    }
+                }
+
+                #ifdef CERVER_DEBUG
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER,
+                        c_string_create ("Connection is on hold on cerver %s.",
+                        cerver->name->str));
+                #endif
+
+                #ifdef CERVER_STATS
+                    cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
+                        c_string_create ("Cerver %s current on hold connections: %i.", 
+                        cerver->name->str, cerver->n_hold_clients));
+                #endif
+            }
+
+            else {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                    c_string_create ("Cerver %s on hold poll is full -- we need to realloc...", 
+                    cerver->name->str));
+                #endif
+                if (cerver_realloc_on_hold_poll_fds (cerver)) {
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                        c_string_create ("Failed to realloc cerver %s on hold poll fds!", 
+                        cerver->name->str));
+                }
+            }
+        }
+    }
+
+    return retval;
 
 }

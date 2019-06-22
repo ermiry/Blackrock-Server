@@ -8,6 +8,22 @@
 
 struct _Cerver;
 
+typedef struct CerverReceive {
+
+    Cerver *cerver;
+    i32 sock_fd;
+    bool on_hold;
+
+} CerverReceive;
+
+extern CerverReceive *cerver_receive_new (struct _Cerver *cerver, 
+    i32 sock_fd, bool on_hold);
+
+extern inline void cerver_receive_delete (void *ptr);
+
+// receive all incoming data from the socket
+extern void *cerver_receive (void *ptr);
+
 // reallocs main cerver poll fds
 // returns 0 on success, 1 on error
 extern u8 cerver_realloc_main_poll_fds (struct _Cerver *cerver);

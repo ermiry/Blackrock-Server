@@ -16,15 +16,7 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-typedef struct CerverReceive {
-
-    Cerver *cerver;
-    i32 sock_fd;
-    bool on_hold;
-
-} CerverReceive;
-
-static CerverReceive *cerver_receive_new (Cerver *cerver, i32 sock_fd, bool on_hold) {
+CerverReceive *cerver_receive_new (Cerver *cerver, i32 sock_fd, bool on_hold) {
 
     CerverReceive *cr = (CerverReceive *) malloc (sizeof (CerverReceive));
     if (cr) {
@@ -37,7 +29,7 @@ static CerverReceive *cerver_receive_new (Cerver *cerver, i32 sock_fd, bool on_h
 
 }
 
-static inline void cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
+inline void cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
 
 // sends back a test packet to the client!
 static void cerver_test_packet_handler (Packet *packet) {
@@ -235,7 +227,7 @@ static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd,
 // FIXME: correctly end client connection on error
 // TODO: add support for handling large files transmissions
 // receive all incoming data from the socket
-static void *cerver_receive (void *ptr) {
+void *cerver_receive (void *ptr) {
 
     if (ptr) {
         CerverReceive *cr = (CerverReceive *) ptr;

@@ -77,12 +77,12 @@ struct _Cerver {
     bool auth_required;                 // does the server requires authentication?
     Auth *auth;                         // server auth info
      
-    AVLTree *on_hold_clients;           // hold on the clients until they authenticate
+    AVLTree *on_hold_connections;       // hold on the connections until they authenticate
     struct pollfd *hold_fds;
-    u32 max_on_hold_clients;
+    u32 max_on_hold_connections;
     u16 current_on_hold_nfds;
-    bool compress_hold_clients;         // compress the hold fds array?
-    bool holding_clients;
+    bool compress_on_hold;              // compress the hold fds array?
+    bool holding_connections;
 
     // allow the clients to use sessions (have multiple connections)
     bool use_sessions;  
