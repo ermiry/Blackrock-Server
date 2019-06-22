@@ -280,6 +280,12 @@ static void cerver_register_new_connection (const Cerver *cerver,
 
     Connection *connection = client_connection_create (new_fd, client_address);
     if (connection) {
+        #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
+                c_string_create ("New connection from IP address: %s -- Port: %d", 
+                connection->ip->str, connection->port));
+        #endif
+
         bool failed = false;
 
         // if the cerver requires auth, we put the connection on hold
@@ -360,14 +366,7 @@ static void *cerver_accept (void *ptr) {
         socklen_t socklen = sizeof (struct sockaddr_storage);
 
         i32 new_fd = accept (cerver->sock, (struct sockaddr *) &client_address, &socklen);
-        if (new_fd > 0) {
-            #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "Accepted a new connection.");
-            #endif
-
-            cerver_register_new_connection (cerver, new_fd, client_address);
-        }
-
+        if (new_fd > 0) cerver_register_new_connection (cerver, new_fd, client_address);
         else {
             // if we get EWOULDBLOCK, we have accepted all connections
             if (errno != EWOULDBLOCK) {
