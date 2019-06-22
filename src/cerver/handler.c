@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <errno.h>
 
 #include "cerver/types/types.h"
@@ -189,7 +190,7 @@ void default_handle_recieved_buffer (void *rcvd_buffer_data) {
 }
 
 static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd, 
-    char *buffer, size_t buffer_size) {
+    char *buffer, size_t buffer_size, bool on_hold) {
 
     if (buffer && (buffer_size > 0)) {
         u32 buffer_idx = 0;
@@ -210,6 +211,7 @@ static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd,
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
+                // FIXME: is there a difference if the client is on hold?
                 Client *client = client_get_by_sock_fd (cerver, sock_fd);
                 if (client) {
                     Packet *packet = packet_new ();
@@ -278,83 +280,10 @@ static void cerver_receive (Cerver *cerver, i32 sock_fd, bool on_hold) {
             char *buffer_data = (char *) calloc (rc, sizeof (char));
             if (buffer_data) {
                 memcpy (buffer_data, packet_buffer, rc);
-                cerver_handle_receive_buffer (cerver, sock_fd, buffer_data, rc);
+                cerver_handle_receive_buffer (cerver, sock_fd, buffer_data, rc, on_hold);
             }
         }
         
-    // } while (true);
-
-}
-
-// FIXME: old!
-static void cerver_recieve (Cerver *cerver, i32 socket_fd, bool onHold) {
-
-    // if (onHold) cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - on hold client!");
-    // else cerver_log_msg (stdout, LOG_SUCCESS, LOG_PACKET, "cerver_recieve () - normal client!");
-
-    ssize_t rc;
-    char packetBuffer[MAX_UDP_PACKET_SIZE];
-    memset (packetBuffer, 0, MAX_UDP_PACKET_SIZE);
-
-    // do {
-        rc = recv (socket_fd, packetBuffer, sizeof (packetBuffer), 0);
-        
-        if (rc < 0) {
-            if (errno != EWOULDBLOCK) {     // no more data to read 
-                // as of 02/11/2018 -- we juts close the socket and if the client is hanging
-                // it will be removed with the client timeout function 
-                // this is to prevent an extra client_count -= 1
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, "cerver_recieve () - rc < 0");
-
-                close (socket_fd);  // close the client socket
-            }
-
-            // break;
-        }
-
-        else if (rc == 0) {
-            // man recv -> steam socket perfomed an orderly shutdown
-            // but in dgram it might mean something?
-            perror ("Error:");
-            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
-                    "Ending client connection - cerver_recieve () - rc == 0");
-
-            close (socket_fd);  // close the client socket
-
-            if (onHold) 
-                 removeOnHoldClient (cerver, 
-                    getClientBySocket (cerver->onHoldClients->root, socket_fd), socket_fd);  
-
-            else {
-                // remove the socket from the main poll
-                for (u32 i = 0; i < poll_n_fds; i++) {
-                    if (cerver->fds[i].fd == socket_fd) {
-                        cerver->fds[i].fd = -1;
-                        cerver->fds[i].events = -1;
-                    }
-                } 
-
-                Client *c = getClientBySocket (cerver->clients->root, socket_fd);
-                if (c) 
-                    if (c->n_active_cons <= 1) 
-                        client_closeConnection (cerver, c);
-
-                else {
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
-                        "Couldn't find an active client with the requested socket!");
-                    #endif
-                }
-            }
-
-            // break;
-        }
-
-        else {
-            // pass the necessary data to the cerver buffer handler
-            RecvdBufferData *data = rcvd_buffer_data_new (cerver, socket_fd, packetBuffer, rc, onHold);
-            cerver->handle_recieved_buffer (data);
-        }
     // } while (true);
 
 }
@@ -448,6 +377,22 @@ static void *cerver_accept (void *ptr) {
 
 }
 
+// reallocs main cerver poll fds
+// returns 0 on success, 1 on error
+u8 cerver_realloc_main_poll_fds (Cerver *cerver) {
+
+    u8 retval = 1;
+
+    if (cerver) {
+        cerver->max_n_fds = cerver->max_n_fds * 2;
+        cerver->fds = realloc (cerver->fds, cerver->max_n_fds * sizeof (struct pollfd));
+        if (cerver->fds) retval = 0;
+    }
+
+    return retval;
+
+}
+
 // get a free index in the main cerver poll strcuture
 i32 cerver_poll_get_free_idx (Cerver *cerver) {
 
@@ -456,6 +401,18 @@ i32 cerver_poll_get_free_idx (Cerver *cerver) {
             if (cerver->fds[i].fd == -1) return i;
 
         return 0;
+    }
+
+    return -1;
+
+}
+
+// get the idx of the connection sock fd in the cerver poll fds
+i32 cerver_poll_get_idx_by_sock_fd (Cerver *cerver, i32 sock_fd) {
+
+    if (cerver) {
+        for (u32 i = 0; i < cerver->max_n_fds; i++)
+            if (cerver->fds[i].fd == sock_fd) return i;
     }
 
     return -1;

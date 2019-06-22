@@ -231,8 +231,25 @@ int client_comparator_session_id (const void *a, const void *b) {
 
 }
 
+// closes all client connections
+u8 client_disconnect (Client *client) {
+
+    if (client) {
+        Connection *connection = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            connection = le->data;
+            client_connection_end (connection);
+        }
+
+        return 0;
+    }
+
+    return 1;
+
+}
+
 // FIXME: map the client with the socket fds
-// TODO: realloc cerver main poll if full!!
+// FIXME: we dont want htab to fully copy our data!!!
 // registers a client to the cerver --> add it to cerver's structures
 u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
@@ -255,14 +272,22 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
                     c_string_create ("Added new sock fd to cerver %s main poll, idx: %i", 
                     cerver->name->str, idx));
                 #endif
+
+                // map the socket fd with the client
+                const void *key = &connection->sock_fd;
+                // FIXME: we dont want htab to fully copy our data!!!
+                htab_insert (cerver->client_sock_fd_map, key, sizeof (i32), client, sizeof (Client));
             }
 
             else {
-                // FIXME: realloc cerver poll
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
-                    c_string_create ("Cerver %s main poll is full!", cerver->name->str));
+                    c_string_create ("Cerver %s main poll is full -- we need to realloc...", cerver->name->str));
                 #endif
+                if (cerver_realloc_main_poll_fds (cerver)) {
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                        c_string_create ("Failed to realloc cerver %s main poll fds!", cerver->name->str));
+                }
             }
         }
 
@@ -276,7 +301,7 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
         
         cerver->n_connected_clients++;
         #ifdef CERVER_STATS
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
             c_string_create ("Connected clients to cerver %s: %i.", 
             cerver->name->str, cerver->n_connected_clients));
         #endif
@@ -286,14 +311,56 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
 }
 
-// TODO:
+// FIXME:
 // unregisters a client from a cerver -- removes it from cerver's structures
-u8 client_unregister_from_cerver (Cerver *cerver, Client *client) {
+Client * client_unregister_from_cerver (Cerver *cerver, Client *client) {
 
-    u8 retval = 1;
+    Client *retval = NULL;
 
     if (cerver && client) {
+        // unregister all the client connections from the cerver
+        Connection *connection = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            connection = (Connection *) le->data;
 
+            // get the idx of the connection sock fd in the cerver poll fds
+            i32 idx = cerver_poll_get_idx_by_sock_fd (cerver, connection->sock_fd);
+            if (idx > 0) {
+                cerver->fds[idx].fd = -1;
+                cerver->fds[idx].events = -1;
+                cerver->current_n_fds--;
+
+                // FIXME: we dont want the client to be destroyed!!
+                const void *key = &connection->sock_fd;
+                htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
+            }
+        }
+
+        // remove the client from the cerver's clients
+        void *client_data = avl_remove_node (cerver->clients, client);
+        if (client_data) {
+            retval = (Client *) client_data;
+
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
+                c_string_create ("Unregistered a new client from cerver %s.", cerver->name->str));
+            #endif
+
+            cerver->n_connected_clients--;
+            #ifdef CERVER_STATS
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
+                c_string_create ("Connected clients to cerver %s: %i.", 
+                cerver->name->str, cerver->n_connected_clients));
+            #endif
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
+                c_string_create ("Received NULL ptr when attempting to remove a client from cerver's %s client tree.", 
+                cerver->name->str));
+            #endif
+        }
     }
 
     return retval;
@@ -339,91 +406,3 @@ Client *client_get_by_session_id (Cerver *cerver, char *session_id) {
     return client;
 
 }
-
-// removes a client form a cerver's main poll structures
-Client *client_unregisterFromServer (Cerver *cerver, Client *client) {
-
-    if (cerver && client) {
-        Client *c = avl_remove_node (cerver->clients, client);
-        if (c) {
-            if (client->active_connections) {
-                for (u8 i = 0; i < client->n_active_cons; i++) {
-                    for (u8 j = 0; j < poll_n_fds; j++) {
-                        if (cerver->fds[j].fd == client->active_connections[i]) {
-                            cerver->fds[j].fd = -1;
-                            cerver->fds[j].events = -1;
-                        }
-                    }
-                }
-            }
-
-            #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Unregistered a client from the sever");
-            #endif
-
-            cerver->connectedClients--;
-
-            return c;
-        }
-
-        else cerver_log_msg (stdout, LOG_WARNING, LOG_CLIENT, "The client wasn't registered in the cerver.");
-    }
-
-    return NULL;
-
-}
-
-// disconnect a client from the cerver and take it out from the cerver's clients and 
-void client_closeConnection (Cerver *cerver, Client *client) {
-
-    if (cerver && client) {
-        if (client->active_connections) {
-            // close all the client's active connections
-            for (u8 i = 0; i < client->n_active_cons; i++)
-                close (client->active_connections[i]);
-
-            free (client->active_connections);
-            client->active_connections = NULL;
-        }
-
-        // remove it from the cerver structures
-        client_unregisterFromServer (cerver, client);
-
-        #ifdef CERVER_DEBUG
-            cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
-                c_string_create ("Disconnected a client from the cerver.\
-                \nConnected clients remainning: %i.", cerver->connectedClients));
-        #endif
-    }
-
-}
-
-// disconnect the client from the cerver by a socket -- usefull for http servers
-int client_disconnect_by_socket (Cerver *cerver, const int sock_fd) {
-    
-    int retval = 1;
-
-    if (cerver) {
-        Client *c = getClientBySocket (cerver->clients->root, sock_fd);
-        if (c) {
-            if (c->n_active_cons <= 1) 
-                client_closeConnection (cerver, c);
-
-            // FIXME: check for client_CloseConnection retval to be sure!!
-            retval  = 0;
-        }
-            
-        else {
-            #ifdef CERVER_DEBUG
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
-                "Couldn't find an active client with the requested socket!");
-            #endif
-        }
-    }
-
-    return retval;
-
-}
-
-// TODO: used to check for client timeouts in any type of cerver
-void client_checkTimeouts (Cerver *cerver) {}

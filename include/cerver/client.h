@@ -89,13 +89,16 @@ extern int client_comparator_client_id (const void *a, const void *b);
 // compare clients based on their session ids
 extern int client_comparator_session_id (const void *a, const void *b);
 
+// closes all client connections
+// returns 0 on success, 1 on error
+extern u8 client_disconnect (Client *client);
+
 // registers a client to the cerver --> add it to cerver's structures
 // returns 0 on success, 1 on error
 extern u8 client_register_to_cerver (struct _Cerver *cerver, Client *client);
 
 // unregisters a client from a cerver -- removes it from cerver's structures
-// returns 0 on success, 1 on error
-extern u8 client_unregister_from_cerver (struct _Cerver *cerver, Client *client);
+extern Client *client_unregister_from_cerver (struct _Cerver *cerver, Client *client);
 
 // gets the client associated with a sock fd using the client-sock fd map
 extern Client *client_get_by_sock_fd (struct _Cerver *cerver, i32 sock_fd);
