@@ -9,6 +9,7 @@
 #include "cerver/packets.h"
 #include "cerver/errors.h"
 #include "cerver/handler.h"
+#include "cerver/sessions.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 #include "cerver/auth.h"
@@ -19,6 +20,44 @@
 
 static i32 on_hold_poll_get_idx_by_sock_fd (const Cerver *cerver, i32 sock_fd);
 static void on_hold_connection_drop (Cerver *cerver, const i32 sock_fd);
+
+static AuthData *auth_data_new (const char *token, void *data, size_t auth_data_size) {
+
+    AuthData *auth_data = (AuthData *) malloc (sizeof (AuthData));
+    if (auth_data) {
+        auth_data->token = token ? str_new (token) : NULL;
+        if (data) {
+            auth_data->auth_data = malloc (sizeof (auth_data_size));
+            if (auth_data->auth_data) {
+                memcpy (auth_data->auth_data, data, auth_data_size);
+                auth_data->auth_data_size = auth_data_size;
+            }
+
+            else {
+                free (auth_data);
+                auth_data = NULL;
+            }
+        }
+
+        else {
+            auth_data->auth_data = NULL;
+            auth_data->auth_data_size = 0;
+        }
+    }
+
+    return auth_data;
+
+}
+
+static void auth_data_delete (AuthData *auth_data) {
+
+    if (auth_data) {
+        str_delete (auth_data->token);
+        if (auth_data->auth_data) free (auth_data->auth_data);
+        free (auth_data);
+    }
+
+}
 
 Auth *auth_new (void) {
 
@@ -331,6 +370,7 @@ void authenticateClient (void *data) {
 
 }
 
+// FIXME:
 // how to manage a successfull authentication to the cerver
 static void auth_success (Packet *packet) {
 
@@ -400,25 +440,81 @@ static void auth_failed (Packet *packet) {
 
 }
 
+// strip out the auth data from the packet
+static AuthData *auth_strip_auth_data (Packet *packet) {
+
+    AuthData *auth_data = NULL;
+
+    if (packet) {
+        // check we have a big enough packet
+        if (packet->packet_size > sizeof (PacketHeader)) {
+            char *end = packet->packet;
+
+            // check if we have a token
+            if (packet->packet_size == (sizeof (PacketHeader) + sizeof (SToken))) {
+                SToken *s_token = (SToken *) (end += sizeof (PacketHeader));
+                auth_data = auth_data_new (s_token->token, NULL, 0);
+            }
+
+            // we have custom data credentials
+            else {
+                end += sizeof (PacketHeader);
+                size_t data_size = packet->packet_size - sizeof (PacketHeader);
+                auth_data = auth_data_new (NULL, end, data_size);
+            }
+        }
+    }
+
+    return auth_data;
+
+}
+
 // try to authenticate a connection using the values he sent to use
 static void auth_try (Packet *packet) {
 
     if (packet) {
         if (packet->cerver->auth->authenticate) {
-            if (!packet->cerver->auth->authenticate (packet)) {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
-                    c_string_create ("Client authenticated successfully to cerver %s",
-                    packet->cerver->name->str));
-                #endif
+            // strip out the auth data from the packet
+            AuthData *auth_data = auth_strip_auth_data (packet);
+            if (auth_data) {
+                // TODO: check if the cerver supports sessions
+                if (auth_data->token) {
+                    // if we get a token, we search for a client with the same token
 
-                auth_success (packet);
+                    // if we found a client, register the new connection to him
+
+                    // if not, we have a new client, so we register it to the cerver
+                }
+
+                else {
+                    // if not, we authenticate using the user defined method
+                    if (!packet->cerver->auth->authenticate (auth_data)) {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
+                            c_string_create ("Client authenticated successfully to cerver %s",
+                            packet->cerver->name->str));
+                        #endif
+
+                        auth_success (packet);
+                    }
+
+                    else {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stderr, LOG_DEBUG, LOG_CLIENT, 
+                            c_string_create ("Client failed to authenticate to cerver %s",
+                            packet->cerver->name->str));
+                        #endif
+
+                        auth_failed (packet);
+                    }
+                }
             }
 
+            // failed to get auth data form packet
             else {
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_DEBUG, LOG_CLIENT, 
-                    c_string_create ("Client failed to authenticate to cerver %s",
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                    c_string_create ("Failed to get auth data from packet in cerver %s",
                     packet->cerver->name->str));
                 #endif
 

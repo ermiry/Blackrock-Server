@@ -13,6 +13,16 @@
 
 struct _Cerver;
 
+// the auth data stripped from the packet
+typedef struct AuthData {
+
+    String *token;
+
+    void *auth_data;
+    size_t auth_data_size;
+
+} AuthData;
+
 // info for the server to perfom a correct client authentication
 typedef struct Auth {
 
