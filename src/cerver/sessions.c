@@ -1,13 +1,46 @@
+#include <stdlib.h>
+
 #include "cerver/types/types.h"
 
 #include "cerver/network.h"
+#include "cerver/packets.h"
+#include "cerver/client.h"
+#include "cerver/sessions.h"
+#include "cerver/auth.h"
 
 #include "cerver/utils/utils.h"
 #include "cerver/utils/sha-256.h"
 
+SessionData *session_data_new (const Packet *packet, const AuthData *auth_data, const Client *client) {
+
+    SessionData *session_data = (SessionData *) malloc (sizeof (SessionData));
+    if (session_data) {
+        session_data->packet = packet;
+        session_data->auth_data = auth_data;
+        session_data->client = client;
+    }
+
+    return session_data;
+
+}
+
+void session_data_delete (void *ptr) {
+
+    if (ptr) {
+        SessionData *session_data = (SessionData *) ptr;
+        session_data->packet = NULL;
+        session_data->auth_data = NULL;
+        session_data->client = NULL;
+    }
+
+}
+
 // TODO: refactor to use timestamps to generate the token
 // create a unique session id for each client based on connection values
-char *session_default_generate_id (i32 fd, const struct sockaddr_storage address) {
+void *session_default_generate_id (const void *session_data) {
+
+    // old parameters
+    // i32 fd, const struct sockaddr_storage address
 
     char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
     u16 port = sock_ip_port ((const struct sockaddr *) &address);

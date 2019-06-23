@@ -20,6 +20,7 @@
 
 static i32 on_hold_poll_get_idx_by_sock_fd (const Cerver *cerver, i32 sock_fd);
 static void on_hold_poll_remove_sock_fd (Cerver *cerver, const i32 sock_fd);
+static Connection *on_hold_connection_remove (const Cerver *cerver, const i32 sock_fd);
 static void on_hold_connection_drop (Cerver *cerver, const i32 sock_fd);
 static Connection *on_hold_connection_get_by_sock (const Cerver *cerver, const i32 sock_fd);
 
@@ -393,12 +394,127 @@ static void auth_send_success_packet (const Cerver *cerver, const i32 sock_fd) {
 
 }
 
-// FIXME:
-// how to manage a successfull authentication to the cerver
-static void auth_success (Packet *packet) {
+// creates a new lcient and registers to cerver with new data
+static u8 auth_create_new_client (const Packet *packet, const AuthData *auth_data) {
+
+    u8 retval = 1;
 
     if (packet) {
+        Connection *connection = on_hold_connection_remove (packet->cerver, packet->sock_fd);
+        if (connection) {
+            Client *c = client_new ();
+            if (c) {
+                if (!client_connection_register (c, connection)) {
+                    if (packet->cerver->use_sessions) {
+                        // FIXME: generate the new session id - token
+                        SessionData *session_data = session_data_new (packet, auth_data, c);
+                        String *session_id = packet->cerver->session_id_generator (session_data);
+                        session_data_delete (session_data);
+                    }
 
+                    else {
+                        // TODO: generate client id
+                    }
+
+                    // register the new client to the cerver
+                    if (!client_register_to_cerver (packet->cerver, c)) {
+                        retval = 0;     // success!!!
+                    }
+
+                    // cerver error -- failed to register the client to cerver
+                    else {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
+                            c_string_create ("Failed to register new lcient to cerver %s",
+                            packet->cerver->name->str));
+                        #endif
+
+                        Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
+                        if (error_packet) {
+                            packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                            packet_send (error_packet, 0);
+                            packet_delete (error_packet);
+                        }
+                        
+                        // close the connection
+                        on_hold_connection_drop (packet->cerver, packet->sock_fd);
+                    }
+                }
+
+                // cerver error -- failed to register connection to new client
+                else {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
+                        c_string_create ("Failed to register connection to client in cerver %s",
+                        packet->cerver->name->str));
+                    #endif
+
+                    Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
+                    if (error_packet) {
+                        packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                        packet_send (error_packet, 0);
+                        packet_delete (error_packet);
+                    }
+                    
+                    // close the connection
+                    on_hold_connection_drop (packet->cerver, packet->sock_fd);
+                }
+            }
+
+            // cerver error -- failed to allocate a new client
+            else {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                    c_string_create ("Failed to allocate a new client in cerver %s", 
+                    packet->cerver->name->str));
+                #endif
+                
+                Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
+                if (error_packet) {
+                    packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                    packet_send (error_packet, 0);
+                    packet_delete (error_packet);
+                }
+
+                // close the connection
+                on_hold_connection_drop (packet->cerver, packet->sock_fd);
+            }
+        }
+
+        // cerver error -- failed to remove connection from on hold structures
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                c_string_create ("Failed to remove connection from cerver's %s on hold connections", 
+                packet->cerver->name->str));
+            #endif
+            
+            Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
+            if (error_packet) {
+                packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                packet_send (error_packet, 0);
+                packet_delete (error_packet);
+            }
+
+            // close the connection
+            on_hold_connection_drop (packet->cerver, packet->sock_fd);
+        }
+    }
+
+    return retval;
+
+}
+
+// how to manage a successfull authentication to the cerver
+// we have a new client authenticated with credentials
+static void auth_success (const Packet *packet, const AuthData *auth_data) {
+
+    if (packet) {
+        // create a new lcient and register to cerver
+        if (!auth_create_new_client (packet, auth_data)) {
+            // if we are successfull, send success packet
+            auth_send_success_packet (packet->cerver, packet->sock_fd);
+        }
     }
 
 }
@@ -472,65 +588,9 @@ static void auth_failed (const Packet *packet) {
 
 }
 
-static void auth_create_new_client (const Packet *packet) {
-
-    if (packet) {
-        // FIXME: make sure to remove the connection from the on hold
-        Connection *connection = on_hold_connection_get_by_sock (packet->cerver, packet->sock_fd);
-        if (connection) {
-            Client *c = client_new ();
-            if (c) {
-                if (!client_connection_register (c, connection)) {
-                    // FIXME: generate the new session id - token
-
-                    // register the new client to the cerver
-
-                    // send success auth packet to client
-                    auth_send_success_packet (packet->cerver, packet->sock_fd);
-                }
-
-                else {
-                    // cerver error -- failed to register connection to new client
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
-                        c_string_create ("Failed to register connection to client in cerver %s",
-                        packet->cerver->name->str));
-                    #endif
-
-                    Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
-                    if (error_packet) {
-                        packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                        packet_send (error_packet, 0);
-                        packet_delete (error_packet);
-                    }
-                    
-                    // TODO: what to do next??
-
-                }
-            }
-
-            else {
-                // cerver error -- failed to allocate a new client
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                    c_string_create ("Failed to allocate a new client in cerver %s", 
-                    packet->cerver->name->str));
-                #endif
-                
-                Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
-                if (error_packet) {
-                    packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                    packet_send (error_packet, 0);
-                    packet_delete (error_packet);
-                }
-
-                // TODO: what to do next??
-            }
-        }
-    }
-
-}
-
+// authenticate a new connection using a session token
+// if we find a client with that token, we register the connection to him;
+// if we don't find a client, the token is invalid
 static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
 
     if (packet && auth_data) {
@@ -575,8 +635,8 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
         }
 
         else {
-            // if not, we have a new client, so we register it to the cerver
-            auth_create_new_client (packet);
+            // if not, the token is invalid!
+            auth_failed (packet);
         }
     }
 
@@ -592,7 +652,7 @@ static void auth_with_defined_method (const Packet *packet, const AuthData *auth
                 packet->cerver->name->str));
             #endif
 
-            auth_success (packet);
+            auth_success (packet, auth_data);
         }
 
         else {
@@ -965,38 +1025,62 @@ static void on_hold_poll_remove_sock_fd (Cerver *cerver, const i32 sock_fd) {
 
 }
 
+// removes the connection from the on hold structures
+static Connection *on_hold_connection_remove (const Cerver *cerver, const i32 sock_fd) {
+
+    Connection *connection = NULL;
+
+    if (cerver) {
+        // remove the connection associated to the sock fd
+        Connection *query = client_connection_new ();
+        query->sock_fd = sock_fd;
+        void *connection_data = avl_remove_node (cerver->on_hold_connections, query);
+        if (connection_data) {
+            connection = (Connection *) connection_data;
+
+            // unregister the fd from the on hold structures
+            on_hold_poll_remove_sock_fd (cerver, sock_fd);
+        }
+    }
+
+    return connection;
+
+}
+
 // close the on hold connection assocaited with sock fd 
 // and remove it from the cerver
 static void on_hold_connection_drop (Cerver *cerver, const i32 sock_fd) {
 
-    // remove the connection associated to the sock fd
-    Connection *query = client_connection_new ();
-    query->sock_fd = sock_fd;
-    void *connection_data = avl_remove_node (cerver->on_hold_connections, query);
-    if (connection_data) {
-        Connection *connection = (Connection *) connection_data;
+    if (cerver) {
+        // remove the connection associated to the sock fd
+        Connection *query = client_connection_new ();
+        query->sock_fd = sock_fd;
+        void *connection_data = avl_remove_node (cerver->on_hold_connections, query);
+        if (connection_data) {
+            Connection *connection = (Connection *) connection_data;
 
-        // close the connection socket
-        client_connection_end (connection);
+            // close the connection socket
+            client_connection_end (connection);
 
-        // unregister the fd from the on hold structures
-        on_hold_poll_remove_sock_fd (cerver, sock_fd);
+            // unregister the fd from the on hold structures
+            on_hold_poll_remove_sock_fd (cerver, sock_fd);
 
-        // we can now safely delete the connection
-        client_connection_delete (connection);
-    }
+            // we can now safely delete the connection
+            client_connection_delete (connection);
+        }
 
-    else {
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
-            c_string_create ("Couldn't find a connection associated with %i sock fd in cerver's %s on hold connections tree.",
-            sock_fd, cerver->name->str));
-        #endif
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Couldn't find a connection associated with %i sock fd in cerver's %s on hold connections tree.",
+                sock_fd, cerver->name->str));
+            #endif
 
-        // unregister the fd from the on hold structures
-        on_hold_poll_remove_sock_fd (cerver, sock_fd);
+            // unregister the fd from the on hold structures
+            on_hold_poll_remove_sock_fd (cerver, sock_fd);
 
-        close (sock_fd);        // just close the socket
+            close (sock_fd);        // just close the socket
+        }
     }
 
 }

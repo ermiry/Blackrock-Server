@@ -86,8 +86,8 @@ struct _Cerver {
 
     // allow the clients to use sessions (have multiple connections)
     bool use_sessions;  
-    // admin defined function to generate session ids bassed on usernames, etc             
-    void *(*session_id_generator) (void *);
+    // admin defined function to generate session ids, it takes a session data struct            
+    void *(*session_id_generator) (const void *);
 
     // the admin can define a function to handle the recieve buffer if they are using a custom protocol
     // otherwise, it will be set to the default one

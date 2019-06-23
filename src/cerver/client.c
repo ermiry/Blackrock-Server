@@ -285,6 +285,8 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
     u8 retval = 1;
 
     if (cerver && client) {
+        bool failed = false;
+
         // register all the client connections to the cerver poll
         Connection *connection = NULL;
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
@@ -316,24 +318,30 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
                 if (cerver_realloc_main_poll_fds (cerver)) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Failed to realloc cerver %s main poll fds!", cerver->name->str));
+
+                    failed = true;
                 }
             }
         }
 
-        // register the client to the cerver client's
-        avl_insert_node (cerver->clients, client);
+        if (!failed) {
+            // register the client to the cerver client's
+            avl_insert_node (cerver->clients, client);
 
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
-            c_string_create ("Registered a new client to cerver %s.", cerver->name->str));
-        #endif
-        
-        cerver->n_connected_clients++;
-        #ifdef CERVER_STATS
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-            c_string_create ("Connected clients to cerver %s: %i.", 
-            cerver->name->str, cerver->n_connected_clients));
-        #endif
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
+                c_string_create ("Registered a new client to cerver %s.", cerver->name->str));
+            #endif
+            
+            cerver->n_connected_clients++;
+            #ifdef CERVER_STATS
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
+                c_string_create ("Connected clients to cerver %s: %i.", 
+                cerver->name->str, cerver->n_connected_clients));
+            #endif
+
+            retval = 0;
+        }
     }
 
     return retval;
