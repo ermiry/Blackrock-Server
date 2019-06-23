@@ -9,6 +9,8 @@
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 
+#define DEFAULT_AUTH_TRIES              3
+
 struct _Cerver;
 
 // info for the server to perfom a correct client authentication

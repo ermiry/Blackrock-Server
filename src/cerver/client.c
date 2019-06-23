@@ -10,6 +10,7 @@
 
 #include "cerver/network.h"
 #include "cerver/cerver.h"
+#include "cerver/auth.h"
 #include "cerver/handler.h"
 #include "cerver/client.h"
 
@@ -29,6 +30,7 @@ Connection *client_connection_new (void) {
         memset (connection, 0, sizeof (Connection));
         connection->ip = NULL;
         connection->active = false;
+        connection->auth_tries = DEFAULT_AUTH_TRIES;
         connection->time_info = NULL;
     }
 

@@ -7,6 +7,7 @@
 
 #include "cerver/network.h"
 #include "cerver/packets.h"
+#include "cerver/errors.h"
 #include "cerver/handler.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
@@ -330,13 +331,99 @@ void authenticateClient (void *data) {
 
 }
 
-// FIXME:
+// how to manage a successfull authentication to the cerver
+static void auth_success (Packet *packet) {
+
+    if (packet) {
+
+    }
+
+}
+
+// how to manage a failed auth to the cerver
+static void auth_failed (Packet *packet) {
+
+    if (packet) {
+        // send failed auth packet to client
+        Packet *error_packet = error_packet_generate (ERR_FAILED_AUTH, "Failed to authenticate!");
+        if (error_packet) {
+            packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+            packet_send (error_packet, 0);
+            packet_delete (error_packet);
+        }
+
+        // get the connection associated with the sock fd
+        Connection *query = client_connection_new ();
+        if (query) {
+            query->sock_fd = packet->sock_fd;
+            void *connection_data = avl_get_node_data (packet->cerver->on_hold_connections, query);
+            if (connection_data) {
+                Connection *connection = (Connection *) connection_data;
+                connection->auth_tries--;
+                if (connection->auth_tries <= 0) {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+                    "Connection reached max auth tries, dropping now...");
+                    #endif
+                    on_hold_connection_drop (packet->cerver, packet->sock_fd);
+                }
+            }
+
+            else {
+                cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                    c_string_create ("Failed to get on hold connection associated with sock: %i", 
+                    packet->sock_fd));
+                on_hold_connection_drop (packet->cerver, packet->sock_fd);
+            }
+        }
+
+        else {
+            // cerver error allocating memory -- this might not happen
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Failed to create connection query in cerver %s.",
+                packet->cerver->name));
+            #endif
+
+            // send a cerver error packet back to the client
+            Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Failed to authenticate!");
+            if (error_packet) {
+                packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                packet_send (error_packet, 0);
+                packet_delete (error_packet);
+            }
+
+            // drop the connection as we are unable to authenticate it
+            on_hold_connection_drop (packet->cerver, packet->sock_fd);
+        }
+    }
+
+}
+
 // try to authenticate a connection using the values he sent to use
 static void auth_try (Packet *packet) {
 
     if (packet) {
         if (packet->cerver->auth->authenticate) {
+            if (!packet->cerver->auth->authenticate (packet)) {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
+                    c_string_create ("Client authenticated successfully to cerver %s",
+                    packet->cerver->name->str));
+                #endif
 
+                auth_success (packet);
+            }
+
+            else {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, LOG_DEBUG, LOG_CLIENT, 
+                    c_string_create ("Client failed to authenticate to cerver %s",
+                    packet->cerver->name->str));
+                #endif
+
+                auth_failed (packet);
+            }
         }
 
         // no authentication method -- clients are not able to interact to the cerver!
