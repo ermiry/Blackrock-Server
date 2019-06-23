@@ -114,6 +114,8 @@ void client_connection_end (Connection *connection) {
 }
 
 // FIXME: add the sock fd to the cerver poll fds!!
+// check if the client is already registered to a cerver or not!!
+// and dont forget to map it from the cerver map
 // registers a new connection to a client
 // returns 0 on success, 1 on error
 u8 client_connection_register (Client *client, Connection *connection) {
@@ -137,9 +139,10 @@ u8 client_connection_register (Client *client, Connection *connection) {
 
 }
 
+// FIXME: unmap the connection from the client!!
 // unregisters a connection from a client and stops and deletes it
 // returns 0 on success, 1 on error
-u8 client_unregister_connection (Client *client, Connection *connection) {
+u8 client_connection_unregister (Client *client, Connection *connection) {
 
     u8 retval = 1;
 

@@ -62,7 +62,7 @@ extern u8 client_connection_register (struct _Client *client, Connection *connec
 
 // unregisters a connection from a client and stops and deletes it
 // returns 0 on success, 1 on error
-extern u8 client_unregister_connection (struct _Client *client, Connection *connection);
+extern u8 client_connection_unregister (struct _Client *client, Connection *connection);
 
 // anyone that connects to the cerver
 struct _Client {
