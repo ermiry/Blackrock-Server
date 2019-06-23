@@ -113,6 +113,7 @@ void client_connection_end (Connection *connection) {
 
 }
 
+// FIXME: add the sock fd to the cerver poll fds!!
 // registers a new connection to a client
 // returns 0 on success, 1 on error
 u8 client_connection_register (Client *client, Connection *connection) {

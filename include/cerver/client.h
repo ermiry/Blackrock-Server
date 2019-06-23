@@ -118,6 +118,6 @@ extern Client *client_get_by_sock_fd (struct _Cerver *cerver, i32 sock_fd);
 
 // searches the avl tree to get the client associated with the session id
 // the cerver must support sessions
-extern Client *client_get_by_session_id (Cerver *cerver, char *session_id);
+extern Client *client_get_by_session_id (struct _Cerver *cerver, char *session_id);
 
 #endif
