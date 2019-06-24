@@ -70,7 +70,7 @@ Cerver *cerver_new (Cerver *cerver) {
 
         c->fds = NULL;
 
-        c->on_hold_clients = NULL;
+        c->on_hold_connections = NULL;
         c->hold_fds = NULL;
 
         c->name = NULL;
@@ -82,6 +82,10 @@ Cerver *cerver_new (Cerver *cerver) {
         c->session_id_generator = NULL;
         
         c->isRunning = false;
+
+        c->app_packet_handler = NULL;
+        c->app_error_packet_handler = NULL;
+        c->custom_packet_handler = NULL;
     }
 
     return c;
@@ -150,19 +154,19 @@ static u8 cerver_on_hold_init (Cerver *cerver) {
     u8 retval = 1;
 
     if (cerver) {
-        // FIXME: we dont want to fully destroy the clients!!
-        cerver->on_hold_clients = avl_init (client_comparator_client_id, destroyClient);
-        if (cerver->on_hold_clients) {
-            cerver->hold_fds = (struct pollfd *) calloc (poll_n_fds, sizeof (struct pollfd));
+        cerver->on_hold_connections = avl_init (client_connection_comparator, client_connection_delete);
+        if (cerver->on_hold_connections) {
+            cerver->max_on_hold_connections = poll_n_fds;
+            cerver->hold_fds = (struct pollfd *) calloc (cerver->max_on_hold_connections, sizeof (struct pollfd));
             if (cerver->hold_fds) {
                 memset (cerver->hold_fds, 0, sizeof (cerver->hold_fds));
-                cerver->max_on_hold_clients = poll_n_fds;
+                cerver->max_on_hold_connections = poll_n_fds;
                 cerver->current_n_fds = 0;
-                for (u32 i = 0; i < cerver->max_on_hold_clients; i++)
+                for (u32 i = 0; i < cerver->max_on_hold_connections; i++)
                     cerver->hold_fds[i].fd = -1;
 
-                cerver->compress_hold_clients = false;
-                cerver->holding_clients = false;
+                cerver->compress_on_hold = false;
+                cerver->holding_connections = false;
 
                 retval = 0;
             }
@@ -212,13 +216,32 @@ u8 cerver_set_sessions (Cerver *cerver, void *(*session_id_generator) (void *)) 
 
 }
 
+// sets a cutom app packet hanlder and a custom app error packet handler
+void cerver_set_app_handlers (Cerver *cerver, Action app_handler, Action app_error_handler) {
+
+    if (cerver) {
+        cerver->app_packet_handler = app_handler;
+        cerver->app_error_packet_handler = app_error_handler;
+    }
+
+}
+
+// sets a custom packet handler
+void cerver_set_custom_handler (Cerver *cerver, Action custom_handler) {
+
+    if (cerver) cerver->custom_packet_handler = custom_handler;
+
+}
+
+
 // FIXME: game data
 static u8 cerver_init_data_structures (Cerver *cerver) {
 
     u8 retval = 1;
 
     if (cerver) {
-        cerver->clients = avl_init (client_comparator_client_id, destroyClient);
+        // FIXME: where do we check if we are comparing by id or by session id?
+        cerver->clients = avl_init (client_comparator_client_id, client_delete);
 
         // initialize main pollfd structures
         cerver->fds = (struct pollfd *) calloc (poll_n_fds, sizeof (struct pollfd));

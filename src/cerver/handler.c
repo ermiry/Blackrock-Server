@@ -56,7 +56,6 @@ void cerver_test_packet_handler (Packet *packet) {
 
 }
 
-// FIXME:
 // handle packet based on type
 static void cerver_packet_handler (void *ptr) {
 
@@ -76,22 +75,23 @@ static void cerver_packet_handler (void *ptr) {
                 // handle a game packet sent from the server
                 case GAME_PACKET: break;
 
-                // FIXME:
-                // user set handler to handler app specific packets
+                // user set handler to handle app specific packets
                 case APP_PACKET:
-                    // if (pack_info->client->appPacketHandler)
-                    //     pack_info->client->appPacketHandler (pack_info);
+                    if (packet->cerver->app_packet_handler)
+                        packet->cerver->app_packet_handler (packet);
                     break;
 
-                // FIXME:
                 // user set handler to handle app specific errors
                 case APP_ERROR_PACKET: 
-                    // if (pack_info->client->appErrorHandler)  
-                    //     pack_info->client->appErrorHandler (pack_info);
+                    if (packet->cerver->app_error_packet_handler)
+                        packet->cerver->app_error_packet_handler (packet);
                     break;
 
                 // custom packet hanlder
-                case CUSTOM_PACKET: break;
+                case CUSTOM_PACKET: 
+                    if (packet->cerver->custom_packet_handler)
+                        packet->cerver->custom_packet_handler (packet);
+                    break;
 
                 // acknowledge the client we have received his test packet
                 case TEST_PACKET: cerver_test_packet_handler (packet); break;
@@ -107,64 +107,6 @@ static void cerver_packet_handler (void *ptr) {
         }
 
         packet_delete (packet);
-    }
-
-}
-
-// FIXME: old!
-// split the entry buffer in packets of the correct size
-void default_handle_recieved_buffer (void *rcvd_buffer_data) {
-
-    if (rcvd_buffer_data) {
-        RecvdBufferData *data = (RecvdBufferData *) rcvd_buffer_data;
-
-        if (data->buffer && (data->total_size > 0)) {
-            u32 buffer_idx = 0;
-            char *end = data->buffer;
-
-            PacketHeader *header = NULL;
-            u32 packet_size;
-            char *packet_data = NULL;
-
-            PacketInfo *info = NULL;
-
-            while (buffer_idx < data->total_size) {
-                header = (PacketHeader *) end;
-
-                // check the packet size
-                packet_size = header->packetSize;
-                if (packet_size > 0) {
-                    // copy the content of the packet from the buffer
-                    packet_data = (char *) calloc (packet_size, sizeof (char));
-                    for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
-                        packet_data[i] = data->buffer[buffer_idx];
-
-                    Client *c = data->onHold ? getClientBySocket (data->cerver->onHoldClients->root, data->sock_fd) :
-                        getClientBySocket (data->cerver->clients->root, data->sock_fd);
-
-                    if (!c) {
-                        cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to get client by socket!");
-                        return;
-                    }
-
-                    info = newPacketInfo (data->cerver, c, data->sock_fd, packet_data, packet_size);
-
-                    if (info)
-                        thpool_add_work (data->cerver->thpool, data->onHold ?
-                            (void *) handleOnHoldPacket : (void *) handlePacket, info);
-
-                    else {
-                        #ifdef CERVER_DEBUG
-                        cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to create packet info!");
-                        #endif
-                    }
-
-                    end += packet_size;
-                }
-
-                else break;
-            }
-        }
     }
 
 }
@@ -191,29 +133,38 @@ static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd,
                 for (u32 i = 0; i < packet_size; i++, buffer_idx++) 
                     packet_data[i] = buffer[buffer_idx];
 
-                // FIXME: is there a difference if the client is on hold?
-                Client *client = client_get_by_sock_fd (cerver, sock_fd);
-                if (client) {
-                    Packet *packet = packet_new ();
-                    if (packet) {
-                        packet->cerver = cerver;
-                        packet->client = client;
-                        packet->sock_fd = sock_fd;
-                        packet->header = header;
-                        packet->packet_size = packet_size;
-                        packet->packet = packet_data;
+                Packet *packet = packet_new ();
+                if (packet) {
+                    packet->cerver = cerver;
+                    packet->sock_fd = sock_fd;
+                    packet->header = header;
+                    packet->packet_size = packet_size;
+                    packet->packet = packet_data;
 
-                        // FIXME: actual handle the packet depending if it is on hold or not!
-                        // thpool_add_work (client->thpool, (void *) client_packet_handler, packet);
+                    if (on_hold) on_hold_packet_handler (packet);
+                    else {
+                        Client *client = client_get_by_sock_fd (cerver, sock_fd);
+                         if (client) cerver_packet_handler (packet);
+
+                        else {
+                            #ifdef CERVER_DEBUG
+                            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                                c_string_create ("Failed to get client associated with sock: %i.", sock_fd));
+                            #endif
+                            // no client - discard the data!
+                            packet_delete (packet);
+                        }
                     }
                 }
 
                 else {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
-                        c_string_create ("Failed to get client associated with sock: %i.", sock_fd));
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
+                        c_string_create ("Failed to create a new packet in cerver_receive () in cerver %s.", 
+                        cerver->name->str));
                     #endif
-                    // TODO: no client - discard the data!
+                    // failed to create a new packet -- discard the data
+                    if (packet_data) free (packet_data);
                 }
 
                 end += packet_size;

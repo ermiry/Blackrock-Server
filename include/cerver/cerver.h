@@ -93,6 +93,11 @@ struct _Cerver {
     // otherwise, it will be set to the default one
     // Action handle_recieved_buffer;
 
+    // custom packet hanlders
+    Action app_packet_handler;
+    Action app_error_packet_handler;
+    Action custom_packet_handler;
+
     /*** server info/stats ***/
     String *name;
     String *welcome_msg;                 // this msg is sent to the client when it first connects
@@ -130,6 +135,12 @@ extern u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authentic
 // configures the cerver to use client sessions
 // retuns 0 on success, 1 on error
 extern u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator);
+
+// sets a cutom app packet hanlder and a custom app error packet handler
+extern void cerver_set_app_handlers (Cerver *cerver, Action app_handler, Action app_error_handler);
+
+// sets a custom packet handler
+extern void cerver_set_custom_handler (Cerver *cerver, Action custom_handler);
 
 // creates a new cerver of the specified type and with option for a custom name
 // also has the option to take another cerver as a paramater
