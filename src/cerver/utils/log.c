@@ -19,7 +19,7 @@ static char *log_get_msg_type (LogMsgType type) {
         case LOG_TEST: strcpy (temp, "[LOG_TEST]"); break;
 
         case LOG_REQ: strcpy (temp, "[LOG_REQ]"); break;
-        case LOG_FILE_REQ: strcpy (temp, "[FILE]"); break;
+        case LOG_FILE: strcpy (temp, "[FILE]"); break;
         case LOG_PACKET: strcpy (temp, "[LOG_PACKET]"); break;
         case LOG_PLAYER: strcpy (temp, "[LOG_PLAYER]"); break;
         case LOG_GAME: strcpy (temp, "[LOG_GAME]"); break;

@@ -28,7 +28,7 @@ typedef enum LogMsgType {
 
     LOG_REQ,
     LOG_PACKET,
-    LOG_FILE_REQ,
+    LOG_FILE,
     LOG_GAME,
     LOG_PLAYER,
 
