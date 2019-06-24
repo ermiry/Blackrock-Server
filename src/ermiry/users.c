@@ -2,8 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
+
 #include "ermiry/ermiry.h"
-#include "ermiry/models.h"
 #include "ermiry/users.h"
 
 #include "mongo/mongo.h"
@@ -15,48 +17,67 @@
 
 mongoc_collection_t *users_collection = NULL;
 
-void user_destroy (void *data);
+void user_delete (void *ptr);
 
-// allocates a new user structure and zeros it
 User *user_new (void) {
 
-    User *new_user = (User *) malloc (sizeof (User));
-    if (new_user) {
-        memset (new_user, 0, sizeof (User));
+    User *user = (User *) malloc (sizeof (User));
+    if (user) {
+        memset (user, 0, sizeof (User));
 
-        new_user->memberSince = (struct tm *) malloc (sizeof (struct tm));
-        new_user->lastTime = (struct tm *) malloc (sizeof (struct tm));
+        user->name = NULL;
+        user->email = NULL;
+        user->username = NULL;
+        user->unique_id = NULL;
+        user->avatar = NULL;
 
-        if (new_user->memberSince && new_user->lastTime) {
-            memset (new_user->memberSince, 0, sizeof (struct tm));
-            memset (new_user->lastTime, 0, sizeof (struct tm));
-        }
+        user->member_since = NULL;
+        user->last_time = NULL;
 
-        new_user->friends = dlist_init (user_destroy, NULL);
-    } 
+        user->bio = NULL;
+        user->location = NULL;
 
-    return new_user;
+        user->friends = dlist_init (user_delete, NULL);
+
+        user->inbox = NULL;
+        user->requests = NULL;
+
+        // FIXME:
+        user->achievements = dlist_init (NULL, NULL);
+    }
 
 }
 
-void user_destroy (void *data) {
+void user_delete (void *ptr) {
 
-    if (data) {
-        User *user = (User *) data;
+    if (ptr) {
+        User *user = (User *) ptr;
 
-        if (user->name) free (user->name);
-        if (user->email) free (user->email);
-        if (user->username) free (user->username);
-        if (user->password) free (user->password);
-        if (user->location) free (user->location);
+        str_delete (user->name);
+        str_delete (user->email);
+        str_delete (user->username);
+        str_delete (user->unique_id);
+        str_delete (user->avatar);
 
-        if (user->memberSince) free (user->memberSince);
-        if (user->lastTime) free (user->lastTime);
+        if (user->member_since) free (user->member_since);
+        if (user->last_time) free (user->last_time);
 
         dlist_destroy (user->friends);
 
+        str_delete (user->inbox);
+        str_delete (user->requests);
+
+        dlist_destroy (user->achievements);
+
         free (user);
     }
+
+}
+
+// compares users based on their username (a - z)
+int user_comparator_by_username (const void *a, const void *b) {
+
+    if (a && b) return str_compare (((User *) a)->username, ((User *) b)->username);
 
 }
 
@@ -393,5 +414,32 @@ int user_remove_friend (const char *username, const char *friend_username) {
     }
 
     return errors;
+
+}
+
+/*** serialization ***/
+
+static inline SUser *suser_new (void) {
+
+    SUser *suser = (SUser *) malloc (sizeof (SUser));
+    if (suser) memset (suser, 0, sizeof (SUser));
+    return suser;
+
+}
+
+static inline void suser_delete (SUser *suser) { if (suser) free (suser); }
+
+// FIXME:
+// serializes a user
+static SUser *user_serialize (const User *user) {
+
+    if (user) {
+        SUser *suser = suser_new ();
+        if (suser) {
+            
+        }
+    }
+
+    return NULL;
 
 }

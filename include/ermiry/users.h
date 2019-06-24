@@ -13,23 +13,26 @@
 // this is how we manage a user in blackrock
 typedef struct User {
 
+    bson_oid_t oid;
+
     String *name;
     String *email;
-    String *username;
+    String *username;               // useful to have duplicate users
+    String *unique_id;
+    String *avatar;                 // avatar filename
 
     struct tm *member_since;
     struct tm *last_time;
 
     String *bio;
     String *location;
-    // TODO: avatar
 
     DoubleList *friends;
 
-    // TODO: inbox
-    // TODO: friend requests
+    String *inbox;                  // inbox filename
+    String *requests;               // friends requests filename
 
-    // TODO: ermiry achievements
+    DoubleList *achievements;       // ermiry achievements
 
 } User;
 
