@@ -8,11 +8,11 @@
 
 #define BLACK_COLL_NAME         "blackprofile"
 
-extern mongoc_collection_t *black_collection;
+extern mongoc_collection_t *black_profile_collection;
 
 typedef struct BlackPVPStats {
 
-    i32 totalKills;
+    i32 total_kills;
 
     i32 wins_death_match;
     i32 wins_free;
@@ -57,12 +57,9 @@ typedef struct BlackProfile {
 } BlackProfile;
 
 extern BlackProfile *black_profile_new (void);
-extern void black_profile_destroy (BlackProfile *profile);
+extern void black_profile_delete (BlackProfile *profile);
 
+// gets a black profile from the db by its oid
 extern BlackProfile *black_profile_get_by_oid (const bson_oid_t *oid, bool populate);
-extern BlackProfile *black_profile_get_by_user (const bson_oid_t *user_oid, bool populate);
-
-extern int black_profile_update_with_model (const bson_oid_t *profile_oid, const BlackProfile *black_profile);
-
 
 #endif

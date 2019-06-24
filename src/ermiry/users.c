@@ -7,6 +7,7 @@
 
 #include "ermiry/ermiry.h"
 #include "ermiry/users.h"
+#include "ermiry/black/profile.h"
 
 #include "mongo/mongo.h"
 
@@ -316,6 +317,72 @@ User *user_get_by_username (const String *username, bool populate) {
     }
 
     return user;
+
+}
+
+// searches a user by emaila nd authenticates it using the provided password
+// on success, returns the user associated with the credentials
+User *user_authenticate (const SErmiryAuth *ermiry_auth) {
+
+    User *retval = NULL;
+
+    if (ermiry_auth) {
+        // get the user by email
+        String *email = str_new (ermiry_auth->email.string);
+        User *user = user_get_by_email (email, true);
+        if (user) {
+            // check for user password
+            if (!strcmp (user->password->str, ermiry_auth->password.string)) {
+                #ifdef ERMIRY_DEBUG
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE,
+                    c_string_create ("Authenticated user with email %s.",
+                    user->email));
+                #endif
+
+                // check that the user has a blackrock profile -- that has purchased the game
+                BlackProfile *black_profile = black_profile_get_by_oid (&user->black_profile_oid, false);
+                if (black_profile) {
+                    user->black_profile = black_profile;
+                    retval = user;
+                }
+
+                else {
+                    #ifdef ERMIRY_DEBUG
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE,
+                        c_string_create ("User with email %s does not have a black profile!",
+                        user->email));
+                    #endif
+                    // TODO: send custom error packet with custom ermiry error packet
+                    // Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
+                    // if (error_packet) {
+                    //     packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                    //     packet_send (error_packet, 0);
+                    //     packet_delete (error_packet);
+                    // }
+                }
+            }
+
+            else {
+                #ifdef ERMIRY_DEBUG
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                    c_string_create ("Wrong password for user with email %s.",
+                    user->email));
+                #endif
+            }
+        }
+
+        else {
+            #ifdef ERMIRY_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Couldn't find a user with email %s.", 
+                ermiry_auth->email.string));
+            #endif
+        }
+
+        str_delete (email);
+    }
+
+    return retval;
 
 }
 

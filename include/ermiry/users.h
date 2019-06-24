@@ -4,6 +4,9 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
+#include "ermiry/ermiry.h"
+#include "ermiry/black/profile.h"
+
 #include "mongo/mongo.h"
 
 #include "cerver/collections/dllist.h"
@@ -30,12 +33,19 @@ typedef struct User {
     String *bio;
     String *location;
 
+    // TODO: maybe change this to an array of oids?
     DoubleList *friends;
 
     String *inbox;                  // inbox filename
     String *requests;               // friends requests filename
 
+    // TODO: maybe change this to an array of oids?
     DoubleList *achievements;       // ermiry achievements
+
+    // TODO: correctly delete this!
+    // black rock data
+    bson_oid_t black_profile_oid;
+    BlackProfile *black_profile;
 
 } User;
 
@@ -53,6 +63,10 @@ extern User *user_get_by_email (const String *email, bool populate);
 
 // gets a user form the db by its username
 extern User *user_get_by_username (const String *username, bool populate);
+
+// searches a user by emaila nd authenticates it using the provided password
+// on success, returns the user associated with the credentials
+extern User *user_authenticate (const SErmiryAuth *ermiry_auth);
 
 // serialized user
 // this how we recieve the users from the cerver

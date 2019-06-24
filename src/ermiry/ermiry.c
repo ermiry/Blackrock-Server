@@ -4,7 +4,8 @@
 
 #include "ermiry/ermiry.h"
 #include "ermiry/users.h"
-#include "ermiry/black.h"
+#include "ermiry/black/profile.h"
+#include "ermiry/black/guild.h"
 
 #include "mongo/mongo.h"
 
@@ -31,8 +32,8 @@ int ermiry_init (void) {
         }
         
         // open handle to blackrock profile collection
-        black_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_COLL_NAME);
-        if (!black_collection) {
+        black_profile_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_COLL_NAME);
+        if (!black_profile_collection) {
             cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to get handle to black collection!");
             errors = 1;
         }
@@ -59,55 +60,10 @@ int ermiry_end (void) {
 
     // close our collections handles
     if (users_collection) mongoc_collection_destroy (users_collection);
-    if (black_collection) mongoc_collection_destroy (black_collection);
+    if (black_profile_collection) mongoc_collection_destroy (black_profile_collection);
     if (black_guild_collection) mongoc_collection_destroy (black_guild_collection);
 
     mongo_disconnect ();
-
-}
-
-// TODO: move to user
-// searches a user by emaila nd authenticates it using the provided password
-// on success, returns the user associated with the credentials
-static User *user_authenticate (SErmiryAuth *ermiry_auth) {
-
-    User *retval = NULL;
-
-    if (ermiry_auth) {
-        // get the user by email
-        User *user = user_get_by_email (ermiry_auth->email.string, ermiry_auth->email.len, true);
-        if (user) {
-            // check for user password
-            if (!strcmp (user->password->str, ermiry_auth->password.string)) {
-                #ifdef ERMIRY_DEBUG
-                cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE,
-                    c_string_create ("Authenticated user with email %s.",
-                    user->email));
-                #endif
-
-                // FIXME: also check if the user has a valid blackrock profile!!
-                retval = user;
-            }
-
-            else {
-                #ifdef ERMIRY_DEBUG
-                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
-                    c_string_create ("Wrong password for user with email %s.",
-                    user->email));
-                #endif
-            }
-        }
-
-        else {
-            #ifdef ERMIRY_DEBUG
-            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
-                c_string_create ("Couldn't find a user with email %s.", 
-                ermiry_auth->email.string));
-            #endif
-        }
-    }
-
-    return retval;
 
 }
 

@@ -15,7 +15,7 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-mongoc_collection_t *black_collection = NULL;
+mongoc_collection_t *black_profile_collection = NULL;
 
 static inline BlackPVEStats *black_pve_stats_new (void) {
 
@@ -43,29 +43,31 @@ BlackProfile *black_profile_new (void) {
     if (profile) {
         memset (profile, 0, sizeof (BlackProfile));
 
-        profile->datePurchased = NULL;
-        profile->lastTime = NULL;
+        profile->date_purchased = NULL;
+        profile->last_time = NULL;
 
-        profile->achievements = dlist_init (black_achievement_destroy, NULL);
+        // FIXME:
+        // profile->achievements = dlist_init (black_achievement_destroy, NULL);
+        profile->achievements = NULL;
 
-        profile->pveStats = black_pve_stats_new ();
-        profile->pvpStats = black_pvp_stats_new ();
+        profile->pve_stats = black_pve_stats_new ();
+        profile->pvp_stats = black_pvp_stats_new ();
     } 
 
     return profile;
 
 }
 
-void black_profile_destroy (BlackProfile *profile) {
+void black_profile_delete (BlackProfile *profile) {
 
     if (profile) {
-        if (profile->datePurchased) free (profile->datePurchased);
-        if (profile->lastTime) free (profile->lastTime);
+        if (profile->date_purchased) free (profile->date_purchased);
+        if (profile->last_time) free (profile->last_time);
 
         dlist_destroy (profile->achievements);
 
-        black_pve_stats_destroy (profile->pveStats);
-        black_pvp_stats_destroy (profile->pvpStats);
+        black_pve_stats_destroy (profile->pve_stats);
+        black_pvp_stats_destroy (profile->pvp_stats);
 
         free (profile);
     }
@@ -107,7 +109,7 @@ static void black_profile_bson_append_pvp_stats (bson_t *doc, const BlackPVPStat
     if (doc && pvp_stats) {
         bson_t *pvp_stats_doc = bson_new ();
 
-        bson_append_int32 (pvp_stats_doc, "totalKills", -1, pvp_stats->totalKills);
+        bson_append_int32 (pvp_stats_doc, "totalKills", -1, pvp_stats->total_kills);
 
         bson_append_int32 (pvp_stats_doc, "winsDeathMatch", -1, pvp_stats->wins_death_match);
         bson_append_int32 (pvp_stats_doc, "winsFree", -1, pvp_stats->wins_free);
@@ -118,6 +120,7 @@ static void black_profile_bson_append_pvp_stats (bson_t *doc, const BlackPVPStat
 
 }
 
+// FIXME: appends achievements
 static bson_t *black_profile_bson_create (const BlackProfile *profile) {
 
     bson_t *doc = NULL;
@@ -126,19 +129,18 @@ static bson_t *black_profile_bson_create (const BlackProfile *profile) {
         doc = bson_new ();
 
         bson_oid_init ((bson_oid_t *) &profile->oid, NULL);
-        bson_append_oid (doc, "_id", -1, &profile->oid);
+        bson_append_oid (doc, "_id", 4, &profile->oid);
 
-        bson_append_oid (doc, "user", -1, &profile->user_oid);
+        bson_append_oid (doc, "user", 5, &profile->user_oid);
 
-        bson_append_date_time (doc, "datePurchased", -1, mktime (profile->datePurchased) * 1000);
-        bson_append_date_time (doc, "lastTime", -1, mktime (profile->lastTime) * 1000);
-        bson_append_int64 (doc, "timePlayed", -1, profile->timePlayed);
-
-        bson_append_int32 (doc, "trophies", -1, profile->trophies);
+        bson_append_date_time (doc, "datePurchased", 14, mktime (profile->date_purchased) * 1000);
+        bson_append_date_time (doc, "lastTime", 9, mktime (profile->last_time) * 1000);
+        bson_append_int64 (doc, "timePlayed", 11, profile->time_played);
 
         bson_append_oid (doc, "guild", -1, &profile->guild_oid);
 
-        char buf[16];
+        // FIXME: append achievements
+        /* char buf[16];
         const char *key = NULL;
         size_t keylen = 0;
         unsigned int i = 0;
@@ -153,16 +155,17 @@ static bson_t *black_profile_bson_create (const BlackProfile *profile) {
             bson_append_oid (&achievements_array, key, (int) keylen, &a->oid);
             i++;
         }
-        bson_append_array_end (doc, &achievements_array);
+        bson_append_array_end (doc, &achievements_array); */
 
-        black_profile_bson_append_pve_stats (doc, profile->pveStats);
-        black_profile_bson_append_pvp_stats (doc, profile->pvpStats);
+        black_profile_bson_append_pve_stats (doc, profile->pve_stats);
+        black_profile_bson_append_pvp_stats (doc, profile->pvp_stats);
     }
 
     return doc;
 
 }
 
+// FIXME: we need to pare stats docs
 static int black_profile_parse_pve_stats (BlackProfile *profile, bson_t *pve_stats_doc) {
 
     int retval = 1;
@@ -184,20 +187,23 @@ static int black_profile_parse_pve_stats (BlackProfile *profile, bson_t *pve_sta
                     // TODO:
                 }
 
-                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
+                else {
+                    #ifdef ERMIRY_DEBUG
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, 
+                        c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
+                    #endif
+                } 
             }
         }
 
-        bson_destroy (pve_stats_doc);
-
-        return 0;
+        retval = 0;
     }
 
     return retval;
 
 }
 
-static int black_profile_parse_pvp_stats (BlackProfile *profile, bson_t *pvp_stats_doc) {
+static int black_profile_parse_pvp_stats (BlackProfile *profile, const bson_t *pvp_stats_doc) {
 
     int retval = 1;
 
@@ -211,30 +217,34 @@ static int black_profile_parse_pvp_stats (BlackProfile *profile, bson_t *pvp_sta
                 const bson_value_t *value = bson_iter_value (&iter);
 
                 if (!strcmp (key, "totalKills")) 
-                    profile->pvpStats->totalKills = value->value.v_int32;
+                    profile->pvp_stats->total_kills = value->value.v_int32;
 
                 else if (!strcmp (key, "winsDeathMatch"))
-                    profile->pvpStats->wins_death_match = value->value.v_int32;
+                    profile->pvp_stats->wins_death_match = value->value.v_int32;
 
                 else if (!strcmp (key, "winsFree"))
-                    profile->pvpStats->wins_free = value->value.v_int32;
+                    profile->pvp_stats->wins_free = value->value.v_int32;
 
                 else if (!strcmp (key, "winsKoth"))
-                    profile->pvpStats->wins_koth = value->value.v_int32;
+                    profile->pvp_stats->wins_koth = value->value.v_int32;
 
-                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
+                else {
+                    #ifdef ERMIRY_DEBUG
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, 
+                        c_string_create ("Got unknown key %s when parsing pvp stats doc.", key));
+                    #endif
+                }
             }
         }
 
-        bson_destroy (pvp_stats_doc);
-
-        return 0;
+        retval = 0;
     }
 
     return retval;
 
 }
 
+// FIXME: 24/06/2019 -- how do we want to handle achievements??
 // parses a bson doc into a black profile model
 static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool populate) {
 
@@ -262,19 +272,16 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
 
                 else if (!strcmp (key, "datePurchased")) {
                     time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
-                    memcpy (profile->datePurchased, gmtime (&secs), sizeof (struct tm));
+                    memcpy (profile->date_purchased, gmtime (&secs), sizeof (struct tm));
                 }
 
                 else if (!strcmp (key, "lastTime")) {
                     time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
-                    memcpy (profile->lastTime, gmtime (&secs), sizeof (struct tm));
+                    memcpy (profile->last_time, gmtime (&secs), sizeof (struct tm));
                 }
 
                 else if (!strcmp (key, "timePlayed")) 
-                    profile->timePlayed = value->value.v_int64;
-
-                else if (!strcmp (key, "trophies"))
-                    profile->trophies = value->value.v_int32;
+                    profile->time_played = value->value.v_int64;
 
                 else if (!strcmp (key, "guild")) 
                     bson_oid_copy (&value->value.v_oid, &profile->guild_oid);
@@ -284,16 +291,39 @@ static BlackProfile *black_profile_doc_parse (const bson_t *profile_doc, bool po
                 }
 
                 else if (!strcmp (key, "pveStats")) {
-                    bson_t *pve_stats_doc = bson_new_from_data (value->value.v_doc.data, value->value.v_doc.data_len);
-                    black_profile_parse_pve_stats (profile, pve_stats_doc);
+                    bson_t *pve_stats_doc = bson_new_from_data (value->value.v_doc.data, 
+                        value->value.v_doc.data_len);
+                    if (pve_stats_doc) {
+                        black_profile_parse_pve_stats (profile, pve_stats_doc);
+                        bson_destroy (pve_stats_doc);
+                    }
+
+                    else {
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                            "Failed to create black profile pve stats doc!");
+                    }
                 }
 
                 else if (!strcmp (key, "pvpStats")) {
-                    bson_t *pvp_stats_doc = bson_new_from_data (value->value.v_doc.data, value->value.v_doc.data_len);
-                    black_profile_parse_pvp_stats (profile, pvp_stats_doc);
+                    bson_t *pvp_stats_doc = bson_new_from_data (value->value.v_doc.data, 
+                        value->value.v_doc.data_len);
+                    if (pvp_stats_doc) {
+                        black_profile_parse_pvp_stats (profile, pvp_stats_doc);
+                        bson_destroy (pvp_stats_doc);
+                    }
+
+                    else {
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                            "Failed to create black profile pvp stats doc!");
+                    }
                 }
 
-                else cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Got unknown key %s when parsing black profile doc.", key));
+                else {
+                    #ifdef ERMIRY_DEBUG
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, 
+                        c_string_create ("Got unknown key %s when parsing black profile doc.", key));
+                    #endif
+                } 
             }
         }
     }
@@ -330,6 +360,7 @@ static const bson_t *black_profile_find_by_user (const bson_oid_t *user_oid) {
 
 }
 
+// gets a black profile from the db by its oid
 BlackProfile *black_profile_get_by_oid (const bson_oid_t *oid, bool populate) {
 
     BlackProfile *profile = NULL;
