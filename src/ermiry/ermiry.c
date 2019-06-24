@@ -77,13 +77,31 @@ static User *user_authenticate (SErmiryAuth *ermiry_auth) {
         // get the user by email
         User *user = user_get_by_email (ermiry_auth->email.string, ermiry_auth->email.len, true);
         if (user) {
+            // check for user password
+            if (!strcmp (user->password->str, ermiry_auth->password.string)) {
+                #ifdef ERMIRY_DEBUG
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE,
+                    c_string_create ("Authenticated user with email %s.",
+                    user->email));
+                #endif
 
+                // FIXME: also check if the user has a valid blackrock profile!!
+                retval = user;
+            }
+
+            else {
+                #ifdef ERMIRY_DEBUG
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                    c_string_create ("Wrong password for user with email %s.",
+                    user->email));
+                #endif
+            }
         }
 
         else {
             #ifdef ERMIRY_DEBUG
             cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
-                c_string_create ("Couldn't find a user with email %s", 
+                c_string_create ("Couldn't find a user with email %s.", 
                 ermiry_auth->email.string));
             #endif
         }
@@ -123,53 +141,6 @@ u8 ermiry_authenticate_method (void *auth_data_ptr) {
     }
 
     return retval;
-
-}
-
-// search for a user with the given username
-// if we find one, check if the password match
-User *ermiry_user_get (const char *username, const char *password, int *errors) {
-
-    // FIXME:
-
-    /* User *user = NULL;
-
-    if (username && password) {
-        user = user_get (username);
-        if (user) {
-            // check that the password is correct
-            if (!strcmp (password, user->password)) *errors = NO_ERRORS;
-            else {
-                // password is incorrect
-                *errors = WRONG_PASSWORD;
-                user_destroy (user);
-                user = NULL;
-            }
-        }
-
-        else {
-            #ifdef ERMIRY_DEBUG
-                cerver_log_msg (stderr, LOG_ERROR, LOG_DEBUG, 
-                    c_string_create ("Not user find with username: %s", username));
-            #endif
-            *errors = NOT_USER_FOUND;
-        }
-    }
-
-    else *errors = SERVER_ERROR;
-
-    return user; */
-
-}
-
-// FIXME:
-// we know that a user exists, so get the associated black profile
-BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors) {
-
-    // BlackProfile *profile = black_profile_get (user_oid);
-    // if (!profile) *errors = PROFILE_NOT_FOUND;
-
-    // return profile;
 
 }
 

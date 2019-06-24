@@ -28,12 +28,9 @@ typedef struct SErmiryAuth {
 
 } SErmiryAuth;
 
-// search for a user with the given username
-// if we find one, check if the password match
-// User *ermiry_user_get (const char *username, const char *password, int *errors);
-
-// we know that a user exists, so get the associated black profile
-// BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors);
+// authenticates an ermiry user with its email and password
+// 23/06/2019 -- 23:22 -- email is unique, but w ewant to have duplicate usernames with a unique id
+extern u8 ermiry_authenticate_method (void *auth_data_ptr);
 
 /*** ermiry achievements ***/
 
