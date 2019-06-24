@@ -30,4 +30,36 @@ extern void str_remove_char (String *string, char garbage);
 // returns -1 if no match
 extern int str_contains (String *string, char *to_find);
 
+// serialized string (small)
+typedef struct SStringS {
+
+    u16 len;
+    char string[64];
+
+} SStringS;
+
+// serialized string (medium)
+typedef struct SStringM {
+
+    u16 len;
+    char string[128];
+
+} SStringM;
+
+// serialized string (large)
+typedef struct SStringL {
+
+    u16 len;
+    char string[256];
+
+} SStringL;
+
+// serialized string (extra large)
+typedef struct SStringXL {
+
+    u16 len;
+    char string[512];
+
+} SStringXL;
+
 #endif
