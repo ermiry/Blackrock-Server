@@ -83,6 +83,115 @@ int user_comparator_by_username (const void *a, const void *b) {
 
 }
 
+// TODO: add unique id
+// prints user values from a user structure
+void user_print (User *user) {
+
+    if (user) {
+        printf ("User: \n");
+        printf ("\tName: %s\n", user->name->str);
+        printf ("\tEmail: %s\n", user->email->str);
+        printf ("\tUsername: %s\n", user->username->str);
+        printf ("\tPassword: %s\n", user->password->str);
+        printf ("\tAvatar: %s\n", user->avatar->str);
+
+        char date_buffer[80];
+        strftime (date_buffer, 80, "%d/%m/%y - %T - GMT", user->member_since);
+        printf ("\tMember since: %s\n", date_buffer);
+        strftime (date_buffer, 80, "%d/%m/%y - %T - GMT", user->last_time);
+        printf ("\tLast time on: %s\n", date_buffer);
+
+        printf ("\tBio: %s\n", user->bio->str);
+        printf ("\tLocation: %s\n", user->location->str);
+
+        printf ("\tInbox: %s\n", user->inbox->str);
+        printf ("\tRequests: %s\n", user->requests->str);
+    }
+
+}
+
+// TODO: add unique id
+// parses a bson doc into a user model
+User *user_doc_parse (const bson_t *user_doc, bool populate) {
+
+    User *user = NULL;
+
+    if (user_doc) {
+        user = user_new ();
+
+        bson_iter_t iter;
+        bson_type_t type;
+
+        if (bson_iter_init (&iter, user_doc)) {
+            while (bson_iter_next (&iter)) {
+                const char *key = bson_iter_key (&iter);
+                const bson_value_t *value = bson_iter_value (&iter);
+
+                if (!strcmp (key, "_id")) {
+                    bson_oid_copy (&value->value.v_oid, &user->oid);
+                    // const bson_oid_t *oid = bson_iter_oid (&iter);
+                    // memcpy (&user->oid, oid, sizeof (bson_oid_t));
+                }
+
+                else if (!strcmp (key, "name") && value->value.v_utf8.str) 
+                    user->name = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "email") && value->value.v_utf8.str) 
+                    user->email = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "username") && value->value.v_utf8.str) 
+                    user->username = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "password") && value->value.v_utf8.str) 
+                    user->password = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "avatar") && value->value.v_utf8.str)
+                    user->avatar = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "memberSince")) {
+                    time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
+                    memcpy (user->member_since, gmtime (&secs), sizeof (struct tm));
+                }
+
+                else if (!strcmp (key, "lastTime")) {
+                    time_t secs = (time_t) bson_iter_date_time (&iter) / 1000;
+                    memcpy (user->last_time, gmtime (&secs), sizeof (struct tm));
+                }
+                
+                else if (!strcmp (key, "bio") && value->value.v_utf8.str)
+                    user->bio = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "location") && value->value.v_utf8.str) 
+                    user->location = str_new (value->value.v_utf8.str);
+
+                // FIXME: iter array of friends!! and get how many they are
+                else if (!strcmp (key, "friends")) {
+
+                }
+
+                else if (!strcmp (key, "inbox") && value->value.v_utf8.str) 
+                    user->inbox = str_new (value->value.v_utf8.str);
+
+                else if (!strcmp (key, "requests") && value->value.v_utf8.str) 
+                    user->requests = str_new (value->value.v_utf8.str);
+
+                // TODO: get array of achievements
+                else if (!strcmp (key, "achievements")) {
+
+                }
+
+                else {
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, 
+                        c_string_create ("Got unknown key %s when parsing user doc.", key));
+                } 
+            }
+        }
+    }
+
+    return user;
+
+}
+
 // get a user doc from the db by oid
 static const bson_t *user_find_by_oid (const bson_oid_t *oid) {
 

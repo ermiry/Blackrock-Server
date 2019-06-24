@@ -42,6 +42,9 @@ typedef struct User {
 extern User *user_new (void);
 extern void user_delete (void *ptr);
 
+// parses a bson doc into a user model
+extern User *user_doc_parse (const bson_t *user_doc, bool populate);
+
 // gets a user from the db by an oid
 extern User *user_get_by_oid (const bson_oid_t *oid, bool populate);
 
