@@ -110,6 +110,42 @@ void user_print (User *user) {
 
 }
 
+// TODO: what about the other fileds that are in ermiry-website user model?
+// FIXME: add friends!!
+static bson_t *user_bson_create (User *user) {
+
+    bson_t *doc = NULL;
+
+    if (user) {
+        doc = bson_new ();
+
+        bson_oid_init (&user->oid, NULL);
+        bson_append_oid (doc, "_id", 4, &user->oid);
+
+        bson_append_utf8 (doc, "name", 5, user->name->str, user->name->len);
+        bson_append_utf8 (doc, "email", 6, user->email->str, user->email->len);
+        bson_append_utf8 (doc, "username", 9, user->username->str, user->username->len);
+        bson_append_utf8 (doc, "password", 9, user->password->str, user->password->len);
+        bson_append_utf8 (doc, "avatar", 7, user->avatar->str, user->avatar->len);
+
+        bson_append_date_time (doc, "memberSince", 12, mktime (user->member_since) * 1000);
+        bson_append_date_time (doc, "lastTime", 9, mktime (user->last_time) * 1000);
+
+        bson_append_utf8 (doc, "bio", 4, user->bio->str, user->bio->len);
+        bson_append_utf8 (doc, "location", 9, user->location->str, user->location->len);
+
+        // TODO: add friends
+
+        bson_append_utf8 (doc, "inbox", 6, user->inbox->str, user->inbox->len);
+        bson_append_utf8 (doc, "requests", 9, user->requests->str, user->requests->len);
+
+        // TODO: add achievements
+    }
+
+    return doc;
+
+}
+
 // TODO: add unique id
 // parses a bson doc into a user model
 User *user_doc_parse (const bson_t *user_doc, bool populate) {

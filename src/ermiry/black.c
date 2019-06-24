@@ -4,7 +4,6 @@
 #include <stdbool.h>
 
 #include "ermiry/ermiry.h"
-#include "ermiry/models.h"
 #include "ermiry/users.h"
 #include "ermiry/black.h"
 
