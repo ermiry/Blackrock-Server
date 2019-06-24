@@ -28,6 +28,9 @@ static AuthData *auth_data_new (const char *token, void *data, size_t auth_data_
 
     AuthData *auth_data = (AuthData *) malloc (sizeof (AuthData));
     if (auth_data) {
+        auth_data->data = NULL;
+        auth_data->delete_data = NULL;
+
         auth_data->token = token ? str_new (token) : NULL;
         if (data) {
             auth_data->auth_data = malloc (sizeof (auth_data_size));
@@ -112,6 +115,7 @@ static void auth_send_success_packet (const Cerver *cerver, const i32 sock_fd) {
 
 }
 
+// FIXME: if something fails in this functions, the client and its data should be completely destroyed
 // creates a new lcient and registers to cerver with new data
 static u8 auth_create_new_client (const Packet *packet, const AuthData *auth_data) {
 
@@ -136,6 +140,9 @@ static u8 auth_create_new_client (const Packet *packet, const AuthData *auth_dat
 
                     // register the new client to the cerver
                     if (!client_register_to_cerver (packet->cerver, c)) {
+                        // set the data to the client (eg. user data)
+                        client_set_data (c, auth_data->data, auth_data->delete_data);
+
                         retval = 0;     // success!!!
                     }
 

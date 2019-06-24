@@ -7,8 +7,6 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
-#include "models.h"
-
 // ermiry error codes
 #define SERVER_ERROR                100
 #define NO_ERRORS                   0
@@ -22,12 +20,20 @@ extern int ermiry_init (void);
 // clean up ermiry data
 extern int ermiry_end (void);
 
+// serialized ermiry credentials
+typedef struct SErmiryAuth {
+
+    SStringS email;
+    SStringS password;
+
+} SErmiryAuth;
+
 // search for a user with the given username
 // if we find one, check if the password match
-User *ermiry_user_get (const char *username, const char *password, int *errors);
+// User *ermiry_user_get (const char *username, const char *password, int *errors);
 
 // we know that a user exists, so get the associated black profile
-BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors);
+// BlackProfile *ermiry_black_profile_get (const bson_oid_t user_oid, int *errors);
 
 /*** ermiry achievements ***/
 

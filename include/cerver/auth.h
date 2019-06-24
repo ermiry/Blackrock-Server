@@ -21,6 +21,13 @@ typedef struct AuthData {
     void *auth_data;
     size_t auth_data_size;
 
+    // recover data used for authentication
+    // after a success auth, it will be added to the client
+    // if not, it should be dispossed by user dfined auth method
+    // and set to NULL
+    void *data;                 
+    Action delete_data;         // how to delete the data
+
 } AuthData;
 
 // info for the server to perfom a correct client authentication

@@ -10,6 +10,8 @@
 
 #define USERS_COLL_NAME         "users"
 
+extern mongoc_collection_t *users_collection;
+
 // this is how we manage a user in blackrock
 typedef struct User {
 
@@ -19,6 +21,7 @@ typedef struct User {
     String *email;
     String *username;               // useful to have duplicate users
     String *unique_id;
+    String *password;
     String *avatar;                 // avatar filename
 
     struct tm *member_since;
@@ -36,11 +39,11 @@ typedef struct User {
 
 } User;
 
-
-extern mongoc_collection_t *users_collection;
-
 extern User *user_new (void);
-extern void user_destroy (void *data);
+extern void user_delete (void *ptr);
+
+// gets a user from the db by its email
+extern User *user_get_by_email (const char *email, unsigned int email_len, bool populate);
 
 extern User *user_get_by_username (const char *username, bool populate);
 extern User *user_get_by_oid (const bson_oid_t *oid, bool populate);

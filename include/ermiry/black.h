@@ -1,8 +1,6 @@
 #ifndef _ERMIRY_BLACK_H_
 #define _ERMIRY_BLACK_H_
 
-#include "ermiry/models.h"
-
 #include "mongo/mongo.h"
 
 // FIXME: move this from here!

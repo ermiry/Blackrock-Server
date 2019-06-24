@@ -29,6 +29,7 @@ User *user_new (void) {
         user->email = NULL;
         user->username = NULL;
         user->unique_id = NULL;
+        user->password = NULL;
         user->avatar = NULL;
 
         user->member_since = NULL;
@@ -57,6 +58,7 @@ void user_delete (void *ptr) {
         str_delete (user->email);
         str_delete (user->username);
         str_delete (user->unique_id);
+        str_delete (user->password);
         str_delete (user->avatar);
 
         if (user->member_since) free (user->member_since);
@@ -230,33 +232,29 @@ static const bson_t *user_find_by_oid (const bson_oid_t *oid) {
 
 }
 
+// gets a user doc from the db by its email
+static const bson_t *user_find_by_email (const char *email, unsigned int email_len) {
+
+    if (email) {
+        bson_t *user_query = bson_new ();
+        bson_append_utf8 (user_query, "email", 6, email, email_len);
+
+        return mongo_find_one (users_collection, user_query);
+    }
+
+}
+
 // get a user doc from the db by username
 static const bson_t *user_find_by_username (const char *username) {
 
     if (username) {
         bson_t *user_query = bson_new ();
-        bson_append_utf8 (user_query, "username", -1, username, -1);
+        bson_append_utf8 (user_query, "username", 9, username, -1);
 
         return mongo_find_one (users_collection, user_query);
     }
 
     return NULL;    
-
-}
-
-User *user_get_by_username (const char *username, bool populate) {
-
-    User *user = NULL;
-
-    if (username) {
-        const bson_t *user_doc = user_find_by_username (username);
-        if (user_doc) {
-            user = user_doc_parse (user_doc, populate);
-            bson_destroy ((bson_t *) user_doc);
-        }
-    }
-
-    return user;
 
 }
 
@@ -267,6 +265,39 @@ User *user_get_by_oid (const bson_oid_t *oid, bool populate) {
     if (oid) {
         const bson_t *user_doc = user_find_by_oid (oid);
         if (user_doc)  {
+            user = user_doc_parse (user_doc, populate);
+            bson_destroy ((bson_t *) user_doc);
+        }
+    }
+
+    return user;
+
+}
+
+// gets a user from the db by its email
+User *user_get_by_email (const char *email, unsigned int email_len, bool populate) {
+
+    User *user = NULL;
+
+    if (email) {
+        const bson_t *user_doc = user_find_by_email (email, email_len);
+        if (user_doc) {
+            user = user_doc_parse (user_doc, populate);
+            bson_destroy ((bson_t *) user_doc);
+        }
+    }
+
+    return user;
+
+}
+
+User *user_get_by_username (const char *username, bool populate) {
+
+    User *user = NULL;
+
+    if (username) {
+        const bson_t *user_doc = user_find_by_username (username);
+        if (user_doc) {
             user = user_doc_parse (user_doc, populate);
             bson_destroy ((bson_t *) user_doc);
         }

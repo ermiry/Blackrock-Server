@@ -66,6 +66,66 @@ int ermiry_end (void) {
 
 }
 
+// TODO: move to user
+// searches a user by emaila nd authenticates it using the provided password
+// on success, returns the user associated with the credentials
+static User *user_authenticate (SErmiryAuth *ermiry_auth) {
+
+    User *retval = NULL;
+
+    if (ermiry_auth) {
+        // get the user by email
+        User *user = user_get_by_email (ermiry_auth->email.string, ermiry_auth->email.len, true);
+        if (user) {
+
+        }
+
+        else {
+            #ifdef ERMIRY_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Couldn't find a user with email %s", 
+                ermiry_auth->email.string));
+            #endif
+        }
+    }
+
+    return retval;
+
+}
+
+// authenticates an ermiry user with its email and password
+// 23/06/2019 -- 23:22 -- email is unique, but w ewant to have duplicate usernames with a unique id
+u8 ermiry_authenticate_method (void *auth_data_ptr) {
+
+    u8 retval = 1;
+
+    if (auth_data_ptr) {
+        AuthData *auth_data = (AuthData *) auth_data_ptr;
+
+        if (auth_data->auth_data_size >= sizeof (SErmiryAuth)) {
+            SErmiryAuth *ermiry_auth = (SErmiryAuth *) auth_data->auth_data;
+
+            User *user = user_authenticate (ermiry_auth);
+            if (user) {
+                auth_data->data = user;
+                auth_data->delete_data = user_delete;
+
+                retval = 0;
+            }
+        }
+
+        else {
+            #ifdef ERMIRY_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                "Failed to authenticate ermiry user -- auth data to small!");
+            #endif
+        }
+    }
+
+    return retval;
+
+}
+
 // search for a user with the given username
 // if we find one, check if the password match
 User *ermiry_user_get (const char *username, const char *password, int *errors) {
