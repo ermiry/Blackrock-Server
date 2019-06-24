@@ -36,10 +36,10 @@ extern int str_contains (String *string, char *to_find);
 
 typedef enum SStringSize {
 
-    SS_SMALL,
-    SS_MEDIUM,
-    SS_LARGE,
-    SS_EXTRA_LARGE
+    SS_SMALL = 64,
+    SS_MEDIUM = 128,
+    SS_LARGE = 256,
+    SS_EXTRA_LARGE = 512
 
 } SStringSize;
 

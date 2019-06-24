@@ -42,19 +42,14 @@ typedef struct User {
 extern User *user_new (void);
 extern void user_delete (void *ptr);
 
-// gets a user from the db by its email
-extern User *user_get_by_email (const char *email, unsigned int email_len, bool populate);
-
-extern User *user_get_by_username (const char *username, bool populate);
+// gets a user from the db by an oid
 extern User *user_get_by_oid (const bson_oid_t *oid, bool populate);
 
-// FIXME: do we rather ant to change this to take user models instead?
-// updates a user in the db with new values
-extern int user_update_with_model (const char *username, User *user_update_model);
+// gets a user from the db by its email
+extern User *user_get_by_email (const String *email, bool populate);
 
-// FIXME: do we rather ant to change this to take user models instead?
-extern int user_add_friend (const char *username, const char *friend_username);
-extern int user_remove_friend (const char *username, const char *friend_username);
+// gets a user form the db by its username
+extern User *user_get_by_username (const String *username, bool populate);
 
 // serialized user
 // this how we recieve the users from the cerver
