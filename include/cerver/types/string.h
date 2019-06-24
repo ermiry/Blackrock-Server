@@ -1,6 +1,8 @@
 #ifndef _CERVER_STRING_H_
 #define _CERVER_STRING_H_
 
+#include "cerver/types/types.h"
+
 typedef struct String {
 
     unsigned int len;
@@ -29,6 +31,17 @@ extern void str_remove_char (String *string, char garbage);
 // returns 1 if it match the letters but len is different
 // returns -1 if no match
 extern int str_contains (String *string, char *to_find);
+
+/*** serialization ***/
+
+typedef enum SStringSize {
+
+    SS_SMALL,
+    SS_MEDIUM,
+    SS_LARGE,
+    SS_EXTRA_LARGE
+
+} SStringSize;
 
 // serialized string (small)
 typedef struct SStringS {
