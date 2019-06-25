@@ -13,6 +13,8 @@ extern "C" {
 
 #include <pthread.h>
 
+#include "cerver/types/string.h"
+
 struct threadpool;
 
 // binary semaphore
@@ -51,6 +53,8 @@ typedef struct thread {
 } thread;
 
 typedef struct threadpool {
+
+	String *name;
 
 	thread **threads;                    /* pointer to threads        */
 	volatile int num_threads_alive;      /* threads currently alive   */

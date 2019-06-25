@@ -1,10 +1,11 @@
 /* ********************************
- * Author:       Johan Hanssen Seferidis
+ * Original Author:       Johan Hanssen Seferidis
  * License:	     MIT
  *
  ********************************/
 
 #define _POSIX_C_SOURCE 200809L
+
 #include <unistd.h>
 #include <signal.h>
 #include <stdio.h>
@@ -13,11 +14,13 @@
 #include <pthread.h>
 #include <errno.h>
 #include <time.h>
+
 #if defined(__linux__)
 #include <sys/prctl.h>
 #endif
 
 #include "cerver/utils/thpool.h"
+#include "cerver/utils/log.h"
 
 #ifdef THPOOL_DEBUG
 #define THPOOL_DEBUG 1
@@ -40,7 +43,7 @@ static threadpool *thpool_new (unsigned int num_threads) {
 	if (thpool) {
 		memset (thpool, 0, sizeof (threadpool));
 		thpool->threads = (thread **) calloc (num_threads, sizeof (thread));
-		thpool->jobqueue = NULL;
+		thpool->job_queue = NULL;
 	}
 
 	return thpool;
@@ -51,7 +54,7 @@ static threadpool *thpool_new (unsigned int num_threads) {
 static void thpool_delete (threadpool *thpool) {
 
 	if (thpool) {
-
+		free (thpool);
 	}
 
 }
@@ -61,63 +64,37 @@ threadpool *thpool_create (unsigned int num_threads) {
 
 	threadpool *thpool = thpool_new (num_threads);
 	if (thpool) {
+		thpool->num_threads_alive = 0;
+		thpool->num_threads_working = 0;
 
+		thpool->job_queue = jobqueue_init ();
+		if (!thpool->job_queue) {
+			#ifdef CERVER_DEBUG
+			cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+				"Failed to init thpool's job queue!");
+			#endif
+			thpool_delete (thpool);
+		}
+
+		else {
+			pthread_mutex_init (&(thpool->thcount_lock), NULL);
+			pthread_cond_init (&thpool->threads_all_idle, NULL);
+
+			// init threads
+			for (unsigned int i = 0; i < num_threads; i++)
+				thread_init (thpool, &thpool->threads[i], i);
+
+			// wait for threads to init
+			while (thpool->num_threads_alive != num_threads) {}
+		}
+
+		threads_on_hold = 0;
+		threads_keep_alive = 1;
 	}
 
 	return thpool;
 
 }
-
-/* Initialise thread pool */
-struct thpool_* thpool_init(int num_threads){
-
-	threads_on_hold   = 0;
-	threads_keepalive = 1;
-
-	/* Make new thread pool */
-	thpool_* thpool_p;
-	thpool_p = (struct thpool_*)malloc(sizeof(struct thpool_));
-	if (thpool_p == NULL){
-		err("thpool_init(): Could not allocate memory for thread pool\n");
-		return NULL;
-	}
-	thpool_p->num_threads_alive   = 0;
-	thpool_p->num_threads_working = 0;
-
-	/* Initialise the job queue */
-	if (jobqueue_init(&thpool_p->jobqueue) == -1){
-		err("thpool_init(): Could not allocate memory for job queue\n");
-		free(thpool_p);
-		return NULL;
-	}
-
-	/* Make threads in pool */
-	thpool_p->threads = (struct thread**)malloc(num_threads * sizeof(struct thread *));
-	if (thpool_p->threads == NULL){
-		err("thpool_init(): Could not allocate memory for threads\n");
-		jobqueue_destroy(&thpool_p->jobqueue);
-		free(thpool_p);
-		return NULL;
-	}
-
-	pthread_mutex_init(&(thpool_p->thcount_lock), NULL);
-	pthread_cond_init(&thpool_p->threads_all_idle, NULL);
-
-	/* Thread init */
-	int n;
-	for (n=0; n<num_threads; n++){
-		thread_init(thpool_p, &thpool_p->threads[n], n);
-#if THPOOL_DEBUG
-			printf("THPOOL_DEBUG: Created thread %d in pool \n", n);
-#endif
-	}
-
-	/* Wait for threads to initialize */
-	while (thpool_p->num_threads_alive != num_threads) {}
-
-	return thpool_p;
-}
-
 
 /* Add work to the thread pool */
 int thpool_add_work(thpool_* thpool_p, void (*function_p)(void*), void* arg_p){
@@ -158,7 +135,7 @@ void thpool_destroy(thpool_* thpool_p){
 	volatile int threads_total = thpool_p->num_threads_alive;
 
 	/* End each thread 's infinite loop */
-	threads_keepalive = 0;
+	threads_keep_alive = 0;
 
 	/* Give one second to kill idle threads */
 	double TIMEOUT = 1.0;
@@ -219,37 +196,60 @@ int thpool_num_threads_working(thpool_* thpool_p){
 
 /* ============================ THREAD ============================== */
 
+static thread *thread_new (void) {
 
-/* Initialize a thread in the thread pool
- *
- * @param thread        address to the pointer of the thread to be created
- * @param id            id to be given to the thread
- * @return 0 on LOG_SUCCESS, -1 otherwise.
- */
-static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
-
-	*thread_p = (struct thread*)malloc(sizeof(struct thread));
-	if (thread_p == NULL){
-		err("thread_init(): Could not allocate memory for thread\n");
-		return -1;
+	thread *t = (thread *) malloc (sizeof (thread));
+	if (t) {
+		memset (t, 0, sizeof (thread));
+		t->thpool_p = NULL;
 	}
 
-	(*thread_p)->thpool_p = thpool_p;
-	(*thread_p)->id       = id;
+	return t;
 
-	pthread_create(&(*thread_p)->pthread, NULL, (void *)thread_do, (*thread_p));
-	pthread_detach((*thread_p)->pthread);
-	return 0;
 }
 
+static inline void thread_delete (thread *t) { if (t) free (t); }
 
-/* Sets the calling thread on hold */
-static void thread_hold(int sig_id) {
-    (void)sig_id;
-	threads_on_hold = 1;
-	while (threads_on_hold){
-		sleep(1);
+static int thread_init (threadpool *thpool, thread **thread_p, unsigned int id) {
+
+	int retval = 1;
+
+	if (thpool) {
+		*thread_p = thread_new ();
+
+		(*thread_p)->thpool_p = thpool;
+		(*thread_p)->id       = id;
+
+		if (!pthread_create (&(*thread_p)->pthread, NULL, (void *)thread_do, (*thread_p))) {
+			if (!pthread_detach ((*thread_p)->pthread)) {
+				retval = 0;
+			}
+
+			else {
+				#ifdef CERVER_DEBUG
+				cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to detach thread in thpool!");
+				#endif
+			}
+		}
+
+		else {
+			#ifdef CERVER_DEBUG
+			cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to create thread in thpool!");
+			#endif
+		}
 	}
+
+	return retval;
+
+}
+
+// sets the calling thread on hold
+static void thread_hold (int sig_id) {
+
+	(void) sig_id;
+	threads_on_hold = 1;
+	while (threads_on_hold) sleep (1);
+
 }
 
 
@@ -293,11 +293,11 @@ static void* thread_do(struct thread* thread_p){
 	thpool_p->num_threads_alive += 1;
 	pthread_mutex_unlock(&thpool_p->thcount_lock);
 
-	while(threads_keepalive){
+	while(threads_keep_alive){
 
 		bsem_wait(thpool_p->jobqueue.has_jobs);
 
-		if (threads_keepalive){
+		if (threads_keep_alive){
 
 			pthread_mutex_lock(&thpool_p->thcount_lock);
 			thpool_p->num_threads_working++;
@@ -331,15 +331,6 @@ static void* thread_do(struct thread* thread_p){
 
 	return NULL;
 }
-
-
-/* Frees a thread  */
-static void thread_destroy (thread* thread_p){
-	free(thread_p);
-}
-
-
-
 
 
 /* ============================ JOB QUEUE =========================== */
