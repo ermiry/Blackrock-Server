@@ -163,6 +163,19 @@ static void *thread_do (thread *thread_p) {
 
 /* ============================ JOB QUEUE =========================== */
 
+static job *job_new (void) {
+
+	job *j = (job *) malloc (sizeof (job));
+	if (j) {
+		j->prev = NULL;
+		j->arg = NULL;
+		j->function = NULL;
+	}
+
+	return j;
+
+}
+
 static jobqueue *jobqueue_new (void) {
 
 	jobqueue *job_queue = (jobqueue *) malloc (sizeof (jobqueue));
@@ -284,15 +297,17 @@ static void jobqueue_delete (jobqueue *job_queue) {
 /* ======================== SYNCHRONISATION ========================= */
 
 
-/* Init semaphore to 1 or 0 */
-static void bsem_init(bsem *bsem_p, int value) {
-	if (value < 0 || value > 1) {
-		err("bsem_init(): Binary semaphore can take only values 1 or 0");
-		exit(1);
+// inits semaphore to 1 or 0 
+static void bsem_init (bsem *bsem_p, int value) {
+
+	if (bsem_p) {
+		if (value == 0 || value == 1) {
+			pthread_mutex_init (&(bsem_p->mutex), NULL);
+			pthread_cond_init (&(bsem_p->cond), NULL);
+			bsem_p->v = value;
+		}
 	}
-	pthread_mutex_init(&(bsem_p->mutex), NULL);
-	pthread_cond_init(&(bsem_p->cond), NULL);
-	bsem_p->v = value;
+	
 }
 
 // resets the semaphore to 0
@@ -339,11 +354,12 @@ static void bsem_wait (bsem *bsem_p) {
 
 /* ============================ THPOOL ============================== */
 
-static threadpool *thpool_new (unsigned int num_threads) {
+static threadpool *thpool_new (const char *name, unsigned int num_threads) {
 
 	threadpool *thpool = (threadpool *) malloc (sizeof (threadpool));
 	if (thpool) {
 		memset (thpool, 0, sizeof (threadpool));
+		thpool->name = str_new (name);
 		thpool->threads = (thread **) calloc (num_threads, sizeof (thread));
 		thpool->job_queue = NULL;
 	}
@@ -352,19 +368,19 @@ static threadpool *thpool_new (unsigned int num_threads) {
 
 }
 
-// TODO:
 static void thpool_delete (threadpool *thpool) {
 
 	if (thpool) {
+		str_delete (thpool->name);
 		free (thpool);
 	}
 
 }
 
 // creates a new threadpool
-threadpool *thpool_create (unsigned int num_threads) {
+threadpool *thpool_create (const char *name, unsigned int num_threads) {
 
-	threadpool *thpool = thpool_new (num_threads);
+	threadpool *thpool = thpool_new (name, num_threads);
 	if (thpool) {
 		thpool->num_threads_alive = 0;
 		thpool->num_threads_working = 0;
@@ -398,84 +414,48 @@ threadpool *thpool_create (unsigned int num_threads) {
 
 }
 
-/* Add work to the thread pool */
-int thpool_add_work(thpool_* thpool_p, void (*function_p)(void*), void* arg_p){
-	job* newjob;
+// add work to the thread pool
+int thpool_add_work (threadpool *thpool_p, void (*function_p)(void*), void* arg_p) {
 
-	newjob=(struct job*)malloc(sizeof(struct job));
-	if (newjob==NULL){
-		err("thpool_add_work(): Could not allocate memory for new job\n");
-		return -1;
+	int retval = 1;
+
+	if (thpool_p) {
+		job *newjob = job_new ();
+		if (newjob) {
+			newjob->function = function_p;
+			newjob->arg = arg_p;
+
+			jobqueue_push (&thpool_p->job_queue, newjob);
+
+			retval = 0;
+		}
 	}
 
-	/* add function and argument */
-	newjob->function=function_p;
-	newjob->arg=arg_p;
+	return retval;
 
-	/* add job to queue */
-	jobqueue_push(&thpool_p->jobqueue, newjob);
-
-	return 0;
 }
 
+// wait until all jobs have finished
+void thpool_wait (threadpool *thpool_p) {
 
-/* Wait until all jobs have finished */
-void thpool_wait(thpool_* thpool_p){
-	pthread_mutex_lock(&thpool_p->thcount_lock);
-	while (thpool_p->jobqueue.len || thpool_p->num_threads_working) {
-		pthread_cond_wait(&thpool_p->threads_all_idle, &thpool_p->thcount_lock);
+	if (thpool_p) {
+		pthread_mutex_lock (&thpool_p->thcount_lock);
+		while (thpool_p->job_queue->len || thpool_p->num_threads_working) {
+			pthread_cond_wait (&thpool_p->threads_all_idle, &thpool_p->thcount_lock);
+		}
+		pthread_mutex_unlock (&thpool_p->thcount_lock);
 	}
-	pthread_mutex_unlock(&thpool_p->thcount_lock);
+
 }
 
+// pause all threads in threadpool
+void thpool_pause (threadpool *thpool_p) {
 
-/* Destroy the threadpool */
-void thpool_destroy(thpool_* thpool_p){
-	/* No need to destory if it's NULL */
-	if (thpool_p == NULL) return ;
-
-	volatile int threads_total = thpool_p->num_threads_alive;
-
-	/* End each thread 's infinite loop */
-	threads_keep_alive = 0;
-
-	/* Give one second to kill idle threads */
-	double TIMEOUT = 1.0;
-	time_t start, end;
-	double tpassed = 0.0;
-	time (&start);
-	while (tpassed < TIMEOUT && thpool_p->num_threads_alive){
-		bsem_post_all(thpool_p->jobqueue.has_jobs);
-		time (&end);
-		tpassed = difftime(end,start);
+	for (unsigned int n = 0; n < thpool_p->num_threads_alive; n++){
+		pthread_kill (thpool_p->threads[n]->pthread, SIGUSR1);
 	}
 
-	/* Poll remaining threads */
-	while (thpool_p->num_threads_alive){
-		bsem_post_all(thpool_p->jobqueue.has_jobs);
-		sleep(1);
-	}
-
-	/* Job queue cleanup */
-	jobqueue_destroy(&thpool_p->jobqueue);
-	/* Deallocs */
-	int n;
-	for (n=0; n < threads_total; n++){
-		thread_destroy(thpool_p->threads[n]);
-	}
-	free(thpool_p->threads);
-	free(thpool_p);
 }
-
-
-/* Pause all threads in threadpool */
-void thpool_pause(thpool_* thpool_p) {
-	int n;
-	for (n=0; n < thpool_p->num_threads_alive; n++){
-		pthread_kill(thpool_p->threads[n]->pthread, SIGUSR1);
-	}
-}
-
 
 // resume all threads in threadpool
 void thpool_resume (threadpool *thpool_p) {
@@ -493,4 +473,42 @@ int thpool_num_threads_working (threadpool *thpool_p) {
 
 	return thpool_p->num_threads_working;
 
+}
+
+void thpool_destroy (threadpool *thpool_p) {
+
+	if (thpool_p) {
+		volatile int threads_total = thpool_p->num_threads_alive;
+
+		/* End each thread 's infinite loop */
+		threads_keep_alive = 0;
+
+		/* Give one second to kill idle threads */
+		double TIMEOUT = 1.0;
+		time_t start, end;
+		double tpassed = 0.0;
+		time (&start);
+		while (tpassed < TIMEOUT && thpool_p->num_threads_alive){
+			bsem_post_all (thpool_p->job_queue->has_jobs);
+			time (&end);
+			tpassed = difftime(end,start);
+		}
+
+		/* Poll remaining threads */
+		while (thpool_p->num_threads_alive){
+			bsem_post_all (thpool_p->job_queue->has_jobs);
+			sleep(1);
+		}
+
+		jobqueue_delete (&thpool_p->job_queue);
+
+		for (unsigned int n = 0; n < threads_total; n++) {
+			thread_delete (thpool_p->threads[n]);
+		}
+
+		free (thpool_p->threads);
+
+		thpool_delete (thpool_p);
+	}
+	
 }
