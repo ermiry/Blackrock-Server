@@ -46,17 +46,17 @@ typedef enum ServerType {
 struct _Cerver {
 
     i32 sock;                           // server socket
-    u8 use_ipv6;  
-    Protocol protocol;                  // we only support either tcp or udp
     u16 port; 
+    Protocol protocol;                  // we only support either tcp or udp
+    bool use_ipv6;  
     u16 connection_queue;               // each server can handle connection differently
 
     bool isRunning;                     // the server is recieving and/or sending packetss
     bool blocking;                      // sokcet fd is blocking?
 
     ServerType type;
-    void *server_data;
-    Action delete_server_data;
+    void *cerver_data;
+    Action delete_cerver_data;
 
     threadpool thpool;
 
@@ -67,13 +67,13 @@ struct _Cerver {
     void *on_client_connected_data;
     Action delete_on_client_connected_data;
 
-    /*** auth ***/
     struct pollfd *fds;
     u32 max_n_fds;                      // current max n fds in pollfd
     u16 current_n_fds;                  // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
     u32 poll_timeout;           
 
+    /*** auth ***/
     bool auth_required;                 // does the server requires authentication?
     Auth *auth;                         // server auth info
      
@@ -105,10 +105,11 @@ struct _Cerver {
     u32 n_connected_clients;
     u32 n_hold_clients;
 
-    // TODO:
-    // add time started
-    // add uptime
-    // maybe a function to be executed every x time -> as an update
+    struct tm *time_started;
+    u64 uptime;
+
+    Action cerver_update;                  
+    u8 ticks;                              // like fps
 
 };
 
@@ -116,17 +117,22 @@ typedef struct _Cerver Cerver;
 
 /*** Cerver Methods ***/
 
-// cerver constructor, with option to init with some values
-extern Server *cerver_new (Cerver *cerver);
+extern Cerver *cerver_new (void);
 extern void cerver_delete (void *ptr);
 
-// sets the cerver msg to be sent when a client connects
-// retuns 0 on success, 1 on error
-extern u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg);
+// sets the cerver main network values
+extern void cerver_set_network_values (Cerver *cerver, const u16 port, const Protocol protocol,
+    bool use_ipv6, const u16 connection_queue);
+
+// sets the cerver's data and a way to free it
+extern void cerver_set_cerver_data (Cerver *cerver, const void *data, Action delete_data);
 
 // sets an action to be performed by the cerver when a new client connects
 extern u8 cerver_set_on_client_connected  (Cerver *cerver, 
     Action on_client_connected, void *data, Action delete_data);
+
+// sets the cerver poll timeout
+extern void cerver_set_poll_time_out (Cerver *cerver, const u32 poll_timeout);
 
 // configures the cerver to require client authentication upon new client connections
 // retuns 0 on success, 1 on error
@@ -141,6 +147,13 @@ extern void cerver_set_app_handlers (Cerver *cerver, Action app_handler, Action 
 
 // sets a custom packet handler
 extern void cerver_set_custom_handler (Cerver *cerver, Action custom_handler);
+
+// sets the cerver msg to be sent when a client connects
+// retuns 0 on success, 1 on error
+extern u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg);
+
+// sets a custom cerver update function to be executed every n ticks
+extern void cerver_set_update (Cerver *cerver, Action update, const u8 ticks);
 
 // creates a new cerver of the specified type and with option for a custom name
 // also has the option to take another cerver as a paramater

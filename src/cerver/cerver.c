@@ -33,103 +33,109 @@
 
 static DoubleList *cervers = NULL;
 
-// cerver constructor, with option to init with some values
-Cerver *cerver_new (Cerver *cerver) {
+Cerver *cerver_new (void) {
 
     Cerver *c = (Cerver *) malloc (sizeof (Cerver));
     if (c) {
         memset (c, 0, sizeof (Cerver));
 
-        // init with some values
-        if (cerver) {
-            c->use_ipv6 = cerver->use_ipv6;
-            c->protocol = cerver->protocol;
-            c->port = cerver->port;
-            c->connection_queue = cerver->connection_queue;
-            c->poll_timeout = cerver->poll_timeout;
-            c->type = cerver->type;
-        }
+        c->protocol = PROTOCOL_TCP;         // default protocol
+        c->use_ipv6 = false;
+        c->connection_queue = DEFAULT_CONNECTION_QUEUE;
 
-        else {
-            c->use_ipv6 = 0;
-            c->protocol = PROTOCOL_TCP;
-        }
-
-        // by default the socket is assumed to be a blocking socket
+        c->isRunning = false;
         c->blocking = true;
-        
-        c->server_data = NULL;
-        c->delete_server_data = NULL;
+
+        c->cerver_data = NULL;
+        c->delete_cerver_data = NULL;
 
         c->thpool = NULL;
 
         c->clients = NULL;
+        c->client_sock_fd_map = NULL;
         c->on_client_connected = NULL;
         c->on_client_connected_data = NULL;
         c->delete_on_client_connected_data = NULL;
 
         c->fds = NULL;
+        c->compress_clients = false;
+
+        c->auth_required = false;
+        c->auth = NULL;
 
         c->on_hold_connections = NULL;
         c->hold_fds = NULL;
+        c->compress_on_hold = false;
+        c->holding_connections = false;
 
-        c->name = NULL;
-        c->welcome_msg = NULL;
-
-        c->auth = NULL;
-        c->auth_required = false;
         c->use_sessions = false;
         c->session_id_generator = NULL;
-        
-        c->isRunning = false;
 
         c->app_packet_handler = NULL;
         c->app_error_packet_handler = NULL;
         c->custom_packet_handler = NULL;
+
+        c->name = NULL;
+        c->welcome_msg = NULL;
+        c->cerver_info_packet = NULL;
+
+        c->time_started = NULL;
+
+        c->cerver_update = NULL;
     }
 
     return c;
 
 }
 
-// deletes a cerver
 void cerver_delete (void *ptr) {
 
     if (ptr) {
         Cerver *cerver = (Cerver *) ptr;
 
-        str_delete (cerver->name);
-        str_delete (cerver->welcome_msg);
+        if (cerver->cerver_data) {
+            if (cerver->delete_cerver_data) cerver->delete_cerver_data (cerver->cerver_data);
+            else free (cerver->cerver_data);
+        }
 
         if (cerver->on_client_connected_data) {
-            if (cerver->delete_on_client_connected_data)
+            if (cerver->delete_on_client_connected_data) 
                 cerver->delete_on_client_connected_data (cerver->on_client_connected_data);
             else free (cerver->on_client_connected_data);
         }
+
+        if (cerver->auth) auth_delete (cerver->auth);
+
+        str_delete (cerver->name);
+        str_delete (cerver->welcome_msg);
+
+        if (cerver->time_started) free (cerver->time_started);
 
         free (cerver);
     }
 
 }
 
-// sets the cerver poll timeout
-void cerver_set_poll_time_out (Cerver *cerver, u32 poll_timeout) {
+// sets the cerver main network values
+void cerver_set_network_values (Cerver *cerver, const u16 port, const Protocol protocol,
+    bool use_ipv6, const u16 connection_queue) {
 
-    if (cerver) cerver->poll_timeout = poll_timeout;
+    if (cerver) {
+        cerver->port = port;
+        cerver->protocol = protocol;
+        cerver->use_ipv6 = use_ipv6;
+        cerver->connection_queue = connection_queue;
+    }
 
 }
 
-// sets the cerver msg to be sent when a client connects
-// retuns 0 on success, 1 on error
-u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
+// sets the cerver's data and a way to free it
+void cerver_set_cerver_data (Cerver *cerver, const void *data, Action delete_data) {
 
     if (cerver) {
-        str_delete (cerver->welcome_msg);
-        cerver->welcome_msg = msg ? str_new (msg) : NULL;
-        return 0;
+        cerver->cerver_data = data;
+        cerver->delete_cerver_data = delete_data;
     }
-
-    return 1;
 
 }
 
@@ -145,6 +151,13 @@ u8 cerver_set_on_client_connected  (Cerver *cerver,
     }
 
     return 1;
+
+}
+
+// sets the cerver poll timeout
+void cerver_set_poll_time_out (Cerver *cerver, const u32 poll_timeout) {
+
+    if (cerver) cerver->poll_timeout = poll_timeout;
 
 }
 
@@ -168,12 +181,14 @@ static u8 cerver_on_hold_init (Cerver *cerver) {
                 cerver->compress_on_hold = false;
                 cerver->holding_connections = false;
 
+                cerver->current_on_hold_nfds = 0;
+
                 retval = 0;
             }
         }
     }
 
-    return 1;
+    return retval;
 
 }
 
@@ -190,7 +205,10 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
             cerver->auth->authenticate = authenticate;
             cerver->auth->auth_packet = auth_packet_generate ();
 
-            retval = cerver_on_hold_init (cerver);
+            if (!cerver_on_hold_init (cerver)) {
+                cerver->auth_required = true;
+                retval = 0;
+            } 
         }
     }
 
@@ -208,7 +226,8 @@ u8 cerver_set_sessions (Cerver *cerver, void *(*session_id_generator) (void *)) 
         if (session_id_generator) {
             cerver->session_id_generator = session_id_generator;
             cerver->use_sessions = true;
-            // FIXME: regenerate avl with new client comparator
+
+            avl_set_comparator (cerver->clients, client_comparator_session_id);
         }
     }
 
@@ -233,6 +252,29 @@ void cerver_set_custom_handler (Cerver *cerver, Action custom_handler) {
 
 }
 
+// sets the cerver msg to be sent when a client connects
+// retuns 0 on success, 1 on error
+u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
+
+    if (cerver) {
+        str_delete (cerver->welcome_msg);
+        cerver->welcome_msg = msg ? str_new (msg) : NULL;
+        return 0;
+    }
+
+    return 1;
+
+}
+
+// sets a custom cerver update function to be executed every n ticks
+void cerver_set_update (Cerver *cerver, Action update, const u8 ticks) {
+
+    if (cerver) {
+        cerver->cerver_update = update;
+        cerver->ticks = ticks;
+    }
+
+}
 
 // FIXME: game data
 static u8 cerver_init_data_structures (Cerver *cerver) {
@@ -574,7 +616,13 @@ static u8 cerver_init (Cerver *cerver, Config *cfg, ServerType type) {
 // creates a new cerver of the specified type and with option for a custom name
 // also has the option to take another cerver as a paramater
 // if no cerver is passed, configuration will be read from config/cerver.cfg
-Cerver *cerver_create (ServerType type, const char *name, Cerver *cerver) {
+
+// returns a new cerver with the specified parameters
+Cerver *cerver_create (const ServerType type, const char *name, 
+    const u16 port, const Protocol protocol, bool use_ipv6,
+    u16 connection_queue, u16 poll_timeout) {
+
+    Cerver *cerver = cerver_new ()
 
     Cerver *c = NULL;
 
