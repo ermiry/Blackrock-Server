@@ -29,7 +29,7 @@ CerverReceive *cerver_receive_new (Cerver *cerver, i32 sock_fd, bool on_hold) {
 
 }
 
-inline void cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
+void cerver_receive_delete (void *ptr) { if (ptr) free (ptr); }
 
 // sends back a test packet to the client!
 void cerver_test_packet_handler (Packet *packet) {
@@ -98,7 +98,7 @@ static void cerver_packet_handler (void *ptr) {
 
                 default:
                     #ifdef CERVER_DEBUG
-                    cengine_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
                         c_string_create ("Got a packet of unknown type in cerver %s.", 
                         packet->cerver->name->str));
                     #endif
@@ -179,7 +179,7 @@ static void cerver_handle_receive_buffer (Cerver *cerver, i32 sock_fd,
 // FIXME: correctly end client connection on error
 // TODO: add support for handling large files transmissions
 // receive all incoming data from the socket
-void *cerver_receive (void *ptr) {
+void cerver_receive (void *ptr) {
 
     if (ptr) {
         CerverReceive *cr = (CerverReceive *) ptr;
@@ -194,7 +194,7 @@ void *cerver_receive (void *ptr) {
             if (rc < 0) {
                 if (errno != EWOULDBLOCK) {     // no more data to read 
                     #ifdef CERVER_DEBUG 
-                    cerver_log_msg (stderr, ERROR, NO_TYPE, "cerver_recieve () - rc < 0");
+                    cerver_log_msg (stderr, LOG_CERVER, LOG_NO_TYPE, "cerver_recieve () - rc < 0");
                     perror ("Error ");
                     #endif
                 }
@@ -206,7 +206,7 @@ void *cerver_receive (void *ptr) {
                 // man recv -> steam socket perfomed an orderly shutdown
                 // but in dgram it might mean something?
                 #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, DEBUG_MSG, NO_TYPE, "cerver_recieve () - rc == 0");
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, "cerver_recieve () - rc == 0");
                 #endif
                 // break;
             }
@@ -227,7 +227,7 @@ void *cerver_receive (void *ptr) {
 
 }
 
-static void cerver_register_new_connection (const Cerver *cerver, 
+static void cerver_register_new_connection (Cerver *cerver, 
     const i32 new_fd, const struct sockaddr_storage client_address) {
 
     Connection *connection = client_connection_create (new_fd, client_address);
@@ -260,7 +260,7 @@ static void cerver_register_new_connection (const Cerver *cerver,
                         #endif
                         client_set_session_id (client, session_id);
 
-                        client_register_to_cerver (cerver, client);
+                        client_register_to_cerver ((Cerver *) cerver, client);
 
                         // trigger cerver on client connected action
                         if (cerver->on_client_connected) 
@@ -276,13 +276,13 @@ static void cerver_register_new_connection (const Cerver *cerver,
                 }
 
                 // just register the client to the cerver
-                else client_register_to_cerver (cerver, client);
+                else client_register_to_cerver ((Cerver *) cerver, client);
             }
         }
 
         if (!failed) {
             // send cerver info packet
-            if (cerver->type != WEB_SERVER) {
+            if (cerver->type != WEB_CERVER) {
                 packet_set_network_values (cerver->cerver_info_packet, new_fd, cerver->protocol);
                 if (packet_send (cerver->cerver_info_packet, 0)) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
@@ -306,7 +306,7 @@ static void cerver_register_new_connection (const Cerver *cerver,
 }
 
 // accepst a new connection to the cerver
-static void *cerver_accept (void *ptr) {
+static void cerver_accept (void *ptr) {
 
     if (ptr) {
         Cerver *cerver = (Cerver *) ptr;

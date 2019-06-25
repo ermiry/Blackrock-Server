@@ -103,7 +103,7 @@ struct _Cerver {
     /*** server info/stats ***/
     String *name;
     String *welcome_msg;                 // this msg is sent to the client when it first connects
-    Packet *cerver_info_packet;          // useful info that we can send to clients 
+    struct _Packet *cerver_info_packet;          // useful info that we can send to clients 
     u32 n_connected_clients;
     u32 n_hold_clients;
 
@@ -127,7 +127,7 @@ extern void cerver_set_network_values (Cerver *cerver, const u16 port, const Pro
     bool use_ipv6, const u16 connection_queue);
 
 // sets the cerver's data and a way to free it
-extern void cerver_set_cerver_data (Cerver *cerver, const void *data, Action delete_data);
+extern void cerver_set_cerver_data (Cerver *cerver, void *data, Action delete_data);
 
 // sets an action to be performed by the cerver when a new client connects
 extern u8 cerver_set_on_client_connected  (Cerver *cerver, 
@@ -142,7 +142,7 @@ extern u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authentic
 
 // configures the cerver to use client sessions
 // retuns 0 on success, 1 on error
-extern u8 cerver_set_sessions (Cerver *cerver, Action session_id_generator);
+extern u8 cerver_set_sessions (Cerver *cerver, void *(*session_id_generator) (const void *));
 
 // sets a cutom app packet hanlder and a custom app error packet handler
 extern void cerver_set_app_handlers (Cerver *cerver, Action app_handler, Action app_error_handler);
@@ -160,7 +160,7 @@ extern void cerver_set_update (Cerver *cerver, Action update, const u8 ticks);
 // returns a new cerver with the specified parameters
 extern Cerver *cerver_create (const CerverType type, const char *name, 
     const u16 port, const Protocol protocol, bool use_ipv6,
-    u16 connection_queue, u16 poll_timeout);
+    u16 connection_queue, u32 poll_timeout);
 
 // teardowns the cerver and creates a fresh new one with the same parameters
 extern Cerver *cerver_restart (Cerver *cerver);
@@ -184,7 +184,7 @@ typedef struct SCerver {
     u16 port; 
 
     char name[32];
-    ServerType type;
+    CerverType type;
     bool auth_required;
 
     bool uses_sessions;
@@ -192,6 +192,6 @@ typedef struct SCerver {
 } SCerver;
 
 // creates a cerver info packet ready to be sent
-extern Packet *cerver_packet_generate (Cerver *cerver);
+extern struct _Packet *cerver_packet_generate (Cerver *cerver);
 
 #endif

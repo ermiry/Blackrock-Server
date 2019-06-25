@@ -13,8 +13,7 @@ typedef struct SessionData {
 
 } SessionData;
 
-extern SessionData *session_data_new (const Packet *packet, 
-    const AuthData *auth_data, const Client *client);
+extern SessionData *session_data_new (Packet *packet, AuthData *auth_data, Client *client);
 
 extern void session_data_delete (void *ptr);
 

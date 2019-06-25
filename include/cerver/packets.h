@@ -89,7 +89,7 @@ typedef struct RequestData {
 
 } RequestData;
 
-typedef struct Packet {
+struct _Packet {
 
     // the cerver and client the packet is from
     struct _Cerver *cerver;
@@ -111,7 +111,9 @@ typedef struct Packet {
     size_t packet_size;
     void *packet;
 
-} Packet;
+};
+
+typedef struct _Packet Packet;
 
 extern Packet *packet_new (void);
 
@@ -149,5 +151,8 @@ extern u8 packet_send_udp (const void *packet, size_t packet_size);
 // sends a packet using its network values
 // returns 0 on success, 1 on error
 extern u8 packet_send (const Packet *packet, int flags);
+
+// check for packets with bad size, protocol, version, etc
+extern u8 packet_check (Packet *packet);
 
 #endif

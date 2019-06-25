@@ -9,7 +9,7 @@
 
 static char *log_get_msg_type (LogMsgType type) {
 
-    char temp[10];
+    char temp[15];
 
     switch (type) {
         case LOG_ERROR: strcpy (temp, "[LOG_ERROR]"); break;

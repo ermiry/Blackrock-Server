@@ -19,10 +19,10 @@ typedef struct CerverReceive {
 extern CerverReceive *cerver_receive_new (struct _Cerver *cerver, 
     i32 sock_fd, bool on_hold);
 
-extern inline void cerver_receive_delete (void *ptr);
+extern void cerver_receive_delete (void *ptr);
 
 // receive all incoming data from the socket
-extern void *cerver_receive (void *ptr);
+extern void cerver_receive (void *ptr);
 
 // sends back a test packet to the client!
 extern void cerver_test_packet_handler (Packet *packet);

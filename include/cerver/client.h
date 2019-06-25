@@ -11,6 +11,7 @@
 #include "client.h"
 
 #include "collections/avl.h"
+#include "collections/dllist.h"
 
 struct _Cerver;
 struct _Client;

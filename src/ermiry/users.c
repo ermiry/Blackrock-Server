@@ -23,6 +23,8 @@ mongoc_collection_t *users_collection = NULL;
 
 void user_delete (void *ptr);
 u8 user_send (const User *user, const i32 sock_fd, Protocol protocol);
+u8 user_send_inbox (const User *user, const i32 sock_fd, const Protocol protocol);
+u8 user_send_requests (const User *user, const i32 sock_fd, const Protocol protocol);
 
 User *user_new (void) {
 
@@ -296,7 +298,7 @@ User *user_get_by_email (const String *email, bool populate) {
     User *user = NULL;
 
     if (email) {
-        const bson_t *user_doc = user_find_bemail_leny_email (email);
+        const bson_t *user_doc = user_find_by_email (email);
         if (user_doc) {
             user = user_doc_parse (user_doc, populate);
             bson_destroy ((bson_t *) user_doc);

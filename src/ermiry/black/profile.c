@@ -64,7 +64,7 @@ void black_profile_delete (BlackProfile *profile) {
         if (profile->date_purchased) free (profile->date_purchased);
         if (profile->last_time) free (profile->last_time);
 
-        dlist_destroy (profile->achievements);
+        // dlist_destroy (profile->achievements);
 
         black_pve_stats_destroy (profile->pve_stats);
         black_pvp_stats_destroy (profile->pvp_stats);

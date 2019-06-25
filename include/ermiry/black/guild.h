@@ -49,26 +49,26 @@ extern BlackGuild *black_guild_get_by_name (const char *guild_name, bool populat
 // serializd black guild
 typedef struct S_BlackGuild {
 
-    char guild_oid[SERIALIZE_BUFF_SIZE];
+    // char guild_oid[SERIALIZE_BUFF_SIZE];
 
-    char name[SERIALIZE_BUFF_SIZE];
-    char description[SERIALIZE_BUFF_SIZE];
-    u32 trophies;
-    // TODO: maybe have an enum for this?
-    // Mexico (MX)
-    char location[SERIALIZE_BUFF_SIZE];             // FIXME: how can we better select this?
-    struct tm creation_date;
+    // char name[SERIALIZE_BUFF_SIZE];
+    // char description[SERIALIZE_BUFF_SIZE];
+    // u32 trophies;
+    // // TODO: maybe have an enum for this?
+    // // Mexico (MX)
+    // char location[SERIALIZE_BUFF_SIZE];             // FIXME: how can we better select this?
+    // struct tm creation_date;
 
-    // conditions to enter
-    BlackGuildType type;            // inivite only, open, closed
-    u32 required_trophies;
+    // // conditions to enter
+    // BlackGuildType type;            // inivite only, open, closed
+    // u32 required_trophies;
 
-    // FIXME: change for a serialized user reference
-    // members
-    User *leader;   
-    u32 n_members;
-    User **members;              // FIXME: how do we want to get members?
-                                // by ermiry user or by black profile?
+    // // FIXME: change for a serialized user reference
+    // // members
+    // User *leader;   
+    // u32 n_members;
+    // User **members;              // FIXME: how do we want to get members?
+    //                             // by ermiry user or by black profile?
 
 } S_BlackGuild;
 

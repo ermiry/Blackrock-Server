@@ -9,6 +9,8 @@
 
 #include "mongo/mongo.h"
 
+#include "cerver/packets.h"
+
 #include "cerver/collections/dllist.h"
 
 #define USERS_COLL_NAME         "users"

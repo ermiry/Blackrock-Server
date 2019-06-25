@@ -6,6 +6,10 @@
 
 #include "mongo/mongo.h"
 
+#include "cerver/network.h"
+
+#include "cerver/collections/dllist.h"
+
 #define BLACK_COLL_NAME         "blackprofile"
 
 extern mongoc_collection_t *black_profile_collection;

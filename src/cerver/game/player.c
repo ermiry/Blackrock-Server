@@ -70,7 +70,7 @@ int player_comparator_client_id (const void *a, const void *b) {
         Player *player_a = (Player *) a;
         Player *player_b = (Player *) b;
 
-        return strcmp (player_a->client->clientID, player_b->client->clientID);
+        return strcmp (player_a->client->client_id->str, player_b->client->client_id->str);
     }
 
 }
@@ -83,11 +83,11 @@ int player_comparator_by_session_id (const void *a, const void *b) {
 }
 
 // adds a player to the game server data main structures
-void player_register_to_server (Server *server, Player *player) {
+void player_register_to_server (Cerver *server, Player *player) {
 
     if (server && player) {
-        if (server->type == GAME_SERVER) {
-            GameServerData *gameData = (GameServerData *) server->serverData;
+        if (server->type == GAME_CERVER) {
+            GameServerData *gameData = (GameServerData *) server->cerver_data;
             if (gameData->players) avl_insert_node (gameData->players, player);
 
             #ifdef CERVER_DEBUG
@@ -108,7 +108,7 @@ void player_register_to_server (Server *server, Player *player) {
 // FIXME: client socket!!
 // removes a player from the server's players struct (avl) and also removes the player
 // client from the main server poll
-void player_unregister_to_server (Server *server, Player *player) {
+void player_unregister_to_server (Cerver *server, Player *player) {
 
     // if (server && player) {
     //     if (server->type == GAME_SERVER) {
@@ -146,30 +146,31 @@ Player *player_get (AVLNode *node, Comparator comparator, void *query) {
 
 }
 
+// FIXME:
 // recursively get the player associated with the socket
 Player *player_get_by_socket (AVLNode *node, i32 socket_fd) {
 
-    if (node) {
-        Player *player = NULL;
+    // if (node) {
+    //     Player *player = NULL;
 
-        player = player_get_by_socket (node->right, socket_fd);
+    //     player = player_get_by_socket (node->right, socket_fd);
 
-        if (!player) {
-            if (node->id) {
-                player = (Player *) node->id;
+    //     if (!player) {
+    //         if (node->id) {
+    //             player = (Player *) node->id;
                 
-                // search the socket fd in the clients active connections
-                for (int i = 0; i < player->client->n_active_cons; i++)
-                    if (socket_fd == player->client->active_connections[i])
-                        return player;
+    //             // search the socket fd in the clients active connections
+    //             for (int i = 0; i < player->client->n_active_cons; i++)
+    //                 if (socket_fd == player->client->active_connections[i])
+    //                     return player;
 
-            }
-        }
+    //         }
+    //     }
 
-        if (!player) player = player_get_by_socket (node->left, socket_fd);
+    //     if (!player) player = player_get_by_socket (node->left, socket_fd);
 
-        return player;
-    }
+    //     return player;
+    // }
 
     return NULL;
 
@@ -189,21 +190,21 @@ bool player_is_in_lobby (Lobby *lobby, Comparator comparator, void *query) {
 
 // FIXME: client socket!!
 // broadcast a packet/msg to all clients/players inside an avl structure
-void player_broadcast_to_all (AVLNode *node, Server *server, void *packet, size_t packetSize) {
+void player_broadcast_to_all (AVLNode *node, Cerver *server, void *packet, size_t packetSize) {
 
-    if (node && server && packet && (packetSize > 0)) {
-        player_broadcast_to_all (node->right, server, packet, packetSize);
+    // if (node && server && packet && (packetSize > 0)) {
+    //     player_broadcast_to_all (node->right, server, packet, packetSize);
 
-        // send packet to curent player
-        if (node->id) {
-            Player *player = (Player *) node->id;
-            if (player) 
-                server_sendPacket (server, player->client->active_connections[0],
-                    player->client->address, packet, packetSize);
-        }
+    //     // send packet to curent player
+    //     if (node->id) {
+    //         Player *player = (Player *) node->id;
+    //         if (player) 
+    //             server_sendPacket (server, player->client->active_connections[0],
+    //                 player->client->address, packet, packetSize);
+    //     }
 
-        player_broadcast_to_all (node->left, server, packet, packetSize);
-    }
+    //     player_broadcast_to_all (node->left, server, packet, packetSize);
+    // }
 
 }
 
@@ -257,7 +258,7 @@ void checkPlayerTimeouts (void) {}
 
 // TODO: 10/11/2018 -- do we need this?
 // when a client creates a lobby or joins one, it becomes a player in that lobby
-void tcpAddPlayer (Server *server) {}
+void tcpAddPlayer (Cerver *server) {}
 
 // TODO: 10/11/2018 -- do we need this?
 // TODO: as of 22/10/2018 -- we only have support for a tcp connection

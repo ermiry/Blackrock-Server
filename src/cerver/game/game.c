@@ -21,10 +21,10 @@
 #include "cerver/utils/config.h"
 #include "cerver/utils/log.h"
 
-GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
+GamePacketInfo *newGamePacketInfo (Cerver *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize);
 
-/*** Game Server configuration ***/
+/*** Game Cerver configuration ***/
 
 // option to set the game server lobby id generator
 void game_set_lobby_id_generator (GameServerData *game_data, void (*lobby_id_generator)(char *)) {
@@ -63,7 +63,7 @@ void game_set_final_action (GameServerData *game_data, Action final_action) {
 
 }
 
-/*** Game Server Data ***/
+/*** Game Cerver Data ***/
 
 // constructor for a new game server data
 // initializes game server data structures and sets actions to defaults
@@ -105,15 +105,15 @@ void game_server_data_delete (GameServerData *game_server_data) {
 
 }
 
-/*** Game Server ***/
+/*** Game Cerver ***/
 
 // cleans up all the game structs like lobbys and in game data set by the admin
-u8 game_server_teardown (Server *server) {
+u8 game_server_teardown (Cerver *server) {
 
     int retval = 1;
 
     if (server) {
-        GameServerData *game_server_data = (GameServerData *) server->serverData;
+        GameServerData *game_server_data = (GameServerData *) server->cerver_data;
         if (game_server_data) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, c_string_create ("Destroying server's: %s game data...", server->name));
@@ -124,7 +124,7 @@ u8 game_server_teardown (Server *server) {
             game_server_data_delete (game_server_data);
         }
 
-        else cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Server %s does not have a refernce to a game data.", server->name));
+        else cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, c_string_create ("Cerver %s does not have a refernce to a game data.", server->name));
     }
 
     return retval;
@@ -173,20 +173,21 @@ void serialize_player (SPlayer *splayer, Player *player) {
 // FIXME:
 // TODO: what treatment do we want to give the serialized data?
 
+// FIXME:
 // traverse each player in the lobby's avl and serialize it
-void serialize_lobby_players (AVLNode *node, SArray *sarray) {
+// void serialize_lobby_players (AVLNode *node, SArray *sarray) {
 
-    if (node && sarray) {
-        serialize_lobby_players (node->right, sarray);
+//     if (node && sarray) {
+//         serialize_lobby_players (node->right, sarray);
 
-        if (node->id) {
+//         if (node->id) {
 
-        }
+//         }
 
-        serialize_lobby_players (node->left, sarray);
-    }
+//         serialize_lobby_players (node->left, sarray);
+//     }
 
-}
+// }
 
 #pragma endregion
 
@@ -200,10 +201,10 @@ void serialize_lobby_players (AVLNode *node, SArray *sarray) {
 
 // FIXME: how do we hanlde the creation of different types of games?
 // the game server starts a new game with the function set for the dessired game type
-u8 gs_startGame (Server *server, Lobby *lobby) {
+u8 gs_startGame (Cerver *server, Lobby *lobby) {
 
     if (server && lobby) {
-        GameServerData *gameData = (GameServerData *) server->serverData;
+        GameServerData *gameData = (GameServerData *) server->cerver_data;
 
         // FIXME:
         // if (!gameData->gameInitFuncs) {
@@ -294,40 +295,40 @@ void handlePlayerInput () {
 // creates a lobby packet with the passed lobby info
 void *createLobbyPacket (RequestType reqType, Lobby *lobby, size_t packetSize) {
 
-    void *packetBuffer = malloc (packetSize);
-    void *begin = packetBuffer;
-    char *end = begin; 
+    // void *packetBuffer = malloc (packetSize);
+    // void *begin = packetBuffer;
+    // char *end = begin; 
 
-    PacketHeader *header = (PacketHeader *) end;
-    initPacketHeader (header, GAME_PACKET, packetSize); 
-    end += sizeof (PacketHeader);
+    // PacketHeader *header = (PacketHeader *) end;
+    // initPacketHeader (header, GAME_PACKET, packetSize); 
+    // end += sizeof (PacketHeader);
 
-    RequestData *reqdata = (RequestData *) end;
-    reqdata->type = reqType;
-    end += sizeof (RequestType);
+    // RequestData *reqdata = (RequestData *) end;
+    // reqdata->type = reqType;
+    // end += sizeof (RequestType);
 
-    // serialized lobby data
-    SLobby *slobby = (SLobby *) end;
-    end += sizeof (SLobby);
+    // // serialized lobby data
+    // SLobby *slobby = (SLobby *) end;
+    // end += sizeof (SLobby);
 
-    // slobby->settings.gameType = lobby->settings->gameType;
-    // slobby->settings.fps = lobby->settings->fps;
-    // slobby->settings.minPlayers = lobby->settings->minPlayers;
-    // slobby->settings.maxPlayers = lobby->settings->maxPlayers;
-    // slobby->settings.playerTimeout = lobby->settings->playerTimeout;
+    // // slobby->settings.gameType = lobby->settings->gameType;
+    // // slobby->settings.fps = lobby->settings->fps;
+    // // slobby->settings.minPlayers = lobby->settings->minPlayers;
+    // // slobby->settings.maxPlayers = lobby->settings->maxPlayers;
+    // // slobby->settings.playerTimeout = lobby->settings->playerTimeout;
 
-    // slobby->inGame = lobby->inGame;
+    // // slobby->inGame = lobby->inGame;
 
-    // FIXME: 
-    // we serialize the players using a vector
-    // slobby->players.n_elems = 0;
+    // // FIXME: 
+    // // we serialize the players using a vector
+    // // slobby->players.n_elems = 0;
 
-    return begin;
+    // return begin;
 
 }
 
 // sends a lobby update packet to all the players inside a lobby
-void sendLobbyPacket (Server *server, Lobby *lobby) {
+void sendLobbyPacket (Cerver *server, Lobby *lobby) {
 
     if (lobby) {
         size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData) +
@@ -346,32 +347,32 @@ void sendLobbyPacket (Server *server, Lobby *lobby) {
 /*** Prototypes of public game server functions ***/
 
 /*** reqs outside a lobby ***/
-void gs_createLobby (Server *, Client *, i32, GameType);
-void gs_joinLobby (Server *, Client *, GameType);
+void gs_createLobby (Cerver *, Client *, i32, GameType);
+void gs_joinLobby (Cerver *, Client *, GameType);
 
 /*** reqs from inside a lobby ***/
-void gs_leaveLobby (Server *, Player *, Lobby *);
-void gs_initGame (Server *, Player *, Lobby *);
-void gs_sendMsg (Server *, Player *, Lobby *, char *msg);
+void gs_leaveLobby (Cerver *, Player *, Lobby *);
+void gs_initGame (Cerver *, Player *, Lobby *);
+void gs_sendMsg (Cerver *, Player *, Lobby *, char *msg);
 
 // FIXME:
 // this is called from the main poll in a new thread
-void gs_handlePacket (PacketInfo *pack_info) {
+// void gs_handlePacket (PacketInfo *pack_info) {
 
-    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "gs_handlePacket ()");
+//     cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "gs_handlePacket ()");
 
-    RequestData *reqData = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
-    switch (reqData->type) {
-        // TODO: get the correct game type from the packet
-        // case LOBBY_CREATE: 
-        //     gs_createLobby (pack_info->server, pack_info->client, pack_info->clientSock, ARCADE); break;
-        // case LOBBY_JOIN: gs_joinLobby (pack_info->server, pack_info->client, ARCADE); break;
-        default: break;
-    }
+//     RequestData *reqData = (RequestData *) (pack_info->packetData + sizeof (PacketHeader));
+//     switch (reqData->type) {
+//         // TODO: get the correct game type from the packet
+//         // case LOBBY_CREATE: 
+//         //     gs_createLobby (pack_info->server, pack_info->client, pack_info->clientSock, ARCADE); break;
+//         // case LOBBY_JOIN: gs_joinLobby (pack_info->server, pack_info->client, ARCADE); break;
+//         default: break;
+//     }
 
-}
+// }
 
-GamePacketInfo *newGamePacketInfo (Server *server, Lobby *lobby, Player *player, 
+GamePacketInfo *newGamePacketInfo (Cerver *server, Lobby *lobby, Player *player, 
     char *packetData, size_t packetSize) {
 
     // if (server && lobby && player && packetData && (packetSize > 0)) {
@@ -459,7 +460,7 @@ void handleGamePacket (void *data) {
 /*** 19/04/2019 -- the following seem to be blackrock specific!!! ***/
 
 // request from a from client to create a new lobby 
-void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameType) {
+void gs_createLobby (Cerver *server, Client *client, i32 sock_fd, GameType gameType) {
 
     // if (server && client) {
     //     #ifdef CERVER_DEBUG
@@ -527,7 +528,7 @@ void gs_createLobby (Server *server, Client *client, i32 sock_fd, GameType gameT
 // TODO: in a larger game, a player migth wanna join a lobby with his friend
 // or we would have an algorithm to find a suitable lobby based on player stats
 // as of 10/11/2018 -- a player just joins the first lobby that we find that is not full
-void gs_joinLobby (Server *server, Client *client, GameType gameType) {
+void gs_joinLobby (Cerver *server, Client *client, GameType gameType) {
 
     // if (server && client) {
     //     GameServerData *gameData = (GameServerData *) server->serverData;
@@ -579,7 +580,7 @@ void gs_joinLobby (Server *server, Client *client, GameType gameType) {
 
 /*** FROM INSIDE A LOBBY ***/
 
-void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
+void gs_leaveLobby (Cerver *server, Player *player, Lobby *lobby) {
 
     // if (server && player && lobby) {
     //     GameServerData *gameData = (GameServerData *) server->serverData;
@@ -619,7 +620,7 @@ void gs_leaveLobby (Server *server, Player *player, Lobby *lobby) {
 
 }
 
-void gs_initGame (Server *server, Player *player, Lobby *lobby) {
+void gs_initGame (Cerver *server, Player *player, Lobby *lobby) {
 
     // if (server && player && lobby) {
     //     GameServerData *gameData = (GameServerData *) server->serverData;
@@ -632,7 +633,7 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
     //                     // send feedback to the players
     //                     size_t packetSize = sizeof (PacketHeader) + sizeof (ErrorData);
     //                     void *errpacket = generateErrorPacket (ERR_GAME_INIT, 
-    //                         "Server error. Failed to init the game.");
+    //                         "Cerver error. Failed to init the game.");
     //                     if (errpacket) {
     //                         player_broadcast_to_all (lobby->players->root, server, errpacket, packetSize);
     //                         free (errpacket);
@@ -696,7 +697,7 @@ void gs_initGame (Server *server, Player *player, Lobby *lobby) {
 
 // TODO:
 // a player wants to send a msg to the players inside the lobby
-void gs_sendMsg (Server *server, Player *player, Lobby *lobby, char *msg) {
+void gs_sendMsg (Cerver *server, Player *player, Lobby *lobby, char *msg) {
 
     // if (server && player && lobby && msg) {
 

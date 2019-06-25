@@ -97,7 +97,7 @@ static void lobby_default_handler (void *ptr) {
     } 
 
     ServerLobby *sl = (ServerLobby *) ptr;
-    Server *server = sl->server;
+    Cerver *server = sl->server;
     Lobby *lobby = sl->lobby;
 
     if (!server || !lobby) {
@@ -270,7 +270,7 @@ void lobby_delete (void *ptr) {
 
 }
 
-int lobby_comparator (void *one, void *two) {
+int lobby_comparator (const void *one, const void *two) {
 
     if (one && two) {
         Lobby *lobby_one = (Lobby *) one;
@@ -353,7 +353,7 @@ static u8 lobby_remove_player (Lobby *lobby, Player *player) {
 
 // FIXME:
 // add a player to the lobby structures
-u8 player_add_to_lobby (Server *server, Lobby *lobby, Player *player) {
+u8 player_add_to_lobby (Cerver *server, Lobby *lobby, Player *player) {
 
     /* if (lobby && player) {
         if (server->type == GAME_SERVER) {
@@ -394,7 +394,7 @@ u8 player_add_to_lobby (Server *server, Lobby *lobby, Player *player) {
 
 // FIXME: client socket!!
 // removes a player from the lobby's players structures and sends it to the game server's players
-u8 player_remove_from_lobby (Server *server, Lobby *lobby, Player *player) {
+u8 player_remove_from_lobby (Cerver *server, Lobby *lobby, Player *player) {
 
     // if (server && lobby && player) {
     //     if (server->type == GAME_SERVER) {
@@ -435,7 +435,7 @@ u8 player_remove_from_lobby (Server *server, Lobby *lobby, Player *player) {
 /*** Public lobby functions ***/
 
 // starts the lobby in a separte thread using its handler
-u8 lobby_start (Server *server, Lobby *lobby) {
+u8 lobby_start (Cerver *server, Lobby *lobby) {
 
     u8 retval = 1;
 
@@ -459,12 +459,12 @@ u8 lobby_start (Server *server, Lobby *lobby) {
 
 // creates a new lobby and inits his values with an owner
 // pass a custom handler or NULL to use teh default one
-Lobby *lobby_create (Server *server, Player *owner, unsigned int max_players, Action handler) {
+Lobby *lobby_create (Cerver *server, Player *owner, unsigned int max_players, Action handler) {
 
     Lobby *lobby = NULL;
 
     if (server && owner) {
-        GameServerData *game_data = (GameServerData *) server->serverData;
+        GameServerData *game_data = (GameServerData *) server->cerver_data;
         if (game_data) {
             // we create a timestamp of the creation of the lobby
             lobby = lobby_init (game_data, max_players, handler);
@@ -493,7 +493,7 @@ Lobby *lobby_create (Server *server, Player *owner, unsigned int max_players, Ac
 
         else {
             cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
-                c_string_create ("Server %s doesn't have a reference to game data!", 
+                c_string_create ("Cerver %s doesn't have a reference to game data!", 
                 server->name->str));
         } 
     }
@@ -567,11 +567,11 @@ u8 lobby_leave (GameServerData *game_data, Lobby *lobby, Player *player) {
 
 }
 
-u8 lobby_destroy (Server *server, Lobby *lobby) {}
+u8 lobby_destroy (Cerver *server, Lobby *lobby) {}
 
 // FIXME: 19/april/2019 -- do we still need this?
 // a lobby should only be destroyed when there are no players left or if we teardown the server
-u8 destroyLobby (Server *server, Lobby *lobby) {
+u8 destroyLobby (Cerver *server, Lobby *lobby) {
 
     /* if (server && lobby) {
         if (server->type == GAME_SERVER) {
@@ -644,7 +644,7 @@ u8 destroyLobby (Server *server, Lobby *lobby) {
 // TODO: add a timestamp when the player leaves
 
 // FIXME: finish refcatoring lobby_leaver with this!!
-u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
+u8 leaveLobby (Cerver *server, Lobby *lobby, Player *player) {
 
     // make sure that the player is inside the lobby
     // if (player_is_in_lobby (player, lobby)) {
@@ -721,7 +721,7 @@ u8 leaveLobby (Server *server, Lobby *lobby, Player *player) {
 // FIXME:
 // TODO: pass the correct game type and maybe create a more advance algorithm
 // finds a suitable lobby for the player
-/* Lobby *findLobby (Server *server) {
+/* Lobby *findLobby (Cerver *server) {
 
     // FIXME: how do we want to handle these errors?
     // perform some check here...

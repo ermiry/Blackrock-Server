@@ -366,23 +366,24 @@ void recievePackets (void) {
 
 }
 
-// broadcast a packet/msg to all clients inside a client's tree
-void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t packetSize) {
+// FIXME:
+// // broadcast a packet/msg to all clients inside a client's tree
+// void broadcastToAllClients (AVLNode *node, Server *server, void *packet, size_t packetSize) {
 
-    if (node && server && packet && (packetSize > 0)) {
-        broadcastToAllClients (node->right, server, packet, packetSize);
+//     if (node && server && packet && (packetSize > 0)) {
+//         broadcastToAllClients (node->right, server, packet, packetSize);
 
-        // send packet to current client
-        if (node->id) {
-            Client *client = (Client *) node->id;
+//         // send packet to current client
+//         if (node->id) {
+//             Client *client = (Client *) node->id;
 
-            // 02/12/2018 -- send packet to the first active connection
-            if (client) 
-                server_sendPacket (server, client->active_connections[0], client->address,
-                    packet, packetSize);
-        }
+//             // 02/12/2018 -- send packet to the first active connection
+//             if (client) 
+//                 server_sendPacket (server, client->active_connections[0], client->address,
+//                     packet, packetSize);
+//         }
 
-        broadcastToAllClients (node->left, server, packet, packetSize);
-    }
+//         broadcastToAllClients (node->left, server, packet, packetSize);
+//     }
 
-}
+// }

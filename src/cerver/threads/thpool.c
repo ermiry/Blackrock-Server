@@ -29,6 +29,67 @@
 static volatile int threads_keep_alive;
 static volatile int threads_on_hold;
 
+static struct job *jobqueue_pull (jobqueue *jobqueue_p);
+static void *thread_do (thread *thread_p);
+
+/* ======================== SYNCHRONISATION ========================= */
+
+
+// inits semaphore to 1 or 0 
+static void bsem_init (bsem *bsem_p, int value) {
+
+	if (bsem_p) {
+		if (value == 0 || value == 1) {
+			pthread_mutex_init (&(bsem_p->mutex), NULL);
+			pthread_cond_init (&(bsem_p->cond), NULL);
+			bsem_p->v = value;
+		}
+	}
+	
+}
+
+// resets the semaphore to 0
+static void bsem_reset (bsem *bsem_p) { bsem_init (bsem_p, 0); }
+
+// post to at least one thread
+static void bsem_post (bsem *bsem_p) {
+
+	if (bsem_p) {
+		pthread_mutex_lock(&bsem_p->mutex);
+		bsem_p->v = 1;
+		pthread_cond_signal(&bsem_p->cond);
+		pthread_mutex_unlock(&bsem_p->mutex);
+	}
+}
+
+// post to all threads
+static void bsem_post_all (bsem *bsem_p) {
+
+	if (bsem_p) {
+		pthread_mutex_lock(&bsem_p->mutex);
+		bsem_p->v = 1;
+		pthread_cond_broadcast(&bsem_p->cond);
+		pthread_mutex_unlock(&bsem_p->mutex);
+	}
+	
+}
+
+// wait on semaphore until semaphore has value 0
+static void bsem_wait (bsem *bsem_p) {
+
+	if (bsem_p) {
+		pthread_mutex_lock (&bsem_p->mutex);
+
+		while (bsem_p->v != 1) {
+			pthread_cond_wait (&bsem_p->cond, &bsem_p->mutex);
+		} 
+
+		bsem_p->v = 0;
+		pthread_mutex_unlock (&bsem_p->mutex);
+	}
+
+}
+
 /* ============================ THREAD ============================== */
 
 static thread *thread_new (void) {
@@ -55,7 +116,7 @@ static int thread_init (threadpool *thpool, thread **thread_p, unsigned int id) 
 		(*thread_p)->thpool_p = thpool;
 		(*thread_p)->id       = id;
 
-		if (!pthread_create (&(*thread_p)->pthread, NULL, (void *)thread_do, (*thread_p))) {
+		if (!pthread_create (&(*thread_p)->pthread, NULL, (void *) thread_do, (*thread_p))) {
 			if (!pthread_detach ((*thread_p)->pthread)) {
 				retval = 0;
 			}
@@ -132,7 +193,7 @@ static void *thread_do (thread *thread_p) {
 				// get a job from the queue and execute it
 				void (*func_buff)(void*);
 				void *arg_buff;
-				job *job_p = jobqueue_pull (&thpool_p->job_queue);
+				job *job_p = jobqueue_pull (thpool_p->job_queue);
 				if (job_p) {
 					func_buff = job_p->function;
 					arg_buff  = job_p->arg;
@@ -298,64 +359,6 @@ static void jobqueue_delete (jobqueue *job_queue) {
 
 }
 
-/* ======================== SYNCHRONISATION ========================= */
-
-
-// inits semaphore to 1 or 0 
-static void bsem_init (bsem *bsem_p, int value) {
-
-	if (bsem_p) {
-		if (value == 0 || value == 1) {
-			pthread_mutex_init (&(bsem_p->mutex), NULL);
-			pthread_cond_init (&(bsem_p->cond), NULL);
-			bsem_p->v = value;
-		}
-	}
-	
-}
-
-// resets the semaphore to 0
-static void bsem_reset (bsem *bsem_p) { bsem_init (bsem_p, 0); }
-
-// post to at least one thread
-static void bsem_post (bsem *bsem_p) {
-
-	if (bsem_p) {
-		pthread_mutex_lock(&bsem_p->mutex);
-		bsem_p->v = 1;
-		pthread_cond_signal(&bsem_p->cond);
-		pthread_mutex_unlock(&bsem_p->mutex);
-	}
-}
-
-// post to all threads
-static void bsem_post_all (bsem *bsem_p) {
-
-	if (bsem_p) {
-		pthread_mutex_lock(&bsem_p->mutex);
-		bsem_p->v = 1;
-		pthread_cond_broadcast(&bsem_p->cond);
-		pthread_mutex_unlock(&bsem_p->mutex);
-	}
-	
-}
-
-// wait on semaphore until semaphore has value 0
-static void bsem_wait (bsem *bsem_p) {
-
-	if (bsem_p) {
-		pthread_mutex_lock (&bsem_p->mutex);
-
-		while (bsem_p->v != 1) {
-			pthread_cond_wait (&bsem_p->cond, &bsem_p->mutex);
-		} 
-
-		bsem_p->v = 0;
-		pthread_mutex_unlock (&bsem_p->mutex);
-	}
-
-}
-
 /* ============================ THPOOL ============================== */
 
 static threadpool *thpool_new (const char *name, unsigned int num_threads) {
@@ -429,7 +432,7 @@ int thpool_add_work (threadpool *thpool_p, void (*function_p)(void*), void* arg_
 			newjob->function = function_p;
 			newjob->arg = arg_p;
 
-			jobqueue_push (&thpool_p->job_queue, newjob);
+			jobqueue_push (thpool_p->job_queue, newjob);
 
 			retval = 0;
 		}
@@ -504,7 +507,7 @@ void thpool_destroy (threadpool *thpool_p) {
 			sleep(1);
 		}
 
-		jobqueue_delete (&thpool_p->job_queue);
+		jobqueue_delete (thpool_p->job_queue);
 
 		for (unsigned int n = 0; n < threads_total; n++) {
 			thread_delete (thpool_p->threads[n]);

@@ -106,6 +106,8 @@ void cerver_delete (void *ptr) {
 
         if (cerver->auth) auth_delete (cerver->auth);
 
+        packet_delete (cerver->cerver_info_packet);
+
         str_delete (cerver->name);
         str_delete (cerver->welcome_msg);
 
@@ -130,7 +132,7 @@ void cerver_set_network_values (Cerver *cerver, const u16 port, const Protocol p
 }
 
 // sets the cerver's data and a way to free it
-void cerver_set_cerver_data (Cerver *cerver, const void *data, Action delete_data) {
+void cerver_set_cerver_data (Cerver *cerver, void *data, Action delete_data) {
 
     if (cerver) {
         cerver->cerver_data = data;
@@ -218,7 +220,7 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
 
 // configures the cerver to use client sessions
 // retuns 0 on success, 1 on error
-u8 cerver_set_sessions (Cerver *cerver, void *(*session_id_generator) (void *)) {
+u8 cerver_set_sessions (Cerver *cerver, void *(*session_id_generator) (const void *)) {
 
     u8 retval = 1;
 
@@ -371,7 +373,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
             cerver->compress_clients = false;
 
             // initialize cerver's own thread pool
-            cerver->thpool = thpool_init (DEFAULT_TH_POOL_INIT);
+            cerver->thpool = thpool_create (cerver->name->str, DEFAULT_TH_POOL_INIT);
             if (cerver->thpool) {
                 switch (cerver->type) {
                     case CUSTOM_CERVER: break;
@@ -470,7 +472,7 @@ static u8 cerver_init (Cerver *cerver) {
 // returns a new cerver with the specified parameters
 Cerver *cerver_create (const CerverType type, const char *name, 
     const u16 port, const Protocol protocol, bool use_ipv6,
-    u16 connection_queue, u16 poll_timeout) {
+    u16 connection_queue, u32 poll_timeout) {
 
     Cerver *cerver = NULL;
 
@@ -501,10 +503,11 @@ Cerver *cerver_create (const CerverType type, const char *name,
 
 }
 
+// FIXME: stop and start the cerver
 // teardowns the cerver and creates a fresh new one with the same parameters
 Cerver *cerver_restart (Cerver *cerver) {
 
-    if (cerver) {
+    /* if (cerver) {
         cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, "Restarting the cerver...");
 
         Cerver temp = { 
@@ -529,7 +532,7 @@ Cerver *cerver_restart (Cerver *cerver) {
         else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Unable to retstart the cerver!");
     }
 
-    else cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "Can't restart a NULL cerver!");
+    else cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "Can't restart a NULL cerver!"); */
     
     return NULL;
 
@@ -539,7 +542,9 @@ Cerver *cerver_restart (Cerver *cerver) {
 u8 cerver_start (Cerver *cerver) {
 
     if (cerver->isRunning) {
-        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "The cerver is already running!");
+        cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
+            c_string_create ("The cerver %s is already running!",
+            cerver->name->str));
         return 1;
     }
 
@@ -547,15 +552,16 @@ u8 cerver_start (Cerver *cerver) {
 
     // one time only inits
     // if we have a game cerver, we might wanna load game data -> set by cerver admin
-    if (cerver->type == GAME_SERVER) {
-        GameServerData *game_data = (GameServerData *) cerver->server_data;
+    if (cerver->type == GAME_CERVER) {
+        GameServerData *game_data = (GameServerData *) cerver->cerver_data;
         if (game_data && game_data->load_game_data) {
             game_data->load_game_data (NULL);
         }
 
         else {
             cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, 
-                "Game cerver doesn't have a reference to a game data!");
+                c_string_create ("Game cerver %s doesn't have a reference to a game data!",
+                cerver->name->str));
         } 
     }
 
@@ -565,6 +571,9 @@ u8 cerver_start (Cerver *cerver) {
         case PROTOCOL_TCP: {
             if (!cerver->blocking) {
                 if (!listen (cerver->sock, cerver->connection_queue)) {
+                    // register the cerver start time
+                    // TODO:
+
                     // set up the initial listening socket     
                     cerver->fds[cerver->current_n_fds].fd = cerver->sock;
                     cerver->fds[cerver->current_n_fds].events = POLLIN;
@@ -573,7 +582,7 @@ u8 cerver_start (Cerver *cerver) {
                     cerver->isRunning = true;
 
                     // cerver is not holding clients if there is not new connections
-                    if (cerver->auth_required) cerver->holding_clients = false;
+                    if (cerver->auth_required) cerver->holding_connections = false;
 
                     cerver_poll (cerver);
 
@@ -582,14 +591,16 @@ u8 cerver_start (Cerver *cerver) {
 
                 else {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                        "Failed to listen in cerver socket!");
+                        c_string_create ("Failed to listen in cerver %s socket!",
+                        cerver->name->str));
                     close (cerver->sock);
                 }
             }
 
             else {
                 cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                    "Cerver socket is not set to non blocking!");
+                    c_string_create ("Cerver %s socket is not set to non blocking!",
+                    cerver->name->str));
             }
             
         } break;
@@ -597,7 +608,9 @@ u8 cerver_start (Cerver *cerver) {
         case PROTOCOL_UDP: /* TODO: */ break;
 
         default: 
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Cant't start cerver! Unknown protocol!");
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                c_string_create ("Cant't start cerver %s! Unknown protocol!",
+                cerver->name->str));
             break;
     }
 
@@ -614,129 +627,128 @@ u8 cerver_shutdown (Cerver *cerver) {
         // close the cerver socket
         if (!close (cerver->sock)) {
             #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "The cerver socket has been closed.");
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
+                    c_string_create ("The cerver %s socket has been closed.",
+                    cerver->name->str));
             #endif
 
             return 0;
         }
 
-        else cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "Failed to close cerver socket!");
+        else {
+            cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, 
+                c_string_create ("Failed to close cerver %s socket!",
+                cerver->name->str));
+        } 
     } 
 
     return 1;
 
 }
 
-// cleans up the client's structures in the current cerver
-// if ther are clients connected, we send a cerver teardown packet
-static void cerver_destroy_clients (Cerver *cerver) {
+// FIXME: get rid of any on hold connections
+static void cerver_destroy_on_hold_connections (Cerver *cerver) {
 
-    // create cerver teardown packet
-    size_t packetSize = sizeof (PacketHeader);
-    void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
+    if (cerver) {
 
-    // send a packet to any active client
-    broadcastToAllClients (cerver->clients->root, cerver, packet, packetSize);
-    
-    // clear the client's poll  -> to stop any connection
-    // this may change to a for if we have a dynamic poll structure
-    memset (cerver->fds, 0, sizeof (cerver->fds));
-
-    // destroy the active clients tree
-    // avl_clear_tree (&cerver->clients->root, cerver->clients->destroy);
-    avl_delete (cerver->clients);
-
-    if (cerver->auth_required) {
-        // send a packet to on hold clients
-        broadcastToAllClients (cerver->onHoldClients->root, cerver, packet, packetSize);
-        // destroy the tree
-        // avl_clear_tree (&cerver->onHoldClients->root, cerver->onHoldClients->destroy);
-        avl_delete (cerver->onHoldClients);
-
-        // clear the on hold client's poll
-        // this may change to a for if we have a dynamic poll structure
-        memset (cerver->hold_fds, 0, sizeof (cerver->fds));
     }
-
-    // the pool has only "empty" clients
-    // pool_clear (cerver->clientsPool);
-
-    free (packet);
 
 }
 
 // FIXME:
+// cleans up the client's structures in the current cerver
+// if ther are clients connected, we send a cerver teardown packet
+static void cerver_destroy_clients (Cerver *cerver) {
+
+    if (cerver) {
+        // TODO: generate a cerver teardwon packet
+        // create cerver teardown packet
+        // size_t packetSize = sizeof (PacketHeader);
+        // void *packet = generatePacket (SERVER_TEARDOWN, packetSize);
+
+        // FIXME:
+        // send a packet to any active client
+        // broadcastToAllClients (cerver->clients->root, cerver, packet, packetSize);
+        
+        // clear the client's poll  -> to stop any connection
+        // this may change to a for if we have a dynamic poll structure
+        // memset (cerver->fds, 0, sizeof (cerver->fds));
+
+        // destroy the active clients tree
+        // avl_clear_tree (&cerver->clients->root, cerver->clients->destroy);
+        // FIXME: unregister the clients from the cerver to properly close the connections
+        avl_delete (cerver->clients);
+    }
+
+}
+
 // teardown a cerver -> stop the cerver and clean all of its data
 u8 cerver_teardown (Cerver *cerver) {
 
-    if (!cerver) {
-        cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "Can't destroy a NULL cerver!");
-        return 1;
+    u8 retval = 1;
+
+    if (cerver) {
+        #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
+                c_string_create ("Starting cerver %s teardown...", cerver->name->str));
+        #endif
+
+        // clean up on hold connections
+        cerver_destroy_on_hold_connections (cerver);
+
+        // clean up cerver connected clients
+        cerver_destroy_clients (cerver);
+        #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Done cleaning up clients.");
+        #endif
+
+        // disable socket I/O in both ways and stop any ongoing job
+        if (!cerver_shutdown (cerver)) {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
+                c_string_create ("Cerver %s has been shutted down.", cerver->name->str));
+            #endif
+        }
+            
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                c_string_create ("Failed to shutdown cerver %s!", cerver->name->str));
+            #endif
+        } 
+        
+        if (cerver->thpool) {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
+                c_string_create ("Cerver %s active thpool threads: %i", 
+                cerver->name->str,
+                thpool_num_threads_working (cerver->thpool)));
+            #endif
+
+            thpool_destroy (cerver->thpool);
+
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
+                c_string_create ("Destroyed cerver %s thpool!", cerver->name->str));
+            #endif
+        } 
+
+        cerver_delete (cerver);
+
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE, 
+            c_string_create ("Cerver %s teardown was successfull!", 
+                cerver->name->str));
+
+        retval = 0;
     }
 
-    #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, "Init cerver teardown...");
-    #endif
-
-    // TODO: what happens if we have a custom auth method?
-    // clean cerver auth data
-    // FIXME:
-    // if (cerver->auth_required) 
-    //     if (cerver->auth.reqAuthPacket) free (cerver->auth.reqAuthPacket);
-
-    // clean independent cerver type structs
-    // if the cerver admin added a destroy cerver data action...
-    if (cerver->delete_server_data) cerver->delete_server_data (cerver);
     else {
-        // FIXME:
-        // we use the default destroy cerver data function
-        // switch (cerver->type) {
-        //     case GAME_SERVER: 
-        //         if (!destroyGameServer (cerver))
-        //             cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Done clearing game cerver data!"); 
-        //         break;
-        //     case FILE_SERVER: break;
-        //     case WEB_SERVER: break;
-        //     default: break; 
-        // }
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, LOG_ERROR, LOG_CERVER, "Can't teardown a NULL cerver!");
+        #endif
     }
 
-    // clean common cerver structs
-    cerver_destroy_clients (cerver);
-    #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Done cleaning up clients.");
-    #endif
-
-    // disable socket I/O in both ways and stop any ongoing job
-    if (!cerver_shutdown (cerver))
-        cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Cerver has been shutted down.");
-
-    else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to shutdown cerver!");
-    
-    if (cerver->thpool) {
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-            c_string_create ("Cerver active thpool threads: %i", 
-            thpool_num_threads_working (cerver->thpool)));
-        #endif
-
-        // FIXME: 04/12/2018 - 15:02 -- getting a segfault
-        thpool_destroy (cerver->thpool);
-
-        #ifdef CERVER_DEBUG
-        cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Destroyed cerver thpool!");
-        #endif
-    } 
-
-    // destroy any other cerver data
-    // if (cerver->packetPool) pool_clear (cerver->packetPool);
-    // if (cerver->serverInfo) free (cerver->serverInfo);
-
-    cerver_delete (cerver);
-
-    cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE, "Cerver teardown was successfull!");
-
-    return 0;
+    return retval;
 
 }
 
@@ -762,7 +774,7 @@ static SCerver *cerver_serliaze (Cerver *cerver) {
             scerver->protocol = cerver->protocol;
             scerver->port = cerver->port;
 
-            strncpy (scerver->name, cerver->name, 32);
+            strncpy (scerver->name, cerver->name->str, 32);
             scerver->type = cerver->type;
             scerver->auth_required = cerver->auth_required;
             scerver->uses_sessions = cerver->use_sessions;

@@ -17,7 +17,7 @@
 #include "cerver/utils/config.h"
 #include "cerver/utils/objectPool.h"
 
-struct _Server;
+struct _Cerver;
 struct _GameServerData;
 struct _Client;
 struct _PacketInfo;
@@ -93,7 +93,7 @@ extern GameServerData *game_server_data_new (void);
 extern void game_server_data_delete (GameServerData *game_server_data);
 
 // cleans up all the game structs like lobbys and in game data set by the admin
-u8 game_server_teardown (struct _Server *server);
+u8 game_server_teardown (struct _Cerver *server);
 
 
 /*** THE FOLLOWING AND KIND OF BLACKROCK SPECIFIC ***/
@@ -113,7 +113,7 @@ typedef struct PlayerAndData {
 // primarilly game updates and messages
 typedef struct GamePacketInfo {
 
-    struct _Server *server;
+    struct _Cerver *server;
     Lobby *lobby;
     Player *player;
     char packetData[65515];		// max udp packet size

@@ -17,7 +17,7 @@
 #define LOBBY_DEFAULT_POLL_TIMEOUT			180000
 #define DEFAULT_MAX_LOBBY_PLAYERS			4
 
-struct _Server;
+struct _Cerver;
 struct _Player;
 struct _GameServerData;
 
@@ -87,7 +87,7 @@ extern Lobby *lobby_init (struct _GameServerData *game_data, unsigned max_player
 extern void lobby_delete (void *ptr);
 
 // used to compare two lobbys
-extern int lobby_comparator (void *one, void *two);
+extern int lobby_comparator (const void *one, const void *two);
 
 // sets the lobby settings and a function to delete it
 extern void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action delete_game_settings);
@@ -111,11 +111,11 @@ extern Lobby *lobby_get (struct _GameServerData *game_data, Lobby *query);
 /*** Player interaction ***/
 
 // starts the lobby in a separte thread using its hanlder
-extern u8 lobby_start (struct _Server *server, Lobby *lobby);
+extern u8 lobby_start (struct _Cerver *server, Lobby *lobby);
 
 // creates a new lobby and inits his values with an owner
 // pass a custom handler or NULL to use teh default one
-extern Lobby *lobby_create (struct _Server *server, struct _Player *owner, unsigned int max_players, Action handler);
+extern Lobby *lobby_create (struct _Cerver *server, struct _Player *owner, unsigned int max_players, Action handler);
 
 // called by a registered player that wants to join a lobby on progress
 // the lobby model gets updated with new values
@@ -126,7 +126,7 @@ extern u8 lobby_leave (struct _GameServerData *game_data, Lobby *lobby, struct _
 
 typedef struct ServerLobby {
 
-    struct _Server *server;
+    struct _Cerver *server;
     Lobby *lobby;
 
 } ServerLobby;

@@ -9,7 +9,7 @@
 
 #include "cerver/collections/avl.h"
 
-struct _Server;
+struct _Cerver;
 struct _GameServerData;
 struct _Client;
 
@@ -54,10 +54,10 @@ extern int player_comparator_client_id (const void *a, const void *b);
 extern int player_comparator_by_session_id (const void *a, const void *b);
 
 // adds a player to the game server data main structures
-extern void player_register_to_server (struct _Server *server, Player *player);
+extern void player_register_to_server (struct _Cerver *server, Player *player);
 // removes a player from the server's players struct (avl) and also removes the player
 // client from the main server poll
-extern void player_unregister_to_server (struct _Server *server, Player *player);
+extern void player_unregister_to_server (struct _Cerver *server, Player *player);
 
 // get a player from an avl tree using a comparator and a query
 extern Player *player_get (AVLNode *node, Comparator comparator, void *query);
@@ -69,7 +69,7 @@ extern Player *player_get_by_socket (AVLNode *node, i32 socket_fd);
 extern bool player_is_in_lobby (Lobby *lobby, Comparator comparator, void *query);
 
 // broadcast a packet/msg to all clients/players inside an avl structure
-extern void player_broadcast_to_all (AVLNode *node, struct _Server *server, void *packet, size_t packetSize);
+extern void player_broadcast_to_all (AVLNode *node, struct _Cerver *server, void *packet, size_t packetSize);
 
 // performs an action on every player in an avl tree 
 extern void player_traverse (AVLNode *node, Action action, void *data);

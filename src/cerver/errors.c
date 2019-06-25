@@ -35,7 +35,7 @@ static inline SError *serror_new (void) {
 
 }
 
-static inline serror_delete (void *ptr) { if (ptr) free (ptr); }
+static inline void serror_delete (void *ptr) { if (ptr) free (ptr); }
 
 static SError *error_serialize (Error *error) {
 
@@ -43,7 +43,7 @@ static SError *error_serialize (Error *error) {
         SError *serror = serror_new ();
         serror->error_type = error->error_type;
         memset (serror->msg, 0, 64);
-        strncpy (serror->msg, error->msg, 64);
+        strncpy (serror->msg, error->msg->str, 64);
 
         return serror;
     }

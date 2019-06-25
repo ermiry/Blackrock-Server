@@ -11,7 +11,8 @@
 typedef enum ErmiryError {
 
     ERR_NO_PROFILE = 1,
+    ERR_INVALID_PROFILE,
 
-};
+} ErmiryError;
 
 #endif

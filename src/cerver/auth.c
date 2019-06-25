@@ -13,8 +13,8 @@
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 #include "cerver/auth.h"
+#include "cerver/threads/thpool.h"
 
-#include "cerver/utils/thpool.h"
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
@@ -117,7 +117,7 @@ static void auth_send_success_packet (const Cerver *cerver, const i32 sock_fd) {
 
 // FIXME: if something fails in this functions, the client and its data should be completely destroyed
 // creates a new lcient and registers to cerver with new data
-static u8 auth_create_new_client (const Packet *packet, const AuthData *auth_data) {
+static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
 
     u8 retval = 1;
 
@@ -232,7 +232,7 @@ static u8 auth_create_new_client (const Packet *packet, const AuthData *auth_dat
 
 // how to manage a successfull authentication to the cerver
 // we have a new client authenticated with credentials
-static void auth_success (const Packet *packet, const AuthData *auth_data) {
+static void auth_success (Packet *packet, AuthData *auth_data) {
 
     if (packet) {
         // create a new lcient and register to cerver
@@ -367,7 +367,7 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
 
 }
 
-static void auth_with_defined_method (const Packet *packet, const AuthData *auth_data) {
+static void auth_with_defined_method (Packet *packet, AuthData *auth_data) {
 
     if (packet && auth_data) {
         AuthPacket auth_packet = { .packet = packet, .auth_data = auth_data };
@@ -514,7 +514,7 @@ void on_hold_packet_handler (void *ptr) {
 
                 default:
                     #ifdef CERVER_DEBUG
-                    cengine_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
+                    cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
                         c_string_create ("Got an on hold packet of unknown type in cerver %s.", 
                         packet->cerver->name->str));
                     #endif
@@ -765,7 +765,7 @@ static Connection *on_hold_connection_remove (const Cerver *cerver, const i32 so
             connection = (Connection *) connection_data;
 
             // unregister the fd from the on hold structures
-            on_hold_poll_remove_sock_fd (cerver, sock_fd);
+            on_hold_poll_remove_sock_fd ((Cerver *) cerver, sock_fd);
         }
     }
 
