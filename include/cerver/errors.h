@@ -24,7 +24,7 @@ typedef enum ErrorType {
 typedef struct Error {
 
     // TODO: maybe add time?
-    ErrorType error_type;
+    u32 error_type;
     String *msg;
 
 } Error;
@@ -38,7 +38,7 @@ extern Packet *error_packet_generate (ErrorType error_type, const char *msg);
 // serialized error data
 typedef struct SError {
 
-    ErrorType error_type;
+    u32 error_type;
     char msg[64];
 
 } SError;

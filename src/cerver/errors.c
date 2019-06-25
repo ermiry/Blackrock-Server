@@ -4,7 +4,7 @@
 #include "cerver/errors.h"
 #include "cerver/packets.h"
 
-Error *error_new (ErrorType error_type, const char *msg) {
+Error *error_new (u32 error_type, const char *msg) {
 
     Error *error = (Error *) malloc (sizeof (Error));
     if (error) {
@@ -53,7 +53,7 @@ static SError *error_serialize (Error *error) {
 }
 
 // creates an error packet ready to be sent
-Packet *error_packet_generate (ErrorType error_type, const char *msg) {
+Packet *error_packet_generate (u32 error_type, const char *msg) {
 
     Packet *packet = NULL;
 

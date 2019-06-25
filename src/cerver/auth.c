@@ -370,7 +370,8 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
 static void auth_with_defined_method (const Packet *packet, const AuthData *auth_data) {
 
     if (packet && auth_data) {
-        if (!packet->cerver->auth->authenticate (auth_data)) {
+        AuthPacket auth_packet = { .packet = packet, .auth_data = auth_data };
+        if (!packet->cerver->auth->authenticate (&auth_packet)) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
                 c_string_create ("Client authenticated successfully to cerver %s",

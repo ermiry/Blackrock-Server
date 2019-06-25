@@ -5,11 +5,14 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
+#include "ermiry/errors.h"
 #include "ermiry/ermiry.h"
 #include "ermiry/users.h"
 #include "ermiry/black/profile.h"
 
 #include "mongo/mongo.h"
+
+#include "cerver/errors.h"
 
 #include "cerver/collections/dllist.h"
 
@@ -322,7 +325,7 @@ User *user_get_by_username (const String *username, bool populate) {
 
 // searches a user by emaila nd authenticates it using the provided password
 // on success, returns the user associated with the credentials
-User *user_authenticate (const SErmiryAuth *ermiry_auth) {
+User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
 
     User *retval = NULL;
 
@@ -352,13 +355,14 @@ User *user_authenticate (const SErmiryAuth *ermiry_auth) {
                         c_string_create ("User with email %s does not have a black profile!",
                         user->email));
                     #endif
-                    // TODO: send custom error packet with custom ermiry error packet
-                    // Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
-                    // if (error_packet) {
-                    //     packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                    //     packet_send (error_packet, 0);
-                    //     packet_delete (error_packet);
-                    // }
+                    // send custom error packet with custom ermiry error packet
+                    Packet *error_packet = error_packet_generate (ERR_NO_PROFILE, 
+                        "No valid blackrock profile associated with your account.");
+                    if (error_packet) {
+                        packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                        packet_send (error_packet, 0);
+                        packet_delete (error_packet);
+                    }
                 }
             }
 

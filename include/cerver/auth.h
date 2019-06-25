@@ -54,4 +54,12 @@ extern void on_hold_packet_handler (void *ptr);
 // returns 0 on success, 1 on error
 extern u8 on_hold_connection (struct _Cerver *cerver, Connection *connection);
 
+// auxiliary structure passed to the user defined auth method
+typedef struct AuthPacket {
+
+    Packet *packet;
+    AuthData *auth_data;
+
+} AuthPacket;
+
 #endif

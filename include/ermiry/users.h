@@ -66,7 +66,7 @@ extern User *user_get_by_username (const String *username, bool populate);
 
 // searches a user by emaila nd authenticates it using the provided password
 // on success, returns the user associated with the credentials
-extern User *user_authenticate (const SErmiryAuth *ermiry_auth);
+extern User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth);
 
 // serialized user
 // this how we recieve the users from the cerver

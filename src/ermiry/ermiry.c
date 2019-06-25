@@ -69,17 +69,19 @@ int ermiry_end (void) {
 
 // authenticates an ermiry user with its email and password
 // 23/06/2019 -- 23:22 -- email is unique, but w ewant to have duplicate usernames with a unique id
-u8 ermiry_authenticate_method (void *auth_data_ptr) {
+u8 ermiry_authenticate_method (void *auth_packet_ptr) {
 
     u8 retval = 1;
 
-    if (auth_data_ptr) {
-        AuthData *auth_data = (AuthData *) auth_data_ptr;
+    if (auth_packet_ptr) {
+        AuthPacket *auth_packet = (AuthPacket *) auth_packet_ptr;
+        Packet *packet = auth_packet->packet;
+        AuthData *auth_data = auth_packet->auth_data;
 
         if (auth_data->auth_data_size >= sizeof (SErmiryAuth)) {
             SErmiryAuth *ermiry_auth = (SErmiryAuth *) auth_data->auth_data;
 
-            User *user = user_authenticate (ermiry_auth);
+            User *user = user_authenticate (packet, ermiry_auth);
             if (user) {
                 auth_data->data = user;
                 auth_data->delete_data = user_delete;
