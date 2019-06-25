@@ -339,7 +339,7 @@ static const bson_t *black_profile_find_by_oid (const bson_oid_t *oid) {
         bson_t *profile_query = bson_new ();
         bson_append_oid (profile_query, "_id", -1, oid);
 
-        return mongo_find_one (black_collection, profile_query);
+        return mongo_find_one (black_profile_collection, profile_query);
     }
 
     return NULL;
@@ -353,7 +353,7 @@ static const bson_t *black_profile_find_by_user (const bson_oid_t *user_oid) {
         bson_t *profile_query = bson_new ();
         bson_append_oid (profile_query, "user", -1, user_oid);
 
-        return mongo_find_one (black_collection, profile_query);
+        return mongo_find_one (black_profile_collection, profile_query);
     }
 
     return NULL;
@@ -424,7 +424,71 @@ int black_profile_update_with_model (const bson_oid_t *profile_oid, const BlackP
         // create a bson with the update info
         bson_t *update = black_profile_bson_create_update (black_profile);
 
-        retval = mongo_update_one (black_collection, profile_query, update);
+        retval = mongo_update_one (black_profile_collection, profile_query, update);
+    }
+
+    return retval;
+
+}
+
+/*** serialization ***/
+
+static inline SBlackProfile *sprofile_new (void) {
+
+    SBlackProfile *sprofile = (SBlackProfile *) malloc (sizeof (SBlackProfile));
+    if (sprofile) memset (sprofile, 0, sizeof (SBlackProfile));
+    return sprofile;
+
+}
+
+static inline void sprofile_delete (SBlackProfile *sprofile) { if (sprofile) free (sprofile); }
+
+static SBlackProfile *black_profile_serialize (const BlackProfile *profile) {
+
+    SBlackProfile *sprofile = NULL;
+
+    if (profile) {
+        sprofile->date_purchased = mktime (profile->date_purchased);
+        sprofile->last_time = mktime (profile->last_time);
+        sprofile->time_played = profile->time_played;
+
+        memcpy (&sprofile->pve_stats, profile->pve_stats, sizeof (BlackPVEStats));
+        memcpy (&sprofile->pvp_stats, profile->pvp_stats, sizeof (BlackPVPStats));
+    }
+
+    return sprofile;
+
+}
+
+/*** balck profile packets ***/
+
+// serializes a black profile and sends it back to the client
+u8 black_profile_send (const BlackProfile *black_profile, const i32 sock_fd, const Protocol protocol) {
+
+    u8 retval = 1;
+
+    if (black_profile) {
+        SBlackProfile *sprofile = black_profile_serialize (black_profile);
+        if (sprofile) {
+            Packet *profile_packet = packet_generate_request (APP_PACKET, ERMIRY_BLACK_PROFILE, sprofile, sizeof (SBlackProfile));
+            if (profile_packet) {
+                packet_set_network_values (profile_packet, sock_fd, protocol);
+                retval = packet_send (profile_packet, 0);
+                packet_delete (profile_packet);
+            }
+
+            else {
+                #ifdef ERMIRY_DEBUG
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to generate black profile packet!");
+                #endif
+            }
+        }
+
+        else {
+            #ifdef ERMIRY_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to serialize black profile!");
+            #endif
+        }
     }
 
     return retval;

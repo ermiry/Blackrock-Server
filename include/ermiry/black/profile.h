@@ -62,4 +62,24 @@ extern void black_profile_delete (BlackProfile *profile);
 // gets a black profile from the db by its oid
 extern BlackProfile *black_profile_get_by_oid (const bson_oid_t *oid, bool populate);
 
+/*** serialization ***/
+
+typedef struct SBlackProfile {
+
+    time_t date_purchased;
+    time_t last_time;
+    u64 time_played;
+
+    // TODO: guild
+
+    // TODO: achievements
+
+    BlackPVEStats pve_stats;
+    BlackPVPStats pvp_stats;
+
+} SBlackProfile;
+
+// serializes a black profile and sends it back to the client
+extern u8 black_profile_send (const BlackProfile *black_profile, const i32 sock_fd, const Protocol protocol);
+
 #endif

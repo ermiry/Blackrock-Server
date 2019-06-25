@@ -358,6 +358,7 @@ User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
                     user_send_requests (user, packet->sock_fd, packet->cerver->protocol);
 
                     // serialize and send blackrock profile
+                    black_profile_send (black_profile, packet->sock_fd, packet->cerver->protocol);
 
                     retval = user;
                 }

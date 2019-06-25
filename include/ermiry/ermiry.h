@@ -13,6 +13,7 @@ typedef enum ErmiryRequest {
     ERMIRY_POST_USER,
 
     ERMIRY_USER,
+    ERMIRY_BLACK_PROFILE,
 
 
 } ErmiryRequest;
