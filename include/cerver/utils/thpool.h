@@ -11,11 +11,57 @@
 extern "C" {
 #endif
 
+#include <pthread.h>
+
+struct threadpool;
+
+// binary semaphore
+typedef struct bsem {
+
+	pthread_mutex_t mutex;
+	pthread_cond_t   cond;
+	int v;
+
+} bsem;
+
+typedef struct job {
+	
+	struct job *prev;                   /* pointer to previous job   */
+	void (*function)(void* arg);        /* function pointer          */
+	void *arg;                          /* function's argument       */
+
+} job;
+
+typedef struct jobqueue {
+
+	pthread_mutex_t rwmutex;             /* used for queue r/w access */
+	job  *front;                         /* pointer to front of queue */
+	job  *rear;                          /* pointer to rear  of queue */
+	bsem *has_jobs;                      /* flag as binary semaphore  */
+	int   len;                           /* number of jobs in queue   */
+
+} jobqueue;
+
+typedef struct thread {
+
+	int id;                        		 /* friendly id               */
+	pthread_t pthread;                   /* pointer to actual thread  */
+	struct threadpool *thpool_p;         /* access to thpool          */
+
+} thread;
+
+typedef struct threadpool {
+
+	thread **threads;                    /* pointer to threads        */
+	volatile int num_threads_alive;      /* threads currently alive   */
+	volatile int num_threads_working;    /* threads currently working */
+	pthread_mutex_t  thcount_lock;       /* used for thread count etc */
+	pthread_cond_t  threads_all_idle;    /* signal to thpool_wait     */
+	jobqueue  *job_queue;                 /* job queue                 */
+
+} threadpool;
+
 /* =================================== API ======================================= */
-
-
-typedef struct thpool_* threadpool;
-
 
 /**
  * @brief  Initialize threadpool
