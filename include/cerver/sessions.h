@@ -17,7 +17,7 @@ extern SessionData *session_data_new (Packet *packet, AuthData *auth_data, Clien
 
 extern void session_data_delete (void *ptr);
 
-// create a unique session id for each client based on connection values
+// create a unique session id for each client based on the current time
 extern void *session_default_generate_id (const void *session_data);
 
 // serialized session id - token

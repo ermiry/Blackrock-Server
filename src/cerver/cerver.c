@@ -485,11 +485,17 @@ Cerver *cerver_create (const CerverType type, const char *name,
             cerver_set_network_values (cerver, port, protocol, use_ipv6, connection_queue);
             cerver_set_poll_time_out (cerver, poll_timeout);
 
-            if (cerver_init (cerver)) {
+            if (!cerver_init (cerver)) {
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_NO_TYPE, 
+                    c_string_create ("Initialized cerver %s!", cerver->name->str));
+            }
+
+            else {
                 cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                     c_string_create ("Failed to init cerver %s!", cerver->name->str));
 
                 cerver_delete (cerver);
+                cerver = NULL;
             }
         }
     }

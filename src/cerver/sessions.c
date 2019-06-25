@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 #include "cerver/types/types.h"
 
@@ -35,31 +37,27 @@ void session_data_delete (void *ptr) {
 
 }
 
-// FIXME:
-// TODO: refactor to use timestamps to generate the token
-// create a unique session id for each client based on connection values
+// create a unique session id for each client based on the current time
 void *session_default_generate_id (const void *session_data) {
 
-    // old parameters
-    // i32 fd, const struct sockaddr_storage address
+    if (session_data) {
+        SessionData *data = (SessionData *) session_data;
 
-    // char *ipstr = sock_ip_to_string ((const struct sockaddr *) &address);
-    // u16 port = sock_ip_port ((const struct sockaddr *) &address);
+        // get current time
+        time_t now = time (0);
+        struct tm *nowtm = localtime (&now);
+        char buf[80] = { 0 };
+        strftime (buf, sizeof(buf), "%Y-%m-%d.%X", nowtm);
+        free (nowtm);
 
-    // if (ipstr && (port > 0)) {
-    //     // 24/11/2018 -- 22:14 -- testing a simple id - just ip + port
-    //     char *connection_values = c_string_create ("%s-%i", ipstr, port);
+        uint8_t hash[32];
+        char hash_string[65];
 
-    //     uint8_t hash[32];
-    //     char hash_string[65];
+        sha_256_calc (hash, buf, strlen (buf));
+        sha_256_hash_to_string (hash_string, hash);
 
-    //     sha_256_calc (hash, connection_values, strlen (connection_values));
-    //     sha_256_hash_to_string (hash_string, hash);
-
-    //     char *retval = c_string_create ("%s", hash_string);
-
-    //     return retval;
-    // }
+        return c_string_create ("%s", hash_string);
+    }
 
     return NULL;
 

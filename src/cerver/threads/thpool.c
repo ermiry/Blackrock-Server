@@ -118,6 +118,12 @@ static int thread_init (threadpool *thpool, thread **thread_p, unsigned int id) 
 
 		if (!pthread_create (&(*thread_p)->pthread, NULL, (void *) thread_do, (*thread_p))) {
 			if (!pthread_detach ((*thread_p)->pthread)) {
+				// #ifdef THPOOL_DEBUG
+				// cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+				// 	c_string_create ("Created thread %i in thpool %s",
+				// 	id, thpool->name->str));
+				// #endif
+				thpool->num_threads_alive += 1;
 				retval = 0;
 			}
 
@@ -153,7 +159,7 @@ static void thread_hold (int sig_id) {
 static void *thread_do (thread *thread_p) {
 
 	if (thread_p) {
-		char *thread_name = c_string_create ("%s-thpool-%d", 
+		char *thread_name = c_string_create ("%s-%d", 
 			thread_p->thpool_p->name->str, thread_p->id);
 
 		#if defined (__linux__)
@@ -165,7 +171,9 @@ static void *thread_do (thread *thread_p) {
 				"thread_do (): pthread_setname_np is not supported on this system.");
 		#endif
 
-		threadpool *thpool_p = thread_p->thpool_p;
+		// #ifdef THPOOL_DEBUG
+		// fprintf (stdout, "Hello from thread %s\n", thread_name);
+		// #endif
 
 		// register signal handler
 		struct sigaction act;
@@ -178,22 +186,22 @@ static void *thread_do (thread *thread_p) {
 		}
 
 		// mark the thread as initialized
-		pthread_mutex_lock (&thpool_p->thcount_lock);
-		thpool_p->num_threads_alive += 1;
-		pthread_mutex_unlock (&thpool_p->thcount_lock);
+		pthread_mutex_lock (&thread_p->thpool_p->thcount_lock);
+		// thread_p->thpool_p->num_threads_alive += 1;
+		pthread_mutex_unlock (&thread_p->thpool_p->thcount_lock);
 
 		while (threads_keep_alive) {
-			bsem_wait (thpool_p->job_queue->has_jobs);
+			bsem_wait (thread_p->thpool_p->job_queue->has_jobs);
 
 			if (threads_keep_alive){
-				pthread_mutex_lock (&thpool_p->thcount_lock);
-				thpool_p->num_threads_working++;
-				pthread_mutex_unlock (&thpool_p->thcount_lock);
+				pthread_mutex_lock (&thread_p->thpool_p->thcount_lock);
+				thread_p->thpool_p->num_threads_working++;
+				pthread_mutex_unlock (&thread_p->thpool_p->thcount_lock);
 
 				// get a job from the queue and execute it
 				void (*func_buff)(void*);
 				void *arg_buff;
-				job *job_p = jobqueue_pull (thpool_p->job_queue);
+				job *job_p = jobqueue_pull (thread_p->thpool_p->job_queue);
 				if (job_p) {
 					func_buff = job_p->function;
 					arg_buff  = job_p->arg;
@@ -201,20 +209,20 @@ static void *thread_do (thread *thread_p) {
 					free (job_p);
 				}
 
-				pthread_mutex_lock (&thpool_p->thcount_lock);
+				pthread_mutex_lock (&thread_p->thpool_p->thcount_lock);
 
-				thpool_p->num_threads_working--;
+				thread_p->thpool_p->num_threads_working--;
 
-				if (!thpool_p->num_threads_working) 
-					pthread_cond_signal (&thpool_p->threads_all_idle);
+				if (!thread_p->thpool_p->num_threads_working) 
+					pthread_cond_signal (&thread_p->thpool_p->threads_all_idle);
 
-				pthread_mutex_unlock (&thpool_p->thcount_lock);
+				pthread_mutex_unlock (&thread_p->thpool_p->thcount_lock);
 			}
 		}
 
-		pthread_mutex_lock (&thpool_p->thcount_lock);
-		thpool_p->num_threads_alive --;
-		pthread_mutex_unlock (&thpool_p->thcount_lock);
+		pthread_mutex_lock (&thread_p->thpool_p->thcount_lock);
+		thread_p->thpool_p->num_threads_alive --;
+		pthread_mutex_unlock (&thread_p->thpool_p->thcount_lock);
 	}
 
 	else {
@@ -389,6 +397,9 @@ threadpool *thpool_create (const char *name, unsigned int num_threads) {
 
 	threadpool *thpool = thpool_new (name, num_threads);
 	if (thpool) {
+		threads_on_hold = 0;
+		threads_keep_alive = 1;
+
 		thpool->num_threads_alive = 0;
 		thpool->num_threads_working = 0;
 
@@ -406,15 +417,19 @@ threadpool *thpool_create (const char *name, unsigned int num_threads) {
 			pthread_cond_init (&thpool->threads_all_idle, NULL);
 
 			// init threads
+			thpool->num_threads_alive = 0;
 			for (unsigned int i = 0; i < num_threads; i++)
 				thread_init (thpool, &thpool->threads[i], i);
 
-			// wait for threads to init
-			while (thpool->num_threads_alive != num_threads) {}
-		}
+			// #ifdef THPOOL_DEBUG
+			// cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+			// 	c_string_create ("Thpool %s alive threads: %d", 
+			// 	thpool->name->str, thpool->num_threads_alive));
+			// #endif
 
-		threads_on_hold = 0;
-		threads_keep_alive = 1;
+			// wait for threads to init
+			// while (thpool->num_threads_alive != num_threads) {}
+		}
 	}
 
 	return thpool;

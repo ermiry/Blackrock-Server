@@ -40,10 +40,10 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
-    Cerver *black_server = cerver_create (GAME_CERVER, "Black-Server", 
+    Cerver *black_server = cerver_create (GAME_CERVER, "black-server", 
 		7007, PROTOCOL_TCP, false, 10, 180000);
 	if (black_server) {
-
+        cerver_start (black_server);
 	}
 
 	else {
