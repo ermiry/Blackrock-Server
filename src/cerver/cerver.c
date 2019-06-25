@@ -15,6 +15,8 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
+#include "cerver/threads/thpool.h"
+
 #include "cerver/network.h"
 #include "cerver/packets.h"
 #include "cerver/auth.h"
@@ -26,7 +28,6 @@
 #include "cerver/collections/dllist.h"
 #include "cerver/collections/avl.h" 
 
-#include "cerver/utils/thpool.h"
 #include "cerver/utils/log.h"
 #include "cerver/utils/utils.h"
 

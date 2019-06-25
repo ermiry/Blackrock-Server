@@ -14,13 +14,14 @@
 #include "cerver/packets.h"
 #include "cerver/auth.h"
 
+#include "cerver/threads/thpool.h"
+
 #include "cerver/game/game.h"
 
 #include "cerver/collections/avl.h"
 #include "cerver/collections/htab.h"
 
 #include "cerver/utils/config.h"
-#include "cerver/utils/thpool.h"
 
 #define DEFAULT_USE_IPV6                0
 #define DEFAULT_PORT                    7001
@@ -59,7 +60,7 @@ struct _Cerver {
     void *cerver_data;
     Action delete_cerver_data;
 
-    threadpool thpool;
+    threadpool *thpool;
 
     AVLTree *clients;                   // connected clients 
     Htab *client_sock_fd_map;           // direct indexing by sokcet fd as key

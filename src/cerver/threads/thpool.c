@@ -18,7 +18,11 @@
 #include <sys/prctl.h>
 #endif
 
-#include "cerver/utils/thpool.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
+
+#include "cerver/threads/thpool.h"
+
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
@@ -57,14 +61,14 @@ static int thread_init (threadpool *thpool, thread **thread_p, unsigned int id) 
 			}
 
 			else {
-				#ifdef CERVER_DEBUG
+				#ifdef THPOOL_DEBUG
 				cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to detach thread in thpool!");
 				#endif
 			}
 		}
 
 		else {
-			#ifdef CERVER_DEBUG
+			#ifdef THPOOL_DEBUG
 			cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to create thread in thpool!");
 			#endif
 		}
@@ -387,7 +391,7 @@ threadpool *thpool_create (const char *name, unsigned int num_threads) {
 
 		thpool->job_queue = jobqueue_init ();
 		if (!thpool->job_queue) {
-			#ifdef CERVER_DEBUG
+			#ifdef THPOOL_DEBUG
 			cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
 				"Failed to init thpool's job queue!");
 			#endif
