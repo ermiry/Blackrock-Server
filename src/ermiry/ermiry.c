@@ -102,6 +102,34 @@ u8 ermiry_authenticate_method (void *auth_packet_ptr) {
 
 }
 
+// handles requests such as ermiry users, black profiles, guilds, etc
+void ermiry_packet_handler (void *packet_ptr) {
+
+    if (packet_ptr) {
+        Packet *packet = (Packet *) packet_ptr;
+
+        if (packet->packet_size >= (sizeof (PacketHeader) + sizeof (RequestData))) {
+            char *end = packet->packet;
+            RequestData *req = (RequestData *) (end += sizeof (PacketHeader));
+
+            switch (req->type) {
+                // requested to send back user data
+                case ERMIRY_GET_USER: break;
+                
+                // requested to post new user data, only if he is the account owner
+                case ERMIRY_POST_USER: break;
+
+                default: 
+                    #ifdef ERMIRY_DEBUG
+                    cerver_log_msg (stderr, LOG_WARNING, LOG_PACKET, "Got an unknown ermiry request.");
+                    #endif
+                    break;
+            }
+        }
+    }
+
+}
+
 /*** TODO: add public funcs to... ***/
 
 /*** PLAYERS / PROFILES ***/

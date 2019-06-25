@@ -92,7 +92,7 @@ void packet_delete (void *ptr) {
 }
 
 // sets the pakcet destinatary is directed to and the protocol to use
-void packet_set_network_values (Packet *packet, i32 sock_fd, Protocol protocol) {
+void packet_set_network_values (Packet *packet, const i32 sock_fd, const Protocol protocol) {
 
     if (packet) {
         packet->sock_fd = sock_fd;
@@ -184,7 +184,7 @@ u8 packet_generate (Packet *packet) {
 
 // generates a simple request packet of the requested type reday to be sent, 
 // and with option to pass some data
-Packet *packet_generate_request (PacketType packet_type, RequestType req_type, 
+Packet *packet_generate_request (PacketType packet_type, u32 req_type, 
     void *data, size_t data_size) {
 
     Packet *packet = packet_new ();

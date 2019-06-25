@@ -85,7 +85,7 @@ typedef enum RequestType {
 
 typedef struct RequestData {
 
-    RequestType type;
+    u32 type;
 
 } RequestData;
 
@@ -123,7 +123,7 @@ extern Packet *packet_create (PacketType type, void *data, size_t data_size);
 
 // sets the pakcet destinatary is directed to and the protocol to use
 extern void packet_set_network_values (Packet *packet, 
-    i32 sock_fd, Protocol protocol);
+    const i32 sock_fd, const Protocol protocol);
 
 // appends the data to the end if the packet already has data
 // if the packet is empty, creates a new buffer
@@ -135,7 +135,7 @@ extern u8 packet_generate (Packet *packet);
 
 // generates a simple request packet of the requested type reday to be sent, 
 // and with option to pass some data
-extern Packet *packet_generate_request (PacketType packet_type, RequestType req_type, 
+extern Packet *packet_generate_request (PacketType packet_type, u32 req_type, 
     void *data, size_t data_size);
 
 // sends a packet using the tcp protocol and the packet sock fd

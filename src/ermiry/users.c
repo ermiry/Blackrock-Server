@@ -22,6 +22,7 @@
 mongoc_collection_t *users_collection = NULL;
 
 void user_delete (void *ptr);
+u8 user_send (const User *user, const i32 sock_fd, Protocol protocol);
 
 User *user_new (void) {
 
@@ -346,6 +347,18 @@ User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
                 BlackProfile *black_profile = black_profile_get_by_oid (&user->black_profile_oid, false);
                 if (black_profile) {
                     user->black_profile = black_profile;
+
+                    // serialize and send user 
+                    user_send (user, packet->sock_fd, packet->cerver->protocol);
+
+                    // send inbox file
+                    user_send_inbox (user, packet->sock_fd, packet->cerver->protocol);
+
+                    // send friends request file
+                    user_send_requests (user, packet->sock_fd, packet->cerver->protocol);
+
+                    // serialize and send blackrock profile
+
                     retval = user;
                 }
 
@@ -430,5 +443,54 @@ static SUser *user_serialize (const User *user) {
     }
 
     return NULL;
+
+}
+
+/*** user packets ***/
+
+// serializes a user and sends it to the client
+u8 user_send (const User *user, const i32 sock_fd, const Protocol protocol) {
+
+    u8 retval = 1;
+
+    if (user) {
+        SUser *suser = user_serialize (user);
+        if (suser) {
+            Packet *user_packet = packet_generate_request (APP_PACKET, ERMIRY_USER, suser, sizeof (SUser));
+            if (user_packet) {
+                packet_set_network_values (user_packet, sock_fd, protocol);
+                retval = packet_send (user_packet, 0);
+                packet_delete (user_packet);
+            }
+
+            else {
+                #ifdef ERMIRY_DEBUG
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to generate user packet!");
+                #endif
+            }
+        }
+
+        else {
+            #ifdef ERMIRY_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to serialize user!");
+            #endif
+        }
+    }
+
+    return retval;
+
+}
+
+// send user's inbox file
+u8 user_send_inbox (const User *user, const i32 sock_fd, const Protocol protocol) {
+
+    // TODO:
+
+}
+
+// send user's friend requests file
+u8 user_send_requests (const User *user, const i32 sock_fd, const Protocol protocol) {
+
+    // TODO:
 
 }

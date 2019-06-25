@@ -94,4 +94,7 @@ typedef struct SUser {
 
 } SUser;
 
+// serializes a user and sends it to the client
+extern u8 user_send (const User *user, const i32 sock_fd, const Protocol protocol);
+
 #endif
