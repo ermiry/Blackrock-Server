@@ -10,14 +10,12 @@
 #include "ermiry/ermiry.h"
 #include "blackrock/blackrock.h"
 
-// TODO: maybe handle this in a separate list by a name?
-Server *gameServer = NULL;
-
 // correctly closes any on-going server and process when quitting the appplication
 void closeProgram (int dummy) {
     
-    if (gameServer) cerver_teardown (gameServer);
-    else cerver_log_msg (stdout, LOG_NO_TYPE, LOG_NO_TYPE, "There isn't any server to teardown. Quitting application.");
+    // FIXME: change this to destroy all cervers!!!
+    // if (gameServer) cerver_teardown (gameServer);
+    // else cerver_log_msg (stdout, LOG_NO_TYPE, LOG_NO_TYPE, "There isn't any server to teardown. Quitting application.");
 
     ermiry_end ();      // disconnect from ermiry's db
 
@@ -25,7 +23,6 @@ void closeProgram (int dummy) {
 
 }
 
-// TODO: recieve signals to init, retsart or teardown a server -> like a control panel
 int main (void) {
 
     // register to the quit signal
@@ -43,31 +40,41 @@ int main (void) {
      * the master server can't be access from any direct request
     **/
 
-    gameServer = cerver_create (GAME_SERVER, "Black-Game-Server", NULL);
-    if (gameServer) {
+    Cerver *black_server = cerver_create (GAME_CERVER, "Black-Server", 
+		7007, PROTOCOL_TCP, false, 10, 180000);
+	if (black_server) {
 
-        // set our own functions to authenticate our clients
-        cerver_set_auth_method (gameServer, blackrock_authMethod);
+	}
 
-        // FIXME:
-        // set our own functions to load and delete global game data
-        // game_set_load_game_data (gameServer->serverData, blackrock_loadGameData);
-        // game_set_delete_game_data (gameServer->serverData, blackrock_deleteGameData);
+	else {
+		cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to create black server!");
+	}
 
-        // set blackrock arcade game init function
-        // FIXME: how can we add our own game types?? check user game components in cengine
-        // gs_add_gameInit (gameServer, ARCADE, blackrock_init_arcade);
+    // gameServer = cerver_create (GAME_SERVER, "Black-Game-Server", NULL);
+    // if (gameServer) {
 
-        // FIXME:
-        // set lobby game data destroy function, to delete our world and
-        // any other data that blackrock lobby uses
-        // gs_set_lobbyDeleteGameData (gameServer, deleteBrGameData);
+    //     // set our own functions to authenticate our clients
+    //     cerver_set_auth_method (gameServer, blackrock_authMethod);
 
-        if (cerver_start (gameServer)) 
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to start server!");
-    } 
+    //     // FIXME:
+    //     // set our own functions to load and delete global game data
+    //     // game_set_load_game_data (gameServer->serverData, blackrock_loadGameData);
+    //     // game_set_delete_game_data (gameServer->serverData, blackrock_deleteGameData);
 
-    else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to create Blackrock Server!");
+    //     // set blackrock arcade game init function
+    //     // FIXME: how can we add our own game types?? check user game components in cengine
+    //     // gs_add_gameInit (gameServer, ARCADE, blackrock_init_arcade);
+
+    //     // FIXME:
+    //     // set lobby game data destroy function, to delete our world and
+    //     // any other data that blackrock lobby uses
+    //     // gs_set_lobbyDeleteGameData (gameServer, deleteBrGameData);
+
+    //     if (cerver_start (gameServer)) 
+    //         cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Failed to start server!");
+    // } 
+
+    // else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to create Blackrock Server!");
 
     ermiry_end ();      // disconnect from ermiry's db
 

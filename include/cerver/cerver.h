@@ -34,13 +34,14 @@
 
 #define poll_n_fds              100           // n of fds for the pollfd array
 
-typedef enum ServerType {
+typedef enum CerverType {
 
-    FILE_SERVER = 1,
-    WEB_SERVER, 
-    GAME_SERVER
+    CUSTOM_CERVER = 0,
+    FILE_CERVER,
+    GAME_CERVER,
+    WEB_CERVER, 
 
-} ServerType;
+} CerverType;
 
 // this is the generic server struct, used to create different server types
 struct _Cerver {
@@ -54,7 +55,7 @@ struct _Cerver {
     bool isRunning;                     // the server is recieving and/or sending packetss
     bool blocking;                      // sokcet fd is blocking?
 
-    ServerType type;
+    CerverType type;
     void *cerver_data;
     Action delete_cerver_data;
 
@@ -155,10 +156,10 @@ extern u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg);
 // sets a custom cerver update function to be executed every n ticks
 extern void cerver_set_update (Cerver *cerver, Action update, const u8 ticks);
 
-// creates a new cerver of the specified type and with option for a custom name
-// also has the option to take another cerver as a paramater
-// if no cerver is passed, configuration will be read from config/server.cfg
-extern Cerver *cerver_create (ServerType type, const char *name, Cerver *cerver);
+// returns a new cerver with the specified parameters
+extern Cerver *cerver_create (const CerverType type, const char *name, 
+    const u16 port, const Protocol protocol, bool use_ipv6,
+    u16 connection_queue, u16 poll_timeout);
 
 // teardowns the cerver and creates a fresh new one with the same parameters
 extern Cerver *cerver_restart (Cerver *cerver);
