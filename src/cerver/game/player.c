@@ -3,128 +3,83 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
+
 #include "cerver/game/game.h"
 #include "cerver/game/player.h"
 
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-// TODO: better id handling and management
-u16 nextPlayerId = 0;
+Player *player_new (void) {
 
-void player_set_delete_player_data (Player *player, Action destroy) {
-
-    if (player) player->destroy_player_data = destroy;
-
-}
-
-// TODO: maybe later the id can be how we store it inside our databse
-// FIXME: player ids, we cannot have infinite ids!!
-// constructor for a new player
-Player *player_new (Client *client, const char *session_id, void *player_data) {
-
-    Player *new_player = (Player *) malloc (sizeof (Player));
-
-    new_player->client = client;
-    if (session_id) {
-        new_player->session_id = (char *) calloc (strlen (session_id) + 1, sizeof (char));
-        strcpy ((char *) new_player->session_id, session_id);
+    Player *player = (Player *) malloc (sizeof (Player));
+    if (player) {
+        player->id = NULL;
+        player->client = NULL;
+        player->data = NULL;
+        player->data_delete = NULL;
     }
 
-    else new_player->session_id = NULL;
-
-    new_player->alive = false;
-    new_player->inLobby = false;
-
-    new_player->components = NULL;
-    new_player->data = player_data;
-
-    new_player->id = nextPlayerId;
-    nextPlayerId++;
-
-    return new_player;
+    return player;
 
 }
 
-// TODO: what happens with the client data??
-// deletes a player struct for ever
-void player_delete (void *data) {
+void player_delete (void *player_ptr) {
 
-    if (data) {
-        Player *player = (Player *) data;
-        if (player->destroy_player_data) player->destroy_player_data (player->data);
-        else if (player->data) free (player->data);
+    if (player_ptr) {
+        Player *player = (Player *) player_ptr;
+
+        str_delete (player->id);
+
+        player->client = NULL;
+
+        if (player->data) {
+            if (player->data_delete)
+                player->data_delete (player->data);
+            else free (player->data);
+        }
 
         free (player);
     }
 
 }
 
-void player_delete_dummy (void *ptr) {}
+// sets the player id
+void player_set_id (Player *player, const char *id) {
 
-// this is our default player comparator
-// comparator for players's avl tree
+    if (player) player->id = str_new (id);
+
+}
+
+// sets player data and a way to delete it
+void player_set_data (Player *player, void *data, Action data_delete) {
+
+    if (player) {
+        player->data = data;
+        player->data_delete = data_delete;
+    }
+
+}
+
+int player_comparator_by_id (const void *a, const void *b) {
+
+    if (a && b) 
+        return str_compare (((Player *) a)->id, ((Player *) b)->id);
+
+}
+
 int player_comparator_client_id (const void *a, const void *b) {
 
     if (a && b) {
-        Player *player_a = (Player *) a;
-        Player *player_b = (Player *) b;
-
-        return strcmp (player_a->client->client_id->str, player_b->client->client_id->str);
+        return str_compare (((Player *) a)->client->client_id, 
+            ((Player *) b)->client->client_id);
     }
 
 }
 
-// compare two players' session id
-int player_comparator_by_session_id (const void *a, const void *b) {
-
-    if (a && b) return strcmp (((Player *) a)->session_id, ((Player *) b)->session_id);
-
-}
-
-// adds a player to the game server data main structures
-void player_register_to_server (Cerver *server, Player *player) {
-
-    if (server && player) {
-        if (server->type == GAME_CERVER) {
-            GameServerData *gameData = (GameServerData *) server->cerver_data;
-            if (gameData->players) avl_insert_node (gameData->players, player);
-
-            #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "Registered a player to the server.");
-            #endif
-        }
-
-        else {
-            #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, 
-                    "Trying to add a player to a server of incompatible type!");
-            #endif
-        }
-    }
-
-}
-
-// FIXME: client socket!!
-// removes a player from the server's players struct (avl) and also removes the player
-// client from the main server poll
-void player_unregister_to_server (Cerver *server, Player *player) {
-
-    // if (server && player) {
-    //     if (server->type == GAME_SERVER) {
-    //         GameServerData *gameData = (GameServerData *) server->serverData;
-    //         if (gameData) {
-    //             // remove the player client from the main server poll
-    //             Client *c; // = getClientBySock (server->clients, player->client->clientSock);
-    //             if (c) client_unregisterFromServer (server, player->client);
-
-    //             // remove the player from the servers players
-    //             avl_remove_node (gameData->players, player);
-    //         }
-    //     }
-    // }
-
-}
+// TODO: player regoster to lobby and unregister
 
 // get a player from an avl tree using a comparator and a query
 Player *player_get (AVLNode *node, Comparator comparator, void *query) {
