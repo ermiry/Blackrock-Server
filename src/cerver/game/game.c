@@ -13,12 +13,8 @@
 #include "cerver/game/lobby.h"
 
 #include "cerver/collections/dllist.h"
-#include "cerver/collections/avl.h"
-#include "cerver/collections/htab.h"
 
 #include "cerver/utils/utils.h"
-#include "cerver/utils/objectPool.h"
-#include "cerver/utils/config.h"
 #include "cerver/utils/log.h"
 
 GameCerver *game_new (void) {

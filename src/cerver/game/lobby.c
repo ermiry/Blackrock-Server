@@ -16,41 +16,18 @@
 #include "cerver/game/lobby.h"
 
 #include "cerver/collections/dllist.h"
-#include "cerver/collections/avl.h"
 
 #include "cerver/utils/utils.h"
-#include "cerver/utils/objectPool.h"
-#include "cerver/utils/config.h"
 #include "cerver/utils/log.h"
 #include "cerver/utils/sha-256.h"
 
-// creates a list to manage the server lobbys
-// called when we init the game server
-// returns 0 on success, 1 on error
-u8 game_init_lobbys (GameServerData *game_data, u8 n_lobbys) {
-
-    u8 retval = 1;
-
-    if (game_data) {
-        if (game_data->currentLobbys) cerver_log_msg (stdout, LOG_WARNING, LOG_CERVER, "The server has already a list of lobbys.");
-        else {
-            game_data->currentLobbys = dlist_init (lobby_delete, lobby_comparator);
-            if (game_data->currentLobbys) retval = 0;
-            else cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init server's lobby list!");
-        }
-    }
-
-    return retval;
-
-}
-
-void lobby_default_generate_id (char *lobby_id) {
+void lobby_default_id_generator (char *lobby_id) {
 
     time_t rawtime = time (NULL);
     struct tm *timeinfo = localtime (&rawtime);
     // we generate the string timestamp in order to generate the lobby id
-    char temp[50];
-    size_t len = strftime (temp, 50, "%F - %r", timeinfo);
+    char temp[50] = { 0 };
+    size_t len = strftime (temp, 50, "%F-%r", timeinfo);
     printf ("%s\n", temp);
 
     uint8_t hash[32];
@@ -236,18 +213,18 @@ void lobby_delete (void *lobby_ptr) {
 // pass the server game data
 // pass 0 to max players to use the default 4
 // pass NULL in handle to use default
-Lobby *lobby_init (GameServerData *game_data, unsigned max_players, Action handler) {
+Lobby *lobby_init (GameCerver *game_cerver, unsigned max_players, Action handler) {
 
     Lobby *lobby = lobby_new ();
     if (lobby) {
         lobby->creation_time_stamp = time (NULL);
 
         char *id = NULL;
-        game_data->lobby_id_generator ((char *) id);
+        game_cerver->lobby_id_generator ((char *) id);
         lobby->id = str_new (id);
 
         // we dont want to really destroy the player data, just removed it from the tree
-        lobby->players = avl_init (game_data->player_comparator, player_delete_dummy);
+        lobby->players = avl_init (game_cerver->player_comparator, player_delete_dummy);
         lobby->max_players = max_players <= 0 ? DEFAULT_MAX_LOBBY_PLAYERS : max_players;
         lobby->players_fds = (struct pollfd *) calloc (lobby->max_players, sizeof (struct pollfd));
         lobby->poll_timeout = LOBBY_DEFAULT_POLL_TIMEOUT;
@@ -283,10 +260,10 @@ void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action delete_g
 }
 
 // sets the lobby game data and a function to delete it
-void lobby_set_game_data (Lobby *lobby, void *game_data, Action delete_lobby_game_data) {
+void lobby_set_game_data (Lobby *lobby, void *game_cerver, Action delete_lobby_game_data) {
 
     if (lobby) {
-        lobby->game_data = game_data;
+        lobby->game_cerver = game_cerver;
         lobby->delete_lobby_game_data = delete_lobby_game_data;
     }
 
@@ -300,10 +277,10 @@ void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->handle
 void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout) { if (lobby) lobby->poll_timeout = timeout; }
 
 // searchs a lobby in the game data and returns a reference to it
-Lobby *lobby_get (GameServerData *game_data, Lobby *query) {
+Lobby *lobby_get (GameCerver *game_cerver, Lobby *query) {
 
     Lobby *found = NULL;
-    for (ListElement *le = dlist_start (game_data->currentLobbys); le; le = le->next) {
+    for (ListElement *le = dlist_start (game_cerver->current_lobbys); le; le = le->next) {
         found = (Lobby *) le->data;
         if (!lobby_comparator (found, query)) break;
     }
@@ -346,7 +323,7 @@ u8 player_add_to_lobby (Cerver *server, Lobby *lobby, Player *player) {
 
     /* if (lobby && player) {
         if (server->type == GAME_SERVER) {
-            GameServerData *gameData = (GameServerData *) server->serverData;
+            GameCerver *gameData = (GameCerver *) server->serverData;
             if (gameData) {
                 if (!player_is_in_lobby (player, lobby)) {
                     Player *p = avl_remove_node (gameData->players, player);
@@ -387,7 +364,7 @@ u8 player_remove_from_lobby (Cerver *server, Lobby *lobby, Player *player) {
 
     // if (server && lobby && player) {
     //     if (server->type == GAME_SERVER) {
-    //         GameServerData *gameData = (GameServerData *) gameData;
+    //         GameCerver *gameData = (GameCerver *) gameData;
     //         if (gameData) {
     //             // make sure that the player is inside the lobby...
     //             if (player_is_in_lobby (player, lobby)) {
@@ -453,17 +430,18 @@ Lobby *lobby_create (Cerver *server, Player *owner, unsigned int max_players, Ac
     Lobby *lobby = NULL;
 
     if (server && owner) {
-        GameServerData *game_data = (GameServerData *) server->cerver_data;
-        if (game_data) {
+        GameCerver *game_cerver = (GameCerver *) server->cerver_data;
+        if (game_cerver) {
             // we create a timestamp of the creation of the lobby
-            lobby = lobby_init (game_data, max_players, handler);
+            lobby = lobby_init (game_cerver, max_players, handler);
             if (lobby) {
                 if (!lobby_add_player (lobby, owner)) {
                     lobby->owner = owner;
                     lobby->current_players = 1;
 
                     // add the lobby the server active ones
-                    dlist_insert_after (game_data->currentLobbys, dlist_end (game_data->currentLobbys), lobby);
+                    dlist_insert_after (game_cerver->current_lobbys, 
+                        dlist_end (game_cerver->current_lobbys), lobby);
                 }
 
                 else {
@@ -494,13 +472,13 @@ Lobby *lobby_create (Cerver *server, Player *owner, unsigned int max_players, Ac
 // FIXME: return a custom error code to handle by the server and client
 // called by a registered player that wants to join a lobby on progress
 // the lobby model gets updated with new values
-u8 lobby_join (GameServerData *game_data, Lobby *lobby, Player *player) {
+u8 lobby_join (GameCerver *game_cerver, Lobby *lobby, Player *player) {
 
     u8 retval = 1;
 
     if (lobby && player) {
         // check if for whatever reason a player al ready inside the lobby wants to join...
-        if (!player_is_in_lobby (lobby, game_data->player_comparator, player)) {
+        if (!player_is_in_lobby (lobby, game_cerver->player_comparator, player)) {
             // check if the lobby is al ready running the game
             if (!lobby->in_game) {
                 // check lobby capacity
@@ -526,13 +504,13 @@ u8 lobby_join (GameServerData *game_data, Lobby *lobby, Player *player) {
 }
 
 // called when a player requests to leave the lobby
-u8 lobby_leave (GameServerData *game_data, Lobby *lobby, Player *player) {
+u8 lobby_leave (GameCerver *game_cerver, Lobby *lobby, Player *player) {
 
     u8 retval = 1;
 
     if (lobby && player) {
         // first check if the player is inside the lobby
-        if (player_is_in_lobby (lobby, game_data->player_comparator, player)) {
+        if (player_is_in_lobby (lobby, game_cerver->player_comparator, player)) {
             // FIXME:
             // now check if the player is the owner
 
@@ -564,7 +542,7 @@ u8 destroyLobby (Cerver *server, Lobby *lobby) {
 
     /* if (server && lobby) {
         if (server->type == GAME_SERVER) {
-            GameServerData *gameData = (GameServerData *) server->serverData;
+            GameCerver *gameData = (GameCerver *) server->serverData;
             if (gameData) {
                 // the game function must have a check for this every loop!
                 if (lobby->inGame) lobby->inGame = false;
@@ -606,9 +584,9 @@ u8 destroyLobby (Cerver *server, Lobby *lobby) {
 
                 // we are safe to clear the lobby structure
                 // first remove the lobby from the active ones, then send it to the inactive ones
-                ListElement *le = dlist_get_element (gameData->currentLobbys, lobby);
+                ListElement *le = dlist_get_element (gameData->current_lobbys, lobby);
                 if (le) {
-                    void *temp = dlist_remove_element (gameData->currentLobbys, le);
+                    void *temp = dlist_remove_element (gameData->current_lobbys, le);
                     if (temp) pool_push (gameData->lobbyPool, temp);
                 }
 
@@ -702,121 +680,3 @@ u8 leaveLobby (Cerver *server, Lobby *lobby, Player *player) {
     // return 1;
 
 }
-
-/*** BLACKROCK SPECIFIC ***/
-
-// FIXME: 20/04/2019 - we need to check this - this is kind of blackrock specific
-// TODO: maybe the admin can add a custom ptr to a custom function?
-// FIXME:
-// TODO: pass the correct game type and maybe create a more advance algorithm
-// finds a suitable lobby for the player
-/* Lobby *findLobby (Cerver *server) {
-
-    // FIXME: how do we want to handle these errors?
-    // perform some check here...
-    if (!server) return NULL;
-    if (server->type != GAME_SERVER) {
-        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Can't search for lobbys in non game server.");
-        return NULL;
-    }
-    
-    GameServerData *gameData = (GameServerData *) server->serverData;
-    if (!gameData) {
-        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "NULL reference to game data in game server!");
-        return NULL;
-    }
-
-    // 11/11/2018 -- we have a simple algorithm that only searches for the first available lobby
-    Lobby *lobby = NULL;
-    for (ListElement *e = dlist_start (gameData->currentLobbys); e != NULL; e = e->next) {
-        lobby = (Lobby *) e->data;
-        if (lobby) {
-            if (!lobby->inGame) {
-                if (lobby->players_nfds < lobby->settings->maxPlayers) {
-                    // we have found a suitable lobby
-                    break;
-                }
-            }
-        }
-    }
-
-    // TODO: what do we do if we do not found a lobby? --> create a new one?
-    if (!lobby) {
-
-    }
-
-    return lobby;
-
-} */
-
-// FIXME: this is blackrcock specific code!!
-// loads the settings for the selected game type from the game server data
-/* GameSettings *getGameSettings (Config *gameConfig, GameType gameType) {
-
-    ConfigEntity *cfgEntity = config_get_entity_with_id (gameConfig, gameType);
-	if (!cfgEntity) {
-        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Problems with game settings config!");
-        return NULL;
-    } 
-
-    GameSettings *settings = (GameSettings *) malloc (sizeof (GameSettings));
-
-    char *playerTimeout = config_get_entity_value (cfgEntity, "playerTimeout");
-    if (playerTimeout) {
-        settings->playerTimeout = atoi (playerTimeout);
-        free (playerTimeout);
-    } 
-    else {
-        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No player timeout found in cfg. Using default.");        
-        settings->playerTimeout = DEFAULT_PLAYER_TIMEOUT;
-    }
-
-    #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("Player timeout: %i", settings->playerTimeout));
-    #endif
-
-    char *fps = config_get_entity_value (cfgEntity, "fps");
-    if (fps) {
-        settings->fps = atoi (fps);
-        free (fps);
-    } 
-    else {
-        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No fps found in cfg. Using default.");        
-        settings->fps = DEFAULT_FPS;
-    }
-
-    #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("FPS: %i", settings->fps));
-    #endif
-
-    char *minPlayers = config_get_entity_value (cfgEntity, "minPlayers");
-    if (minPlayers) {
-        settings->minPlayers = atoi (minPlayers);
-        free (minPlayers);
-    } 
-    else {
-        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No min players found in cfg. Using default.");        
-        settings->minPlayers = DEFAULT_MIN_PLAYERS;
-    }
-
-    #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("Min players: %i", settings->minPlayers));
-    #endif
-
-    char *maxPlayers = config_get_entity_value (cfgEntity, "maxPlayers");
-    if (maxPlayers) {
-        settings->maxPlayers = atoi (maxPlayers);
-        free (maxPlayers);
-    } 
-    else {
-        cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "No max players found in cfg. Using default.");        
-        settings->maxPlayers = DEFAULT_MIN_PLAYERS;
-    }
-
-    #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, c_string_create ("Max players: %i", settings->maxPlayers));
-    #endif
-
-    return settings;
-
-} */
