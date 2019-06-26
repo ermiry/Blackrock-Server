@@ -27,18 +27,13 @@ struct _PacketInfo;
 #define DEFAULT_MIN_PLAYERS         2
 #define DEFAULT_MAX_PLAYERS         4    
 
-#define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
-#define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
+struct _GameCerver {
 
-struct _GameServerData {
+    // TODO: better arrange the lobbys based on types
+    DoubleList *current_lobbys;                     // a list of the current lobbys
+    void *(*lobby_id_generator) (const void *);
 
-    DoubleList *currentLobbys;      // a list of the current lobbys
-    void (*lobby_id_generator)(char *);
-    // Pool *lobbyPool;             // 21/10/2018 -- 22:04 -- each game server has its own pool
-
-    // Pool *playersPool;          // 22/10/2018 -- each server has its own player's pool
-    AVLTree *players;
-    Comparator player_comparator;      // used in the avl tree
+    Comparator player_comparator;
 
     // we can define a function to load game data at start, 
     // for example to connect to a db or something like that
@@ -46,42 +41,36 @@ struct _GameServerData {
     Action delete_game_data;
     void *game_data;
 
-    // an admin can set a custom function to find a lobby bassed on 
-	// some game parameters
-    // TODO: do we want this here?  21/04/2019
-	Action findLobby;
-
     // action to be performed right before the game server teardown
-    // eg. send a message to all players
     Action final_game_action;
+    void *final_action_args;
 
 };
 
-typedef struct _GameServerData GameServerData;
+typedef struct _GameCerver GameCerver;
 
-/*** Game Server Configuration ***/
+extern GameCerver *game_new (void);
 
-// option to set a custom lobby id generator
-extern void game_set_lobby_id_generator (GameServerData *game_data, void (*lobby_id_generator)(char *));
-// option to set the main game server player comprator
-extern void game_set_player_comparator (GameServerData *game_data, Comparator player_comparator);
-// option to set the a func to be executed only once at the start of the game server
-extern void game_set_load_game_data (GameServerData *game_data, Action load_game_data);
-// option to set the func to be executed only once when the game server gets destroyed
-extern void game_set_delete_game_data (GameServerData *game_data, Action delete_game_data);
+extern void game_delete (void *game_ptr);
 
-// option to set an action to be performed right before the game server teardown
-// the server reference will be passed to the action
+/*** Game Cerver Configuration ***/
+
+// option to set the game cerver lobby id generator
+extern void game_set_lobby_id_generator (GameCerver *game_cerver, 
+    void *(*lobby_id_generator) (const void *));
+
+// option to set the game cerver comparator
+extern void game_set_player_comparator (GameCerver *game_cerver, 
+    Comparator player_comparator);
+
+// sets a way to get and destroy game cerver game data
+extern void game_set_load_game_data (GameCerver *game_cerver, 
+    Action load_game_data, Action delete_game_data);
+
+// option to set an action to be performed right before the game cerver teardown
 // eg. send a message to all players
-extern void game_set_final_action (GameServerData *game_data, Action final_action);
-
-// constructor for a new game server data
-// initializes game server data structures and sets actions to defaults
-extern GameServerData *game_server_data_new (void);
-extern void game_server_data_delete (GameServerData *game_server_data);
-
-// cleans up all the game structs like lobbys and in game data set by the admin
-u8 game_server_teardown (struct _Cerver *server);
+extern void game_set_final_action (GameCerver *game_cerver, 
+    Action final_action, void *final_action_args);
 
 
 /*** THE FOLLOWING AND KIND OF BLACKROCK SPECIFIC ***/

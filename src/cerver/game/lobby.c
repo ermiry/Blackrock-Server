@@ -26,7 +26,7 @@
 
 // creates a list to manage the server lobbys
 // called when we init the game server
-// returns 0 on LOG_SUCCESS, 1 on error
+// returns 0 on success, 1 on error
 u8 game_init_lobbys (GameServerData *game_data, u8 n_lobbys) {
 
     u8 retval = 1;
@@ -175,32 +175,60 @@ Lobby *lobby_new (void) {
 
     Lobby *lobby = (Lobby *) malloc (sizeof (Lobby));
     if (lobby) {
+        memset (lobby, 0, sizeof (Lobby));
+
         lobby->id = NULL;
-        lobby->creation_time_stamp = 0;
 
-        lobby->running = false;
-        lobby->in_game = false;
+        lobby->sock_fd_player_map = NULL;
+        lobby->players_fds = NULL;
+        lobby->compress_players = false;
 
-        lobby->game_settings = NULL;
-        lobby->delete_lobby_game_settings = NULL;
+        lobby->running = lobby->in_game = false;
 
         lobby->owner = NULL;
-        lobby->players = NULL;
-        lobby->max_players = 0;
-        lobby->current_players = 0;
 
-        lobby->players_fds = NULL;
-        lobby->players_nfds = 0;
-        lobby->compress_players = false;
-        lobby->poll_timeout = 0;
+        lobby->packet_handler = NULL;
+
+        lobby->game_settings = NULL;
+        lobby->game_settings_delete = NULL;
 
         lobby->game_data = NULL;
-        lobby->delete_lobby_game_data = NULL;
+        lobby->game_data_delete = NULL;
 
-        lobby->handler = NULL;
+        lobby->update = NULL;
     }
 
     return lobby;
+
+}
+
+void lobby_delete (void *lobby_ptr) {
+
+    if (lobby_ptr) {
+        Lobby *lobby = (Lobby *) lobby_ptr;
+
+        str_delete (lobby->id);
+
+        htab_destroy (lobby->sock_fd_player_map);
+
+        if (lobby->players_fds) free (lobby->players_fds);
+
+        lobby->owner = NULL;
+
+        if (lobby->game_settings) {
+            if (lobby->game_settings_delete) 
+                lobby->game_settings_delete (lobby->game_settings);
+            else free (lobby->game_settings);
+        }
+
+        if (lobby->game_data) {
+            if (lobby->game_data_delete) 
+                lobby->game_data_delete (lobby->game_data);
+            else free (lobby->game_data);
+        }
+
+        free (lobby);
+    }
 
 }
 
@@ -228,45 +256,6 @@ Lobby *lobby_init (GameServerData *game_data, unsigned max_players, Action handl
     }
 
     return lobby;
-
-}
-
-// TODO: how do we handle to destroy a lobby that is not empty yet
-// deletes a lobby for ever -- called when we teardown the server
-// we do not need to give any feedback to the players if there is any inside
-void lobby_delete (void *ptr) {
-
-    if (ptr) {
-        Lobby *lobby = (Lobby *) ptr;
-
-        str_delete (lobby->id);
-
-        lobby->running = false;
-        lobby->in_game = false;             // just to be sure
-        lobby->owner = NULL;                // the owner is destroyed in the avl tree
-
-        if (lobby->game_data) {
-            if (lobby->delete_lobby_game_data) lobby->delete_lobby_game_data (lobby->game_data);
-            else free (lobby->game_data);
-        }
-
-        if (lobby->players_fds) {
-            memset (lobby->players_fds, 0, sizeof (struct pollfd) * lobby->max_players);
-            free (lobby->players_fds);
-        }
-
-        if (lobby->players) {
-            avl_clear_tree (&lobby->players->root, lobby->players->destroy);
-            free (lobby->players);
-        }   
-
-        if (lobby->game_settings) {
-            if (lobby->delete_lobby_game_settings) lobby->delete_lobby_game_settings (lobby->game_settings);
-            else free (lobby->game_settings);
-        }
-
-        free (lobby);
-    }
 
 }
 

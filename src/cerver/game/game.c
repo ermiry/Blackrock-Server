@@ -21,86 +21,80 @@
 #include "cerver/utils/config.h"
 #include "cerver/utils/log.h"
 
-GamePacketInfo *newGamePacketInfo (Cerver *server, Lobby *lobby, Player *player, 
-    char *packetData, size_t packetSize);
+GameCerver *game_new (void) {
+
+    GameCerver *game = (GameCerver *) malloc (sizeof (GameCerver));
+    if (game) {
+        game->current_lobbys = dlist_init (lobby_delete, lobby_comparator);
+
+        game->lobby_id_generator = NULL;
+        game->player_comparator = NULL;
+
+        game->load_game_data = NULL;
+        game->delete_game_data = NULL;
+        game->game_data = NULL;
+
+        game->final_game_action = NULL;
+        game->final_action_args = NULL;
+    }
+
+    return game;
+
+}
+
+void game_delete (void *game_ptr) {
+
+    if (game_ptr) {
+        GameCerver *game = (GameCerver *) game_ptr;
+
+        dlist_destroy (game->current_lobbys);
+
+        if (game->game_data) {
+            if (game->delete_game_data)
+                game->delete_game_data (game->game_data);
+            else free (game->game_data);
+        }
+
+        free (game);
+    }
+
+}
 
 /*** Game Cerver configuration ***/
 
-// option to set the game server lobby id generator
-void game_set_lobby_id_generator (GameServerData *game_data, void (*lobby_id_generator)(char *)) {
+// option to set the game cerver lobby id generator
+void game_set_lobby_id_generator (GameCerver *game_cerver, void *(*lobby_id_generator) (const void *)) {
 
-    if (game_data) game_data->lobby_id_generator = lobby_id_generator;
-
-}
-
-// option to set the main game server player comprator
-void game_set_player_comparator (GameServerData *game_data, Comparator player_comparator) {
-
-    if (game_data) game_data->player_comparator = player_comparator;
+    if (game_cerver) game_cerver->lobby_id_generator = lobby_id_generator;
 
 }
 
-// option to set the a func to be executed only once at the start of the game server
-void game_set_load_game_data (GameServerData *game_data, Action load_game_data) {
+// option to set the game cerver comparator
+void game_set_player_comparator (GameCerver *game_cerver, Comparator player_comparator) {
 
-    if (game_data) game_data->load_game_data = load_game_data;
-
-}
-
-// option to set the func to be executed only once when the game server gets destroyed
-void game_set_delete_game_data (GameServerData *game_data, Action delete_game_data) {
-
-    if (game_data) game_data->delete_game_data = delete_game_data;
+    if (game_cerver) game_cerver->player_comparator = player_comparator;
 
 }
 
-// option to set an action to be performed right before the game server teardown
-// the server reference will be passed to the action
-// eg. send a message to all players
-void game_set_final_action (GameServerData *game_data, Action final_action) {
+// sets a way to get and destroy game cerver game data
+void game_set_load_game_data (GameCerver *game_cerver, 
+    Action load_game_data, Action delete_game_data) {
 
-    if (game_data) game_data->final_game_action = final_action;
-
-}
-
-/*** Game Cerver Data ***/
-
-// constructor for a new game server data
-// initializes game server data structures and sets actions to defaults
-GameServerData *game_server_data_new (void) {
-
-    GameServerData *game_server_data = (GameServerData *) malloc (sizeof (GameServerData));
-    if (game_server_data) {
-        game_server_data->currentLobbys = dlist_init (lobby_delete, lobby_comparator);
-        game_server_data->lobby_id_generator = lobby_default_generate_id;
-        game_server_data->findLobby = NULL;
-
-        game_server_data->player_comparator = player_comparator_client_id;
-        game_init_players (game_server_data, game_server_data->player_comparator);
-
-        game_server_data->load_game_data = game_server_data->delete_game_data = NULL;
-        game_server_data->game_data = NULL;
-
-        game_server_data->final_game_action = NULL;
+    if (game_cerver) {
+        game_cerver->load_game_data = load_game_data;
+        game_cerver->delete_game_data = delete_game_data;
     }
 
-    return game_server_data;
-
 }
 
-void game_server_data_delete (GameServerData *game_server_data) {
+// option to set an action to be performed right before the game cerver teardown
+// eg. send a message to all players
+void game_set_final_action (GameCerver *game_cerver, 
+    Action final_action, void *final_action_args) {
 
-    if (game_server_data) {
-        // destroy current active lobbies
-        dlist_destroy (game_server_data->currentLobbys);
-
-        // destroy game players
-        avl_clear_tree (&game_server_data->players->root, game_server_data->players->destroy);
-
-        // delete game server game data
-        if (game_server_data->delete_game_data) game_server_data->delete_game_data (game_server_data->game_data);
-
-        free (game_server_data);
+    if (game_cerver) {
+        game_cerver->final_game_action = final_action;
+        game_cerver->final_action_args = final_action_args;
     }
 
 }

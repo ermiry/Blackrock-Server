@@ -352,7 +352,6 @@ static u8 cerver_network_init (Cerver *cerver) {
 
 }
 
-// TODO: init cerver specific game data
 static u8 cerver_init_data_structures (Cerver *cerver) {
 
     u8 retval = 1;
@@ -379,22 +378,8 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
                     case CUSTOM_CERVER: break;
                     case FILE_CERVER: break;
                     case GAME_CERVER: {
-                        // FIXME: correctly init the game cerver!!
-                        // GameServerData *gameData = (GameServerData *) malloc (sizeof (GameServerData));
-
-                        // // init the lobbys with n inactive in the pool
-                        // if (game_init_lobbys (gameData, GS_LOBBY_POOL_INIT)) {
-                        //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver lobbys!");
-                        //     return 1;
-                        // }
-
-                        // // init the players with n inactive in the pool
-                        // if (game_init_players (gameData, GS_PLAYER_POOL_INT)) {
-                        //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to init cerver players!");
-                        //     return 1;
-                        // }
-
-                        // cerver->serverData = gameData;
+                        cerver->cerver_data = game_new ();
+                        cerver->delete_cerver_data = game_delete;
                     } break;
                     case WEB_CERVER: break;
                     
@@ -559,7 +544,7 @@ u8 cerver_start (Cerver *cerver) {
     // one time only inits
     // if we have a game cerver, we might wanna load game data -> set by cerver admin
     if (cerver->type == GAME_CERVER) {
-        GameServerData *game_data = (GameServerData *) cerver->cerver_data;
+        GameCerver *game_data = (GameCerver *) cerver->cerver_data;
         if (game_data && game_data->load_game_data) {
             game_data->load_game_data (NULL);
         }

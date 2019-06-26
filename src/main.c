@@ -41,7 +41,7 @@ int main (void) {
     **/
 
     Cerver *black_server = cerver_create (GAME_CERVER, "black-server", 
-		7007, PROTOCOL_TCP, false, 10, 180000);
+		7007, PROTOCOL_TCP, false, 10, 2000);
 	if (black_server) {
         cerver_start (black_server);
 	}

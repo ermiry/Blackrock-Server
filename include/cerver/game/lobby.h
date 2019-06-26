@@ -42,27 +42,29 @@ struct _Lobby {
 	String *id;							// lobby unique id - generated using the creation timestamp
 	time_t creation_time_stamp;
 
+	Htab *sock_fd_player_map;           // maps a socket fd to a player
+    struct pollfd *players_fds;     			
+	u16 players_nfds;                   // n of active fds in the pollfd array
+    bool compress_players;              // compress the fds array?
+    u32 poll_timeout;    
+
 	bool running;						// lobby is listening for player packets
 	bool in_game;						// lobby is inside a game
 
-	void *game_settings;
-	Action delete_lobby_game_settings;
-
 	struct _Player *owner;				// the client that created the lobby -> he has higher privileges
-	AVLTree *players;					// players inside the lobby -> reference to the main player avl
 	unsigned int max_players;
 	unsigned int current_players;
 
-    struct pollfd *players_fds;     			
-    u16 players_nfds;                           // n of active fds in the pollfd array
-    bool compress_players;              		// compress the fds array?
-    u32 poll_timeout;    
+	Action packet_handler;				// lobby packet handler
+
+	void *game_settings;
+	Action game_settings_delete;
 
 	// the server admin can add its server specific data types
 	void *game_data;
-	Action delete_lobby_game_data;
+	Action game_data_delete;
 
-	Action handler;						// lobby player handler
+	Action update;						// lobby update function to be executed every fps
 
 };
 
@@ -76,15 +78,13 @@ extern u8 game_init_lobbys (struct _GameServerData *game_data, u8 n_lobbys);
 // lobby constructor
 extern Lobby *lobby_new (void);
 
+extern void lobby_delete (void *lobby_ptr);
+
 // initializes a new lobby
 // pass the server game data
 // pass 0 to max players to use the default 4
 // pass NULL in handle to use default
 extern Lobby *lobby_init (struct _GameServerData *game_data, unsigned max_players, Action handler);
-
-// deletes a lobby for ever -- called when we teardown the server
-// we do not need to give any feedback to the players if there is any inside
-extern void lobby_delete (void *ptr);
 
 // used to compare two lobbys
 extern int lobby_comparator (const void *one, const void *two);
