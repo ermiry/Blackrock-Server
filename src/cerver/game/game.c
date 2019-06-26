@@ -706,3 +706,39 @@ void gs_sendMsg (Cerver *server, Player *player, Lobby *lobby, char *msg) {
 }
 
 #pragma endregion
+
+#pragma region new
+
+// handles a game type packet
+void game_packet_handler (Packet *packet) {
+
+    if (packet) {
+        if (packet->packet_size >= (sizeof (PacketHeader) + sizeof (RequestData))) {
+            char *end = packet->packet;
+            RequestData *req = (RequestData *) (end += sizeof (PacketHeader));
+
+            switch (req->type) {
+                case LOBBY_CREATE: break;
+
+                case LOBBY_JOIN: break;
+
+                case LOBBY_LEAVE: break;
+
+                case LOBBY_UPDATE: break;
+
+                case LOBBY_DESTROY: break;
+
+                default: {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_WARNING, LOG_GAME, 
+                        "game_packet_hanlder () -- got a packet with unknwon request.");
+                    #endif
+                } break;
+            }
+        }
+    }
+
+}
+
+
+#pragma endregion

@@ -489,7 +489,12 @@ static void cerver_auth_packet_handler (Packet *packet) {
                 // the client sent use its data to authenticate itself
                 case CLIENT_AUTH_DATA: auth_try (packet); break;
 
-                default: break;
+                default: {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_WARNING, LOG_PACKET, 
+                        "cerver_auth_packet_hanlder () -- got an unknwown request type");
+                    #endif
+                } break;
             }
         }
     }

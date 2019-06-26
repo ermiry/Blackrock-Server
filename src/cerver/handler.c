@@ -73,7 +73,7 @@ static void cerver_packet_handler (void *ptr) {
                 case REQUEST_PACKET: break;
 
                 // handle a game packet sent from the server
-                case GAME_PACKET: break;
+                case GAME_PACKET: game_packet_handler (packet); break;
 
                 // user set handler to handle app specific packets
                 case APP_PACKET:

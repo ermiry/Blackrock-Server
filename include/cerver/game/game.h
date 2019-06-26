@@ -27,20 +27,8 @@ struct _PacketInfo;
 #define DEFAULT_MIN_PLAYERS         2
 #define DEFAULT_MAX_PLAYERS         4    
 
-#define FPS		20
-
 #define GS_LOBBY_POOL_INIT      1   // n lobbys to init the lobby pool with
 #define GS_PLAYER_POOL_INT      2   // n players to init the player pool with
-
-#ifdef RUN_FROM_MAKE
-    #define GS_GAME_SETTINGS_CFG         "./config/gameSettings.cfg"
-
-#elif RUN_FROM_BIN
-    #define GS_GAME_SETTINGS_CFG         "../config/gameSettings.cfg"
-
-#else
-    #define GS_GAME_SETTINGS_CFG          ""
-#endif  
 
 struct _GameServerData {
 
@@ -196,6 +184,15 @@ typedef struct PlayerInputPacket {
     // u8 layer;   
 
 } Position; */
+
+#pragma endregion
+
+#pragma region new 
+
+#include "cerver/packets.h"
+
+// handles a game type packet
+extern void game_packet_handler (Packet *packet);
 
 #pragma endregion
 
