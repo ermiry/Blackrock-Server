@@ -132,7 +132,7 @@ Htab *htab_init (unsigned int size, Hash hash_f, Compare compare_f, Copy kcopy_f
 }
 
 // inserts a new value to the htab associated with its key
-int htab_insert (Htab *ht, const void *key, size_t key_size, const void *val, size_t val_size) {
+int htab_insert (Htab *ht, const void *key, size_t key_size, void *val, size_t val_size) {
 
     size_t index;
     HtabNode *node = NULL;
@@ -273,7 +273,7 @@ int htab_remove (Htab *ht, const void *key, size_t key_size) {
     size_t index;
     HtabNode *node = NULL, *prev = NULL;
 
-    if (!ht || !key || !ht->compare_f) return -1;
+    if (!ht || !key || !ht->compare_f) return 1;
 
     index = ht->hash_f (key, key_size, ht->size);
     node = ht->table[index];
@@ -292,7 +292,7 @@ int htab_remove (Htab *ht, const void *key, size_t key_size) {
         node = node->next;
     }
 
-    return -1;
+    return 1;
 
 }
 
@@ -333,7 +333,7 @@ void htab_destroy (Htab *ht) {
                     while (node) {
                         if (ht->allow_copy) {
                             if (node->val) {
-                                if (ht->destroy) destroy (node->val);
+                                if (ht->destroy) ht->destroy (node->val);
                                 else free (node->val);
                             }
                         }

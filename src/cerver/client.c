@@ -379,7 +379,7 @@ Client *client_get_by_sock_fd (Cerver *cerver, i32 sock_fd) {
         const i32 *key = &sock_fd;
         size_t client_size = sizeof (Client);
         void *client_data = htab_get_data (cerver->client_sock_fd_map, 
-            key, sizeof (i32), &client_size);
+            key, sizeof (i32));
         if (client_data) client = (Client *) client_data;
     }
 

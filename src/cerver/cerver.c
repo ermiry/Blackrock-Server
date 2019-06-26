@@ -359,7 +359,7 @@ static u8 cerver_init_data_structures (Cerver *cerver) {
 
     if (cerver) {
         cerver->clients = avl_init (client_comparator_client_id, client_delete);
-        cerver->client_sock_fd_map = htab_init (poll_n_fds, NULL, NULL, NULL, NULL);
+        cerver->client_sock_fd_map = htab_init (poll_n_fds, NULL, NULL, NULL, false, NULL, NULL);
 
         // initialize main pollfd structures
         cerver->fds = (struct pollfd *) calloc (poll_n_fds, sizeof (struct pollfd));

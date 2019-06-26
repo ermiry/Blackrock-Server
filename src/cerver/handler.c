@@ -388,8 +388,7 @@ static void cerver_poll_compress_clients (Cerver *cerver) {
 
 }
 
-// FIXME: we dont want htab to fully copy our data!!!
-// regsiters a client connection to the cerver's main poll structure
+// regsiters a client connection to the cerver's mains poll structure
 // and maps the sock fd to the client
 u8 cerver_poll_register_connection (Cerver *cerver, Client *client, Connection *connection) {
 
@@ -410,7 +409,6 @@ u8 cerver_poll_register_connection (Cerver *cerver, Client *client, Connection *
 
             // map the socket fd with the client
             const void *key = &connection->sock_fd;
-            // FIXME: we dont want htab to fully copy our data!!!
             htab_insert (cerver->client_sock_fd_map, key, sizeof (i32), client, sizeof (Client));
 
             retval = 0;
@@ -448,9 +446,13 @@ u8 cerver_poll_unregister_connection (Cerver *cerver, Client *client, Connection
             cerver->fds[idx].events = -1;
             cerver->current_n_fds--;
 
-            // FIXME: we dont want the client to be destroyed!!
             const void *key = &connection->sock_fd;
-            htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
+            int ret = htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                c_string_create ("Failed to remove from cerver's %s client sock map.", 
+                cerver->name->str));
+            #endif
         }
     }
 

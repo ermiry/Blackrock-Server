@@ -33,7 +33,7 @@ typedef struct Htab {
 
     bool allow_copy;
     Copy vcopy_f;
-    void (*destroy)(void *data)
+    void (*destroy)(void *data);
 
 } Htab;
 
@@ -50,7 +50,7 @@ extern Htab *htab_init (unsigned int size, Hash hash_f, Compare compare_f, Copy 
 
 // inserts a new value to the htab associated with its key
 extern int htab_insert (Htab *ht, const void *key, size_t key_size, 
-    const void *val, size_t val_size);
+    void *val, size_t val_size);
 
 // returns a ptr to the data associated with the key
 extern void *htab_get_data (Htab *ht, const void *key, size_t key_size);
