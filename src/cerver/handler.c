@@ -248,7 +248,7 @@ static void cerver_register_new_connection (Cerver *cerver,
         else {
             Client *client = client_new ();
             if (client) {
-                client_connection_register (client, connection);
+                client_connection_register (cerver, client, connection);
 
                 // if we need to generate session ids...
                 if (cerver->use_sessions) {
@@ -385,6 +385,76 @@ static void cerver_poll_compress_clients (Cerver *cerver) {
             }
         }
     }  
+
+}
+
+// FIXME: we dont want htab to fully copy our data!!!
+// regsiters a client connection to the cerver's main poll structure
+// and maps the sock fd to the client
+u8 cerver_poll_register_connection (Cerver *cerver, Client *client, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (cerver && client && connection) {
+        i32 idx = cerver_poll_get_free_idx (cerver);
+        if (idx > 0) {
+            cerver->fds[idx].fd = connection->sock_fd;
+            cerver->fds[idx].events = POLLIN;
+            cerver->current_n_fds++;
+
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+                c_string_create ("Added new sock fd to cerver %s main poll, idx: %i", 
+                cerver->name->str, idx));
+            #endif
+
+            // map the socket fd with the client
+            const void *key = &connection->sock_fd;
+            // FIXME: we dont want htab to fully copy our data!!!
+            htab_insert (cerver->client_sock_fd_map, key, sizeof (i32), client, sizeof (Client));
+
+            retval = 0;
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Cerver %s main poll is full -- we need to realloc...", 
+                cerver->name->str));
+            #endif
+            if (cerver_realloc_main_poll_fds (cerver)) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                    c_string_create ("Failed to realloc cerver %s main poll fds!", 
+                    cerver->name->str));
+            }
+        }
+    }
+
+    return retval;
+
+}
+
+// unregsiters a client connection from the cerver's main poll structure
+// and removes the map from the socket to the client
+u8 cerver_poll_unregister_connection (Cerver *cerver, Client *client, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (cerver && client && connection) {
+        // get the idx of the connection sock fd in the cerver poll fds
+        i32 idx = cerver_poll_get_idx_by_sock_fd (cerver, connection->sock_fd);
+        if (idx > 0) {
+            cerver->fds[idx].fd = -1;
+            cerver->fds[idx].events = -1;
+            cerver->current_n_fds--;
+
+            // FIXME: we dont want the client to be destroyed!!
+            const void *key = &connection->sock_fd;
+            htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
+        }
+    }
+
+    return retval;
 
 }
 

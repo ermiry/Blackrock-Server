@@ -126,7 +126,7 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
         if (connection) {
             Client *c = client_new ();
             if (c) {
-                if (!client_connection_register (c, connection)) {
+                if (!client_connection_register (packet->cerver, c, connection)) {
                     if (packet->cerver->use_sessions) {
                         // FIXME: generate the new session id - token
                         SessionData *session_data = session_data_new (packet, auth_data, c);
@@ -334,7 +334,7 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
             // FIXME: make sure to remove the connection from the on hold
             Connection *connection = on_hold_connection_get_by_sock (packet->cerver, packet->sock_fd);
             if (connection) {
-                if (!client_connection_register (client, connection)) {
+                if (!client_connection_register (packet->cerver, client, connection)) {
                     // FIXME: add the connection sock fd to the cerver poll fds
 
                     // remove the connection from the on hold structures

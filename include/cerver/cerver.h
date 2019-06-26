@@ -104,6 +104,7 @@ struct _Cerver {
     String *name;
     String *welcome_msg;                 // this msg is sent to the client when it first connects
     struct _Packet *cerver_info_packet;          // useful info that we can send to clients 
+    // TODO: 26/06/2019 -- we are not doing nothing with these!!
     u32 n_connected_clients;
     u32 n_hold_clients;
 

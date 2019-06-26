@@ -7,6 +7,8 @@
 #include "cerver/cerver.h"
 
 struct _Cerver;
+struct _Client;
+struct _Connection;
 
 typedef struct CerverReceive {
 
@@ -36,6 +38,16 @@ extern i32 cerver_poll_get_free_idx (struct _Cerver *cerver);
 
 // get the idx of the connection sock fd in the cerver poll fds
 extern i32 cerver_poll_get_idx_by_sock_fd (struct _Cerver *cerver, i32 sock_fd);
+
+// regsiters a client connection to the cerver's main poll structure
+// and maps the sock fd to the client
+extern u8 cerver_poll_register_connection (struct _Cerver *cerver, 
+    struct _Client *client, struct _Connection *connection);
+
+// unregsiters a client connection from the cerver's main poll structure
+// and removes the map from the socket to the client
+u8 cerver_poll_unregister_connection (struct _Cerver *cerver, 
+    struct _Client *client, struct _Connection *connection);
 
 // server poll loop to handle events in the registered socket's fds
 extern u8 cerver_poll (struct _Cerver *cerver);

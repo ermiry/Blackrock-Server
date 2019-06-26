@@ -113,19 +113,27 @@ void client_connection_end (Connection *connection) {
 
 }
 
-// FIXME: add the sock fd to the cerver poll fds!!
-// check if the client is already registered to a cerver or not!!
-// and dont forget to map it from the cerver map
 // registers a new connection to a client
 // returns 0 on success, 1 on error
-u8 client_connection_register (Client *client, Connection *connection) {
+u8 client_connection_register (Cerver *cerver, Client *client, Connection *connection) {
 
     u8 retval = 1;
 
     if (client && connection) {
         if (dlist_insert_after (client->connections, dlist_end (client->connections), connection)) {
-            connection->active = true;
-            retval = 0;
+            // regsiter the connection to the cerver poll
+            if (!cerver_poll_register_connection (cerver, client, connection)) {
+                #ifdef CERVER_DEBUG
+                if (client->session_id) {
+                    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
+                        c_string_create ("Registered a new connection to client with session id: %s",
+                        client->session_id->str));
+                }
+                #endif
+
+                connection->active = true;
+                retval = 0;
+            }
         }
 
         // failed to register connection
@@ -139,10 +147,9 @@ u8 client_connection_register (Client *client, Connection *connection) {
 
 }
 
-// FIXME: unmap the connection from the client!!
 // unregisters a connection from a client and stops and deletes it
 // returns 0 on success, 1 on error
-u8 client_connection_unregister (Client *client, Connection *connection) {
+u8 client_connection_unregister (Cerver *cerver, Client *client, Connection *connection) {
 
     u8 retval = 1;
 
@@ -151,6 +158,9 @@ u8 client_connection_unregister (Client *client, Connection *connection) {
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
             con = (Connection *) le->data;
             if (connection->sock_fd == con->sock_fd) {
+                // unmap the client connection from the cerver poll
+                cerver_poll_register_connection (cerver, client, connection);
+
                 client_connection_end (connection);
                 client_connection_delete (dlist_remove_element (client->connections, le));
 
@@ -207,12 +217,12 @@ void client_delete (void *ptr) {
 
 // TODO: create connected time stamp
 // creates a new client and registers a new connection
-Client *client_create (const i32 sock_fd, const struct sockaddr_storage address) {
+Client *client_create (Cerver *cerver, const i32 sock_fd, const struct sockaddr_storage address) {
 
     Client *client = client_new ();
     if (client) {
         Connection *connection = client_connection_create (sock_fd, address);
-        if (connection) client_connection_register (client, connection);
+        if (connection) client_connection_register (cerver, client, connection);
         else {
             // failed to create a new connection
             client_delete (client);
@@ -277,8 +287,6 @@ u8 client_disconnect (Client *client) {
 
 }
 
-// FIXME: map the client with the socket fds
-// FIXME: we dont want htab to fully copy our data!!!
 // registers a client to the cerver --> add it to cerver's structures
 u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
@@ -291,37 +299,7 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
         Connection *connection = NULL;
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
             connection = (Connection *) le->data;
-
-            i32 idx = cerver_poll_get_free_idx (cerver);
-            if (idx > 0) {
-                cerver->fds[idx].fd = connection->sock_fd;
-                cerver->fds[idx].events = POLLIN;
-                cerver->current_n_fds++;
-
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
-                    c_string_create ("Added new sock fd to cerver %s main poll, idx: %i", 
-                    cerver->name->str, idx));
-                #endif
-
-                // map the socket fd with the client
-                const void *key = &connection->sock_fd;
-                // FIXME: we dont want htab to fully copy our data!!!
-                htab_insert (cerver->client_sock_fd_map, key, sizeof (i32), client, sizeof (Client));
-            }
-
-            else {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
-                    c_string_create ("Cerver %s main poll is full -- we need to realloc...", cerver->name->str));
-                #endif
-                if (cerver_realloc_main_poll_fds (cerver)) {
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
-                        c_string_create ("Failed to realloc cerver %s main poll fds!", cerver->name->str));
-
-                    failed = true;
-                }
-            }
+            failed = cerver_poll_register_connection (cerver, client, connection);
         }
 
         if (!failed) {
@@ -348,9 +326,8 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 
 }
 
-// FIXME:
 // unregisters a client from a cerver -- removes it from cerver's structures
-Client * client_unregister_from_cerver (Cerver *cerver, Client *client) {
+Client *client_unregister_from_cerver (Cerver *cerver, Client *client) {
 
     Client *retval = NULL;
 
@@ -359,18 +336,7 @@ Client * client_unregister_from_cerver (Cerver *cerver, Client *client) {
         Connection *connection = NULL;
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
             connection = (Connection *) le->data;
-
-            // get the idx of the connection sock fd in the cerver poll fds
-            i32 idx = cerver_poll_get_idx_by_sock_fd (cerver, connection->sock_fd);
-            if (idx > 0) {
-                cerver->fds[idx].fd = -1;
-                cerver->fds[idx].events = -1;
-                cerver->current_n_fds--;
-
-                // FIXME: we dont want the client to be destroyed!!
-                const void *key = &connection->sock_fd;
-                htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
-            }
+            cerver_poll_unregister_connection (cerver, client, connection);
         }
 
         // remove the client from the cerver's clients

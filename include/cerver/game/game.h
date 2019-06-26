@@ -189,10 +189,12 @@ typedef struct PlayerInputPacket {
 
 #pragma region new 
 
+struct _Packet;
+
 #include "cerver/packets.h"
 
 // handles a game type packet
-extern void game_packet_handler (Packet *packet);
+extern void game_packet_handler (struct _Packet *packet);
 
 #pragma endregion
 

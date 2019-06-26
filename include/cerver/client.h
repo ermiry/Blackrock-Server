@@ -17,7 +17,7 @@ struct _Cerver;
 struct _Client;
 
 // a connection from a client
-typedef struct Connection {
+struct _Connection {
 
     // connection values
     i32 sock_fd;
@@ -33,7 +33,9 @@ typedef struct Connection {
 
     bool active;
 
-} Connection;
+};
+
+typedef struct _Connection Connection;
 
 extern Connection *client_connection_new (void);
 extern void client_connection_delete (void *ptr);
@@ -59,11 +61,13 @@ extern void client_connection_end (Connection *connection);
 
 // registers a new connection to a client
 // returns 0 on success, 1 on error
-extern u8 client_connection_register (struct _Client *client, Connection *connection);
+extern u8 client_connection_register (struct _Cerver *cerver, 
+    struct _Client *client, Connection *connection);
 
 // unregisters a connection from a client and stops and deletes it
 // returns 0 on success, 1 on error
-extern u8 client_connection_unregister (struct _Client *client, Connection *connection);
+extern u8 client_connection_unregister (struct _Cerver *cerver, 
+    struct _Client *client, Connection *connection);
 
 // anyone that connects to the cerver
 struct _Client {
@@ -89,7 +93,8 @@ extern Client *client_new (void);
 extern void client_delete (void *ptr);
 
 // creates a new client and registers a new connection
-extern Client *client_create (const i32 sock_fd, const struct sockaddr_storage address);
+extern Client *client_create (struct _Cerver *cerver, 
+    const i32 sock_fd, const struct sockaddr_storage address);
 
 // sets the client's session id
 extern void client_set_session_id (Client *client, const char *session_id);
