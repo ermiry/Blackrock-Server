@@ -7,7 +7,7 @@
 #include "cerver/types/string.h"
 
 #include "cerver/cerver.h"
-
+#include "cerver/packets.h"
 #include "cerver/game/player.h"
 #include "cerver/game/lobby.h"
 
@@ -20,7 +20,7 @@
 struct _Cerver;
 struct _GameServerData;
 struct _Client;
-struct _PacketInfo;
+struct _Packet;
 
 #define DEFAULT_PLAYER_TIMEOUT      30
 #define DEFAULT_FPS                 20
@@ -29,7 +29,6 @@ struct _PacketInfo;
 
 struct _GameCerver {
 
-    // TODO: better arrange the lobbys based on types
     DoubleList *current_lobbys;                     // a list of the current lobbys
     void *(*lobby_id_generator) (const void *);
 
@@ -72,119 +71,7 @@ extern void game_set_load_game_data (GameCerver *game_cerver,
 extern void game_set_final_action (GameCerver *game_cerver, 
     Action final_action, void *final_action_args);
 
-
-/*** THE FOLLOWING AND KIND OF BLACKROCK SPECIFIC ***/
-/*** WE NEED TO DECIDE WITH NEED TO BE ON THE FRAMEWORK AND WHICH DOES NOT!! ***/
-
-// 17/11/2018 -- aux structure for traversing a players tree
-typedef struct PlayerAndData {
-
-    void *playerData;
-    void *data;
-
-} PlayerAndData;
-
-/*** LOG_GAME PACKETS ***/
-
-// 04/11/2018 -- 21:29 - to handle requests from players inside the lobby
-// primarilly game updates and messages
-typedef struct GamePacketInfo {
-
-    struct _Cerver *server;
-    Lobby *lobby;
-    Player *player;
-    char packetData[65515];		// max udp packet size
-    size_t packetSize;
-
-} GamePacketInfo;
-
-/*** LOG_GAME SERIALIZATION ***/
-
-#pragma region LOG_GAME SERIALIZATION
-
-typedef int32_t SRelativePtr;
-struct _SArray;
-
-// TODO: 19/11/2018 -- 19:05 - we need to add support for scores!
-
-// info that we need to send to the client about the players
-typedef struct Splayer {
-
-	// TODO:
-	// char name[64];
-
-	// TODO: 
-	// we need a way to add info about the players info for specific game
-	// such as their race or level in blackrock
-
-	bool owner;
-
-} SPlayer;
-
-// info that we need to send to the client about the lobby he is in
-typedef struct SLobby {
-
-	GameSettings settings;
-    bool inGame;
-
-	// array of players inside the lobby
-	// struct _SArray players;
-
-} SLobby;
-
-// FIXME: do we need this?
-typedef struct UpdatedGamePacket {
-
-	GameSettings gameSettings;
-
-	PlayerId playerId;
-
-	// SequenceNum sequenceNum;
-	// SequenceNum ack_input_sequence_num;
-
-	// SArray players; // Array of SPlayer.
-	// SArray explosions; // Array of SExplosion.
-	// SArray projectiles; // Array of SProjectile.
-
-} UpdatedGamePacket; 
-
-// FIXME: do we need this?
-typedef struct PlayerInput {
-
-	// Position pos;
-
-} PlayerInput;
-
-typedef uint64_t SequenceNum;
-
-// FIXME:
-typedef struct PlayerInputPacket {
-
-	// SequenceNum sequenceNum;
-	// PlayerInput input;
-	
-} PlayerInputPacket;
-
-// FIXME: this should be a serialized version of the game component
-// in the game we move square by square
-/* typedef struct Position {
-
-    u8 x, y;
-    // u8 layer;   
-
-} Position; */
-
-#pragma endregion
-
-#pragma region new 
-
-struct _Packet;
-
-#include "cerver/packets.h"
-
 // handles a game type packet
 extern void game_packet_handler (struct _Packet *packet);
-
-#pragma endregion
 
 #endif

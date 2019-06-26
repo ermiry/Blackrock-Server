@@ -684,6 +684,19 @@ u8 cerver_teardown (Cerver *cerver) {
                 c_string_create ("Starting cerver %s teardown...", cerver->name->str));
         #endif
 
+        switch (cerver->type) {
+            case CUSTOM_CERVER: break;
+            case FILE_CERVER: break;
+            case GAME_CERVER: {
+                GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
+                if (game_cerver->final_game_action)
+                    game_cerver->final_game_action (game_cerver->final_action_args);
+            } break;
+            case WEB_CERVER: break;
+
+            default: break;
+        }
+
         // clean up on hold connections
         cerver_destroy_on_hold_connections (cerver);
 
