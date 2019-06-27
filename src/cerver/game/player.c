@@ -79,7 +79,49 @@ int player_comparator_client_id (const void *a, const void *b) {
 
 }
 
-// TODO: player regoster to lobby and unregister
+// registers a player to the lobby --> add him to lobby's structures
+u8 player_register_to_lobby (Lobby *lobby, Player *player) {
+
+    u8 retval = 1;
+
+    if (lobby && player) {
+        if (player->client) {
+            bool failed = false;
+
+            // register all the player's client connections to the lobby poll
+            Connection *connection = NULL;
+            for (ListElement *le = dlist_start (player->client->connections); le; le = le->next) {
+                connection = (Connection *) le->data;
+                failed = lobby_poll_register_connection (lobby, player, connection);
+            }
+
+            if (!failed) {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_PLAYER, 
+                    c_string_create ("Registered a new player to lobby %s",
+                    lobby->id->str));
+                #endif
+
+                lobby->n_current_players++;
+                #ifdef CERVER_STATS
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+                    c_string_create ("Registered players to lobby %s: %i.",
+                    lobby->id->str, lobby->n_current_players));
+                #endif
+
+                retval = 0;
+            }
+        }
+    }
+
+    return retval;
+
+}
+
+// unregisters a player from a lobby --> removes him from lobby's structures
+u8 player_unregister_from_lobby () {
+
+}
 
 // get a player from an avl tree using a comparator and a query
 Player *player_get (AVLNode *node, Comparator comparator, void *query) {

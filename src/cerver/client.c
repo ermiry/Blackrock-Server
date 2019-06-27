@@ -287,6 +287,8 @@ u8 client_disconnect (Client *client) {
 
 }
 
+// TODO: maybe we dont want to fully remove the client from the avl,
+// maybe create another function???
 // registers a client to the cerver --> add it to cerver's structures
 u8 client_register_to_cerver (Cerver *cerver, Client *client) {
 

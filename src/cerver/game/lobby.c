@@ -209,6 +209,80 @@ void lobby_delete (void *lobby_ptr) {
 
 }
 
+// reallocs lobby poll fds
+// returns 0 on success, 1 on error
+static u8 lobby_realloc_poll_fds (Lobby *lobby) {
+
+    u8 retval = 1;
+
+    if (lobby) {
+        lobby->max_players_fds = lobby->max_players_fds * 2;
+        lobby->players_fds = realloc (lobby->players_fds,
+            lobby->max_players_fds * sizeof (struct pollfd));
+        if (lobby->players_fds) retval = 0;
+    }
+
+    return retval;
+
+}
+
+// gets a free idx in the lobby poll structure
+static i32 lobby_poll_get_free_idx (const Lobby *lobby) {
+
+    if (lobby) {
+        for (u32 i = 0; i < lobby->max_players_fds; i++) 
+            if (lobby->players_fds[i].fd == -1) return i;
+    }
+
+    return -1;
+
+}
+
+// registers a player's client connection to the lobby poll
+// and maps the sock fd to the player
+u8 lobby_poll_register_connection (Lobby *lobby, Player *player, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (lobby && player && connection) {
+        i32 idx = lobby_poll_get_free_idx (lobby);
+        if (idx > 0) {
+            lobby->players_fds[idx].fd = connection->sock_fd;
+            lobby->players_fds[idx].events = POLLIN;
+            lobby->current_players_fds++;
+
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, 
+                c_string_create ("Added a new sock fd to lobby %s poll - idx %i",
+                lobby->id->str, idx));
+            #endif
+
+            // map the socket fd with the player
+            const void *key = &connection->sock_fd;
+            htab_insert (lobby->sock_fd_player_map, key, sizeof (i32), player, sizeof (Player));
+
+            retval = 0;
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE,
+                c_string_create ("Lobby %s poll is full -- we need to realloc...",
+                lobby->id->str));
+            #endif
+
+            if (lobby_realloc_poll_fds (lobby)) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE,
+                    c_string_create ("Failed to realloc lobby %s poll structure!",
+                    lobby->id->str));
+            }
+        }
+    }
+
+    return retval;
+
+}
+
 // initializes a new lobby
 // pass the server game data
 // pass 0 to max players to use the default 4

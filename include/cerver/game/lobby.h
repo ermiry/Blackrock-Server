@@ -18,8 +18,8 @@
 #define DEFAULT_MAX_LOBBY_PLAYERS			4
 
 struct _Cerver;
+struct _Connection;
 struct _Player;
-struct _GameServerData;
 
 struct _GameSettings {
 
@@ -44,7 +44,8 @@ struct _Lobby {
 
 	Htab *sock_fd_player_map;           // maps a socket fd to a player
     struct pollfd *players_fds;     			
-	u16 players_nfds;                   // n of active fds in the pollfd array
+	u16 max_players_fds;
+	u16 current_players_fds;                   // n of active fds in the pollfd array
     bool compress_players;              // compress the fds array?
     u32 poll_timeout;    
 
@@ -53,7 +54,7 @@ struct _Lobby {
 
 	struct _Player *owner;				// the client that created the lobby -> he has higher privileges
 	unsigned int max_players;
-	unsigned int current_players;
+	unsigned int n_current_players;
 
 	Action packet_handler;				// lobby packet handler
 
@@ -74,6 +75,11 @@ typedef struct _Lobby Lobby;
 extern Lobby *lobby_new (void);
 
 extern void lobby_delete (void *lobby_ptr);
+
+// registers a player's client connection to the lobby poll
+// and maps the sock fd to the player
+extern u8 lobby_poll_register_connection (Lobby *lobby, 
+	struct _Player *player, struct _Connection *connection);
 
 typedef struct CerverLobby {
 
