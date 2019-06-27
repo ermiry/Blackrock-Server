@@ -78,9 +78,35 @@ extern Lobby *lobby_new (void);
 
 extern void lobby_delete (void *lobby_ptr);
 
+//compares two lobbys based on their ids
+extern int lobby_comparator (const void *one, const void *two);
+
+// set lobby poll function timeout in mili secs
+// how often we are checking for new packages
+extern void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout);
+
+// sets the lobby packet handler
+extern void lobby_set_handler (Lobby *lobby, Action handler);
+
+// sets the lobby settings and a function to delete it
+extern void lobby_set_game_settings (Lobby *lobby, 
+	void *game_settings, Action game_settings_delete);
+
+// sets the lobby game data and a function to delete it
+extern void lobby_set_game_data (Lobby *lobby, void *game_data, Action game_data_delete);
+
+// sets the lobby update action, the lobby will we passed as the args
+extern void lobby_set_update (Lobby *lobby, Action update);
+
 // registers a player's client connection to the lobby poll
 // and maps the sock fd to the player
 extern u8 lobby_poll_register_connection (Lobby *lobby, 
+	struct _Player *player, struct _Connection *connection);
+
+// unregisters a player's client connection from the lobby poll structure
+// and removes the map from the sock fd to the player
+// returns 0 on success, 1 on error
+extern u8 lobby_poll_unregister_connection (Lobby *lobby, 
 	struct _Player *player, struct _Connection *connection);
 
 typedef struct CerverLobby {

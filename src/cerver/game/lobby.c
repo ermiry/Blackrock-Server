@@ -209,6 +209,48 @@ void lobby_delete (void *lobby_ptr) {
 
 }
 
+//compares two lobbys based on their ids
+int lobby_comparator (const void *one, const void *two) {
+
+    if (one && two) 
+        return str_compare (((Lobby *) one)->id, ((Lobby *) two)->id);
+
+}
+
+// set lobby poll function timeout in mili secs
+// how often we are checking for new packages
+void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout) { 
+    
+    if (lobby) lobby->poll_timeout = timeout; 
+    
+}
+
+// set the lobby packet handler
+void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->packet_handler = handler; }
+
+// sets the lobby settings and a function to delete it
+void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action game_settings_delete) {
+
+    if (lobby) {
+        lobby->game_settings = game_settings;
+        lobby->game_settings_delete = game_settings_delete;
+    }
+
+}
+
+// sets the lobby game data and a function to delete it
+void lobby_set_game_data (Lobby *lobby, void *game_data, Action game_data_delete) {
+
+    if (lobby) {
+        lobby->game_data = game_data;
+        lobby->game_data_delete = game_data_delete;
+    }
+
+}
+
+// sets the lobby update action, the lobby will we passed as the args
+void lobby_set_update (Lobby *lobby, Action update) { if (lobby) lobby->update = update; }
+
 // reallocs lobby poll fds
 // returns 0 on success, 1 on error
 static u8 lobby_realloc_poll_fds (Lobby *lobby) {
@@ -353,45 +395,7 @@ Lobby *lobby_init (GameCerver *game_cerver, unsigned max_players, Action handler
 
 }
 
-int lobby_comparator (const void *one, const void *two) {
-
-    if (one && two) {
-        Lobby *lobby_one = (Lobby *) one;
-        Lobby *lobby_two = (Lobby *) two;
-
-        return str_compare (lobby_one->id, lobby_two->id);
-    }
-
-}
-
 /*** Lobby Configuration ***/
-
-// sets the lobby settings and a function to delete it
-void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action delete_game_settings) {
-
-    if (lobby) {
-        lobby->game_settings = game_settings;
-        lobby->delete_lobby_game_settings = delete_game_settings;
-    }
-
-}
-
-// sets the lobby game data and a function to delete it
-void lobby_set_game_data (Lobby *lobby, void *game_cerver, Action delete_lobby_game_data) {
-
-    if (lobby) {
-        lobby->game_cerver = game_cerver;
-        lobby->delete_lobby_game_data = delete_lobby_game_data;
-    }
-
-}
-
-// set the lobby player handler
-void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->handler = handler; }
-
-// set lobby poll function timeout in mili secs
-// how often we are checking for new packages
-void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout) { if (lobby) lobby->poll_timeout = timeout; }
 
 // searchs a lobby in the game data and returns a reference to it
 Lobby *lobby_get (GameCerver *game_cerver, Lobby *query) {
