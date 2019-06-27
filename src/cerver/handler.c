@@ -447,11 +447,13 @@ u8 cerver_poll_unregister_connection (Cerver *cerver, Client *client, Connection
             cerver->current_n_fds--;
 
             const void *key = &connection->sock_fd;
-            int ret = htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
+            retval = htab_remove (cerver->client_sock_fd_map, key, sizeof (i32));
             #ifdef CERVER_DEBUG
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                c_string_create ("Failed to remove from cerver's %s client sock map.", 
-                cerver->name->str));
+            if (retval) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
+                    c_string_create ("Failed to remove from cerver's %s client sock map.", 
+                    cerver->name->str));
+            }
             #endif
         }
     }

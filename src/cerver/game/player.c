@@ -119,7 +119,22 @@ u8 player_register_to_lobby (Lobby *lobby, Player *player) {
 }
 
 // unregisters a player from a lobby --> removes him from lobby's structures
-u8 player_unregister_from_lobby () {
+u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
+
+    u8 retval = 1;
+
+    if (lobby && player) {
+        if (player->client) {
+            // unregister all the player's client connections from the lobby
+            Connection *connection = NULL;
+            for (ListElement *le = dlist_start (player->client->connections); le; le = le->next) {
+                connection = (Connection *) le->data;
+                lobby_poll_unregister_connection (lobby, player, connection);
+            }
+        }
+    }
+
+    return retval;
 
 }
 

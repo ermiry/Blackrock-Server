@@ -238,6 +238,18 @@ static i32 lobby_poll_get_free_idx (const Lobby *lobby) {
 
 }
 
+// gets the idx of the connection fd in the poll fds
+static i32 lobby_poll_get_idx_by_sock_fd (const Lobby *lobby, const i32 sock_fd) {
+
+    if (lobby) {
+        for (u32 i = 0; i < lobby->max_players_fds; i++)
+            if (lobby->players_fds[i].fd == sock_fd) return i;
+    }
+
+    return -1;
+
+}
+
 // registers a player's client connection to the lobby poll
 // and maps the sock fd to the player
 u8 lobby_poll_register_connection (Lobby *lobby, Player *player, Connection *connection) {
@@ -276,6 +288,37 @@ u8 lobby_poll_register_connection (Lobby *lobby, Player *player, Connection *con
                     c_string_create ("Failed to realloc lobby %s poll structure!",
                     lobby->id->str));
             }
+        }
+    }
+
+    return retval;
+
+}
+
+// unregisters a player's client connection from the lobby poll structure
+// and removes the map from the sock fd to the player
+// returns 0 on success, 1 on error
+u8 lobby_poll_unregister_connection (Lobby *lobby, Player *player, Connection *connection) {
+
+    u8 retval = 1;
+
+    if (lobby && player && connection) {
+        // get the idx of the connection sock in the lobby poll fds
+        i32 idx = lobby_poll_get_idx_by_sock_fd (lobby, connection->sock_fd);
+        if (idx >= 0) {
+            lobby->players_fds[idx].fd = -1;
+            lobby->players_fds[idx].events = -1;
+            lobby->current_players_fds--;
+
+            const void *key = &connection->sock_fd;
+            retval = htab_remove (lobby->sock_fd_player_map, key, sizeof (i32));
+            #ifdef CERVER_DEBUG
+            if (retval) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
+                    c_string_create ("Failed to remove from lobby's %s sock fd player map.",
+                    lobby->id->str));
+            }
+            #endif
         }
     }
 
