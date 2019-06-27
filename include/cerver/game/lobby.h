@@ -10,7 +10,8 @@
 #include "cerver/game/gameType.h"
 #include "cerver/game/player.h"
 
-#include "cerver/collections/avl.h"
+#include "cerver/collections/dllist.h"
+#include "cerver/collections/htab.h"
 
 #include "cerver/utils/objectPool.h"
 
@@ -52,6 +53,7 @@ struct _Lobby {
 	bool running;						// lobby is listening for player packets
 	bool in_game;						// lobby is inside a game
 
+	DoubleList *players;				// players insside the lobby
 	struct _Player *owner;				// the client that created the lobby -> he has higher privileges
 	unsigned int max_players;
 	unsigned int n_current_players;

@@ -35,9 +35,22 @@ extern void player_set_id (Player *player, const char *id);
 extern void player_set_data (Player *player, void *data, Action data_delete);
 
 // compares two players by their ids
-int player_comparator_by_id (const void *a, const void *b);
+extern int player_comparator_by_id (const void *a, const void *b);
 
 // compares two players by their clients ids
 extern int player_comparator_client_id (const void *a, const void *b);
+
+// registers a player to the lobby --> add him to lobby's structures
+extern u8 player_register_to_lobby (Lobby *lobby, Player *player);
+
+// unregisters a player from a lobby --> removes him from lobby's structures
+extern u8 player_unregister_from_lobby (Lobby *lobby, Player *player);
+
+// gets a player from the lobby using the query
+extern Player *player_get_from_lobby (Lobby *lobby, Player *query);
+
+// broadcasts a packet to all the players in the lobby
+extern void player_broadcast_to_all (const Lobby *lobby, Packet *packet, 
+    Protocol protocol, int flags);
 
 #endif
