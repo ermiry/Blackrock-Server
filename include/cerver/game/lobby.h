@@ -57,6 +57,7 @@ struct _Lobby {
 	unsigned int max_players;
 	unsigned int n_current_players;
 
+	Action handler;						// lobby handler (lobby poll)
 	Action packet_handler;				// lobby packet handler
 
 	void *game_settings;
@@ -88,8 +89,11 @@ extern u8 lobby_poll_init (Lobby *lobby, unsigned int max_players_fds);
 // how often we are checking for new packages
 extern void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout);
 
-// sets the lobby packet handler
+// set the lobby hanlder
 extern void lobby_set_handler (Lobby *lobby, Action handler);
+
+// set the lobby packet handler
+extern void lobby_set_packet_handler (Lobby *lobby, Action packet_handler);
 
 // sets the lobby settings and a function to delete it
 extern void lobby_set_game_settings (Lobby *lobby, 

@@ -11,6 +11,9 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
+#include "cerver/cerver.h"
+#include "cerver/handler.h"
+
 #include "cerver/game/game.h"
 #include "cerver/game/player.h"
 #include "cerver/game/lobby.h"
@@ -40,92 +43,6 @@ void lobby_default_id_generator (char *lobby_id) {
     lobby_id = c_string_create ("%s", hash_string);
 
 }
-
-// takes as data a server lobby structure
-// recieves packages from players inside the lobby
-// packages are assumed to use cerver structure to transfer data
-// if you need to manage packages in a custom way or do not user cerver types at all, 
-// you can set your own handler
-static void lobby_default_handler (void *ptr) {
-
-    // check we have the correct data
-    if (!ptr) {
-        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
-            "Can start lobby handler, neither server nor lobby can be null!");
-        return;
-    } 
-
-    ServerLobby *sl = (ServerLobby *) ptr;
-    Cerver *server = sl->server;
-    Lobby *lobby = sl->lobby;
-
-    if (!server || !lobby) {
-        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
-            "Can start lobby handler, neither server nor lobby can be null!");
-        return;
-    } 
-
-    // we are good to go...
-    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, "Lobby has started!");
-
-    int poll_retval;
-    while (lobby->running) {
-        poll_retval = poll (lobby->players_fds, lobby->players_nfds, lobby->poll_timeout);
-
-        // poll failed
-        if (poll_retval < 0) {
-            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                c_string_create ("Lobby %s poll failed!", lobby->id->str));
-            #ifdef CERVER_DEBUG
-            perror ("Error");
-            #endif
-            server->isRunning = false;
-            break;
-        }
-
-        // if poll has timed out, just continue to the next loop... 
-        if (poll_retval == 0) {
-            // #ifdef CERVER_DEBUG
-            // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Poll timeout.");
-            // #endif
-            continue;
-        }
-
-        // FIXME:
-        // one or more fd(s) are readable, need to determine which ones they are
-        /* for (u8 i = 0; i < poll_n_fds; i++) {
-            if (server->fds[i].revents == 0) continue;
-            if (server->fds[i].revents != POLLIN) continue;
-
-            // accept incoming connections that are queued
-            if (server->fds[i].fd == server->serverSock) {
-                if (server_accept (server)) {
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, "LOG_SUCCESS accepting a new client!");
-                    #endif
-                }
-                else {
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, "Failed to accept a new client!");
-                    #endif
-                } 
-            }
-
-            // TODO: maybe later add this directly to the thread pool
-            // not the server socket, so a connection fd must be readable
-            else server_recieve (server, server->fds[i].fd, false);
-        } */
-
-        // if (server->compress_clients) compressClients (server);
-    }
-
-    #ifdef CERVER_DEBUG
-    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
-        c_string_create ("Lobby %s handler has stopped!", lobby->id->str));
-    #endif
-
-}
-
 
 /*** Lobby ***/
 
@@ -251,8 +168,15 @@ void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout) {
     
 }
 
+// set the lobby hanlder
+void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->handler = handler; }
+
 // set the lobby packet handler
-void lobby_set_handler (Lobby *lobby, Action handler) { if (lobby) lobby->packet_handler = handler; }
+void lobby_set_packet_handler (Lobby *lobby, Action packet_handler) {
+
+    if (lobby) lobby->packet_handler = packet_handler;
+
+}
 
 // sets the lobby settings and a function to delete it
 void lobby_set_game_settings (Lobby *lobby, void *game_settings, Action game_settings_delete) {
@@ -404,6 +328,71 @@ Lobby *lobby_get (GameCerver *game_cerver, Lobby *query) {
     }
 
     return NULL;
+
+}
+
+static u8 lobby_poll (void *ptr) {
+
+    u8 retval = 1;
+
+    if (ptr) {
+        CerverLobby *cerver_lobby = (CerverLobby *) ptr;
+        Cerver *cerver = cerver_lobby->cerver;
+        Lobby *lobby = cerver_lobby->lobby;
+
+        cerver_log_msg (stdout, LOG_SUCCESS, LOG_GAME, 
+            c_string_create ("Lobby %s handler has started!", lobby->id->str));
+
+        int poll_retval = 0;
+        while (lobby->running) {
+            poll_retval = poll (lobby->players_fds, lobby->max_players_fds, lobby->poll_timeout);
+
+            // poll failed
+            if (poll_retval < 0) {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
+                    c_string_create ("Lobby %s poll has failed!", lobby->id->str));
+                perror ("Error");
+                break;
+            }
+
+            // if poll has timed out, just continue to the next loop... 
+            if (poll_retval == 0) {
+                // #ifdef CERVER_DEBUG
+                // cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
+                //    c_string_create ("Lobby %s poll timeout.", lobby->id->str));
+                // #endif
+                continue;
+            }
+
+            // one or more fd(s) are readable, need to determine which ones they are
+            for (u16 i = 0; i < lobby->current_players_fds; i++) {
+                if (lobby->players_fds[i].revents == 0) continue;
+                if (lobby->players_fds[i].revents != POLLIN) continue;
+
+                // FIXME:
+                /* if (thpool_add_work (cerver->thpool, lobby->handler, 
+                    cerver_receive_new (cerver, cerver->fds[i].fd, true))) {
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                        c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
+                        cerver->name->str));
+                } */
+            }
+        }
+
+        #ifdef CERVER_DEBUG
+        cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+            c_string_create ("Lobby %s poll has stopped!", lobby->id->str));
+        #endif
+
+        retval = 0;
+    }
+
+    else {
+        cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
+            "Can't handle players on a NULL client");
+    } 
+
+    return retval;
 
 }
 
