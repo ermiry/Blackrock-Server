@@ -117,7 +117,7 @@ extern u8 lobby_poll_unregister_connection (Lobby *lobby,
 	struct _Player *player, struct _Connection *connection);
 
 // searches a lobby in the game cerver and returns a reference to it
-extern Lobby *lobby_get (GameCerver *game_cerver, Lobby *query);
+extern Lobby *lobby_get (struct _GameCerver *game_cerver, Lobby *query);
 
 typedef struct CerverLobby {
 

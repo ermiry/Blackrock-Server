@@ -632,7 +632,7 @@ static u8 on_hold_poll (void *ptr) {
                 if (cerver->hold_fds[i].revents != POLLIN) continue;
 
                 if (thpool_add_work (cerver->thpool, cerver_receive, 
-                    cerver_receive_new (cerver, cerver->fds[i].fd, true))) {
+                    cerver_receive_new (cerver, cerver->hold_fds[i].fd, true))) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
                         cerver->name->str));

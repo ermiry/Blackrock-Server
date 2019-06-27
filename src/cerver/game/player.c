@@ -14,6 +14,8 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
+ListElement *player_get_le_from_lobby (Lobby *lobby, Player *player);
+
 Player *player_new (void) {
 
     Player *player = (Player *) malloc (sizeof (Player));
@@ -98,6 +100,8 @@ u8 player_register_to_lobby (Lobby *lobby, Player *player) {
             }
 
             if (!failed) {
+                dlist_insert_after (lobby->players, dlist_end (lobby->players), player);
+
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stdout, LOG_SUCCESS, LOG_PLAYER, 
                     c_string_create ("Registered a new player to lobby %s",
@@ -127,11 +131,16 @@ u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
 
     if (lobby && player) {
         if (player->client) {
-            // unregister all the player's client connections from the lobby
-            Connection *connection = NULL;
-            for (ListElement *le = dlist_start (player->client->connections); le; le = le->next) {
-                connection = (Connection *) le->data;
-                lobby_poll_unregister_connection (lobby, player, connection);
+            ListElement *le = player_get_le_from_lobby (lobby, player);
+            if (le) {
+                dlist_remove_element (lobby->players, le);
+
+                // unregister all the player's client connections from the lobby
+                Connection *connection = NULL;
+                for (ListElement *le = dlist_start (player->client->connections); le; le = le->next) {
+                    connection = (Connection *) le->data;
+                    lobby_poll_unregister_connection (lobby, player, connection);
+                }
             }
         }
     }
@@ -144,6 +153,13 @@ u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
 Player *player_get_from_lobby (Lobby *lobby, Player *query) {
 
     return (lobby ? (Player *) dlist_search (lobby->players, query) : NULL);
+
+}
+
+// get sthe list element associated with the player
+ListElement *player_get_le_from_lobby (Lobby *lobby, Player *player) {
+
+    return (lobby ? dlist_get_element (lobby->players, player) : NULL);
 
 }
 

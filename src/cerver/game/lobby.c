@@ -369,13 +369,12 @@ static u8 lobby_poll (void *ptr) {
                 if (lobby->players_fds[i].revents == 0) continue;
                 if (lobby->players_fds[i].revents != POLLIN) continue;
 
-                // FIXME:
-                /* if (thpool_add_work (cerver->thpool, lobby->handler, 
-                    cerver_receive_new (cerver, cerver->fds[i].fd, true))) {
+                if (thpool_add_work (cerver->thpool, lobby->handler, 
+                    cerver_receive_new (cerver, lobby->players_fds[i].fd, false))) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
                         cerver->name->str));
-                } */
+                }
             }
         }
 
