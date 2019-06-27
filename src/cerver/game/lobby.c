@@ -16,6 +16,7 @@
 #include "cerver/game/lobby.h"
 
 #include "cerver/collections/dllist.h"
+#include "cerver/collections/htab.h"
 
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
@@ -37,25 +38,6 @@ void lobby_default_id_generator (char *lobby_id) {
     sha_256_hash_to_string (hash_string, hash);
 
     lobby_id = c_string_create ("%s", hash_string);
-
-}
-
-// we remove any fd that was set to -1 for what ever reason
-static void lobby_players_compress (Lobby *lobby) {
-
-    if (lobby) {
-        lobby->compress_players = false;
-        
-        for (u16 i = 0; i < lobby->players_nfds; i++) {
-            if (lobby->players_fds[i].fd == -1) {
-                for (u16 j = i; j < lobby->players_nfds; j++)
-                    lobby->players_fds[i].fd = lobby->players_fds[j + 1].fd;
-
-                i--;
-                lobby->players_nfds--;
-            }
-        }
-    }
 
 }
 
@@ -158,7 +140,6 @@ Lobby *lobby_new (void) {
 
         lobby->sock_fd_player_map = NULL;
         lobby->players_fds = NULL;
-        lobby->compress_players = false;
 
         lobby->running = lobby->in_game = false;
 
@@ -186,6 +167,7 @@ void lobby_delete (void *lobby_ptr) {
 
         str_delete (lobby->id);
 
+        dlist_destroy (lobby->players);
         htab_destroy (lobby->sock_fd_player_map);
 
         if (lobby->players_fds) free (lobby->players_fds);
@@ -209,11 +191,55 @@ void lobby_delete (void *lobby_ptr) {
 
 }
 
+// initializes a new lobby
+u8 lobby_init (GameCerver *game_cerver, Lobby *lobby) {
+
+    u8 retval = 1;
+
+    if (lobby) {
+        lobby->creation_time_stamp = time (NULL);
+        void *id = game_cerver->lobby_id_generator (lobby);
+        if (id) {
+            lobby->id = (String *) id;
+
+            lobby->players = dlist_init (player_delete, player_comparator_by_id);
+
+            retval = 0;
+        }
+    }
+
+    return retval;
+
+}
+
 //compares two lobbys based on their ids
 int lobby_comparator (const void *one, const void *two) {
 
     if (one && two) 
         return str_compare (((Lobby *) one)->id, ((Lobby *) two)->id);
+
+}
+
+// inits the lobby poll structures
+// returns 0 on success, 1 on error
+u8 lobby_poll_init (Lobby *lobby, unsigned int max_players_fds) {
+
+    u8 retval = 1;
+
+    if (lobby) {
+        lobby->players_fds = (struct pollfd *) calloc (max_players_fds, sizeof (struct pollfd));
+        if (lobby->players_fds) {
+            lobby->max_players_fds = max_players_fds;
+            lobby->current_players_fds = 0;
+
+            for (u32 i = 0; i < lobby->max_players_fds; i++) {
+                lobby->players_fds[i].fd = -1;
+                lobby->players_fds[i].events = -1;
+            }
+        }
+    }
+
+    return retval;
 
 }
 
@@ -368,154 +394,16 @@ u8 lobby_poll_unregister_connection (Lobby *lobby, Player *player, Connection *c
 
 }
 
-// initializes a new lobby
-// pass the server game data
-// pass 0 to max players to use the default 4
-// pass NULL in handle to use default
-Lobby *lobby_init (GameCerver *game_cerver, unsigned max_players, Action handler) {
-
-    Lobby *lobby = lobby_new ();
-    if (lobby) {
-        lobby->creation_time_stamp = time (NULL);
-
-        char *id = NULL;
-        game_cerver->lobby_id_generator ((char *) id);
-        lobby->id = str_new (id);
-
-        // we dont want to really destroy the player data, just removed it from the tree
-        lobby->players = avl_init (game_cerver->player_comparator, player_delete_dummy);
-        lobby->max_players = max_players <= 0 ? DEFAULT_MAX_LOBBY_PLAYERS : max_players;
-        lobby->players_fds = (struct pollfd *) calloc (lobby->max_players, sizeof (struct pollfd));
-        lobby->poll_timeout = LOBBY_DEFAULT_POLL_TIMEOUT;
-
-        lobby->handler = handler ? handler : lobby_default_handler;
-    }
-
-    return lobby;
-
-}
-
-/*** Lobby Configuration ***/
-
-// searchs a lobby in the game data and returns a reference to it
+// searches a lobby in the game cerver and returns a reference to it
 Lobby *lobby_get (GameCerver *game_cerver, Lobby *query) {
 
     Lobby *found = NULL;
     for (ListElement *le = dlist_start (game_cerver->current_lobbys); le; le = le->next) {
         found = (Lobby *) le->data;
-        if (!lobby_comparator (found, query)) break;
+        if (!lobby_comparator (found, query)) return found;
     }
 
-    return found;
-
-}
-
-/*** Handle lobby players ***/
-
-// FIXME:
-// add a player to a lobby
-static u8 lobby_add_player (Lobby *lobby, Player *player) {
-
-    if (lobby && player) {
-        // if (!player_is_in_lobby (player, lobby)) {
-
-        // }
-    }
-
-}
-
-// FIXME:
-// removes a player from the lobby
-static u8 lobby_remove_player (Lobby *lobby, Player *player) {
-
-    u8 retval = 1;
-
-    if (lobby && player) {
-
-    }
-
-    return retval;
-
-}
-
-// FIXME:
-// add a player to the lobby structures
-u8 player_add_to_lobby (Cerver *server, Lobby *lobby, Player *player) {
-
-    /* if (lobby && player) {
-        if (server->type == GAME_SERVER) {
-            GameCerver *gameData = (GameCerver *) server->serverData;
-            if (gameData) {
-                if (!player_is_in_lobby (player, lobby)) {
-                    Player *p = avl_remove_node (gameData->players, player);
-                    if (p) {
-                        i32 client_sock_fd = player->client->active_connections[0];
-
-                        avl_insert_node (lobby->players, p);
-
-                        // for (u32 i = 0; i < poll_n_fds; i++) {
-                        //     if (server->fds[i].fd == client_sock_fd) {
-                        //         server->fds[i].fd = -1;
-                        //         server->fds[i].events = -1;
-                        //     }
-                        // } 
-
-                        lobby->players_fds[lobby->players_nfds].fd = client_sock_fd;
-                        lobby->players_fds[lobby->players_nfds].events = POLLIN;
-                        lobby->players_nfds++;
-
-                        player->inLobby = true;
-
-                        return 0;
-                    }
-
-                    else cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to get player from avl!");
-                }
-            }
-        }
-    } */
-
-    return 1;    
-
-}
-
-// FIXME: client socket!!
-// removes a player from the lobby's players structures and sends it to the game server's players
-u8 player_remove_from_lobby (Cerver *server, Lobby *lobby, Player *player) {
-
-    // if (server && lobby && player) {
-    //     if (server->type == GAME_SERVER) {
-    //         GameCerver *gameData = (GameCerver *) gameData;
-    //         if (gameData) {
-    //             // make sure that the player is inside the lobby...
-    //             if (player_is_in_lobby (player, lobby)) {
-    //                 // create a new player and add it to the server's players
-    //                 // Player *p = newPlayer (gameData->playersPool, NULL, player);
-
-    //                 // remove from the poll fds
-    //                 for (u8 i = 0; i < lobby->players_nfds; i++) {
-    //                     /* if (lobby->players_fds[i].fd == player->client->clientSock) {
-    //                         lobby->players_fds[i].fd = -1;
-    //                         lobby->players_nfds--;
-    //                         lobby->compress_players = true;
-    //                         break;
-    //                     } */
-    //                 }
-
-    //                 // delete the player from the lobby
-    //                 avl_remove_node (lobby->players, player);
-
-    //                 // p->inLobby = false;
-
-    //                 // player_registerToServer (server, p);
-
-    //                 return 0;
-    //             }
-    //         }
-    //     }
-    // }
-
-    return 1;
+    return NULL;
 
 }
 

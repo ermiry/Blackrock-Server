@@ -46,8 +46,7 @@ struct _Lobby {
 	Htab *sock_fd_player_map;           // maps a socket fd to a player
     struct pollfd *players_fds;     			
 	u16 max_players_fds;
-	u16 current_players_fds;                   // n of active fds in the pollfd array
-    bool compress_players;              // compress the fds array?
+	u16 current_players_fds;            // n of active fds in the pollfd array
     u32 poll_timeout;    
 
 	bool running;						// lobby is listening for player packets
@@ -81,6 +80,10 @@ extern void lobby_delete (void *lobby_ptr);
 //compares two lobbys based on their ids
 extern int lobby_comparator (const void *one, const void *two);
 
+// inits the lobby poll structures
+// returns 0 on success, 1 on error
+extern u8 lobby_poll_init (Lobby *lobby, unsigned int max_players_fds);
+
 // set lobby poll function timeout in mili secs
 // how often we are checking for new packages
 extern void lobby_set_poll_time_out (Lobby *lobby, unsigned int timeout);
@@ -108,6 +111,9 @@ extern u8 lobby_poll_register_connection (Lobby *lobby,
 // returns 0 on success, 1 on error
 extern u8 lobby_poll_unregister_connection (Lobby *lobby, 
 	struct _Player *player, struct _Connection *connection);
+
+// searches a lobby in the game cerver and returns a reference to it
+extern Lobby *lobby_get (GameCerver *game_cerver, Lobby *query);
 
 typedef struct CerverLobby {
 
