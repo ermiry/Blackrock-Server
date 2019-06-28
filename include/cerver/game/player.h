@@ -5,7 +5,7 @@
 #include "cerver/types/string.h"
 
 #include "cerver/cerver.h"
-#include "cerver/packets"
+#include "cerver/packets.h"
 
 #include "cerver/game/game.h"
 #include "cerver/game/lobby.h"

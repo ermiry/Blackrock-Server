@@ -455,7 +455,7 @@ Lobby *lobby_create (Cerver *cerver, Client *client) {
             }
 
             else {
-                #ifdef
+                #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to init the new lobby!");
                 #endif
 
