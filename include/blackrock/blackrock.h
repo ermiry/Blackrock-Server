@@ -23,24 +23,6 @@ typedef unsigned char asciiChar;
 
 #define THREAD_OK   0
 
-/*** BLACKROCK ERROS ***/
-
-typedef enum BlackErrorType {
-
-    BLACK_ERROR_SERVER = 0,
-
-    BLACK_ERROR_WRONG_CREDENTIALS,
-    BLACK_ERROR_USERNAME_TAKEN,
-
-} BlackErrorType;
-
-typedef struct BlackError {
-
-    BlackErrorType errorType;
-    char msg[128];
-
-} BlackError;
-
 /*** LOG_GAME OBJECTS ***/
 
 #include "blackrock/map.h"
@@ -134,33 +116,6 @@ typedef struct Combat  {
     Defense defense;
 
 } Combat;
-
-/*** Players ***/
-
-#define SQL_PROFILE_ID_COL          0
-#define SQL_USERNAME_COL            1
-#define SQL_PASSWORD_COL            2
-#define SQL_KILLS_COL               3
-#define SQL_GAMES_PLAYED_COL        4
-#define SQL_HIGHSCORE_COL           5
-#define SQL_N_FRIENDS_COL           6
-#define SQL_FRIENDS_COL             7
-
-typedef struct PlayerProfile {
-
-    u32 profileID;
-    char *username;
-    char *password;
-
-    u32 kills;
-    u32 gamesPlayed;
-    u32 highscore;
-
-    u32 n_friends;
-    char *friends;
-    // char *clan;
-
-} PlayerProfile;
 
 /*** LOG_GAME DATA ***/
 
