@@ -1,5 +1,5 @@
-#ifndef ROOM_H
-#define ROOM_H
+#ifndef _BLACKROCK_ROOM_H_
+#define _BLACKROCK_ROOM_H_
 
 #include "blackrock.h"
 

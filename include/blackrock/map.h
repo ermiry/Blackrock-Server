@@ -1,38 +1,89 @@
-#ifndef MAP_H_
-#define MAP_H_
+#ifndef _BLACKROCK_MAP_H_
+#define _BLACKROCK_MAP_H_
 
-#include "blackrock.h"
+#include <stdbool.h>
 
-typedef struct Point {
+#include "cerver/types/types.h"
 
-    i32 x, y;
+#include "cengine/game/go.h"
 
-}  Point;
+#include "game/game.h"
+
+#include "cerver/collections/dllist.h"
+
+typedef struct Coord {
+
+    i32 x;
+    i32 y;
+
+} Coord;
 
 typedef struct Segment {
 
-    Point start, mid, end;
+    Coord start, mid, end;
     i32 roomFrom, roomTo;
     bool hasWayPoint;
 
 } Segment;
 
-#define MAX_WALLS   2000
+#define DUNGEON_ROOM_MIN_WIDTH      5
+#define DUNGEON_ROOM_MAX_WIDTH      12
 
-typedef struct Wall {
+#define DUNGEON_ROOM_MIN_HEIGHT     5
+#define DUNGEON_ROOM_MAX_HEIGHT     12
 
-    u32 x, y; // position
+#define DUNGEON_FILL_PERCENT        0.45
 
-    bool hasBeenSeen;
+typedef struct Dungeon {
 
-    bool blocksMovement;
-    bool blocksSight;
+    u32 width, height;
+    bool useRandomSeed;
+    u32 seed;
+    float fillPercent;
+    u8 **map;
 
-} Wall;
+} Dungeon;
 
-extern Wall walls[MAX_WALLS];
+typedef struct CaveRoom {
 
-extern void initMap (bool **mapCells);
-extern Point getFreeSpot (bool **mapCells);
+    LList *tiles;
+    LList *edgeTiles;
+    LList *connectedRooms;
+
+    u16 roomSize;
+    bool isMainRoom;
+    bool isAccessibleFromMain;
+
+} CaveRoom;
+
+typedef struct Cave {
+
+    u32 width, heigth;
+    bool useRandomSeed;
+    u32 seed;
+    u32 fillPercent;
+    u8 **map;
+
+} Cave;
+
+typedef struct Map {
+
+    u32 width, heigth;
+    GameObject ***go_map;
+    Dungeon *dungeon;
+    Cave *cave;
+
+} Map;
+
+extern Dungeon *dungeon_generate (Map *map, u32 width, u32 heigth, u32 seed, float fillPercent);
+extern void dungeon_destroy (Dungeon *dungeon);
+
+extern Cave *cave_generate (Map *map, u32 width, u32 heigth, u32 seed, u32 fillPercent);
+extern void cave_destroy (Cave *cave);
+
+extern Map *map_create (u32 width, u32 height);
+extern void map_destroy (Map *map);
+
+extern Coord map_get_free_spot (Map *map);
 
 #endif
