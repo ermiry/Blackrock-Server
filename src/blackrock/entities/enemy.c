@@ -47,7 +47,7 @@ static u8 enemy_loot_load (u32 monId, EnemyLoot *loot) {
         strcpy (itemsTxt, c);
 
         // parse the string by commas
-        char **tokens = splitString (itemsTxt, ',');
+        char **tokens = c_string_split (itemsTxt, ',');
         if (tokens) {
             // count how many elements will be extracted
             u32 count = 0;

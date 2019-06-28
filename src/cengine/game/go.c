@@ -39,7 +39,7 @@ static bool game_objects_realloc (void) {
 static DoubleList *tags = NULL;
 
 void game_object_destroy_dummy (void *ptr);
-int game_object_comparator (void *one, void *two);
+int game_object_comparator (const void *one, const void *two);
 
 static GameObjectTag *game_object_tag_new (const char *name) {
 
@@ -235,7 +235,7 @@ GameObject *game_object_new (const char *name, const char *tag) {
 // this is used to avoid go destruction when destroying go's children
 void game_object_destroy_dummy (void *ptr) {}
 
-int game_object_comparator (void *one, void *two) {
+int game_object_comparator (const void *one, const void *two) {
 
     if (one && two) {
         GameObject *go_one = (GameObject *) one;
@@ -522,6 +522,6 @@ void game_object_user_component_remove (GameObject *go, const char *name) {
 
 int game_object_set_layer (GameObject *go, const char *layer) {
 
-    return layer_add_object (layer, go);
+    // return layer_add_object (layer, go);
 
 }

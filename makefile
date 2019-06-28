@@ -3,6 +3,7 @@ TARGET      := server
 # blackrock server specific
 
 PTHREAD := -l pthread
+MATH 	:= -lm
 SQLITE3 := -l sqlite3
 CMONGO 	:= `pkg-config --libs --cflags libmongoc-1.0`
 
@@ -26,7 +27,7 @@ DEPEXT      := d
 OBJEXT      := o
 
 CFLAGS      := -g $(DEFINES) $(RUN_MAKE)
-LIB         := $(PTHREAD) $(SQLITE3) $(CMONGO)
+LIB         := $(PTHREAD) $(MATH) $(SQLITE3) $(CMONGO)
 INC         := -I $(INCDIR) -I /usr/local/include $(LIB)
 INCDEP      := -I $(INCDIR)
 

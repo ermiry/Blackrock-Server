@@ -12,6 +12,7 @@
 #define DEFAULT_AUTH_TRIES              3
 
 struct _Cerver;
+struct _Connection;
 
 // the auth data stripped from the packet
 typedef struct AuthData {
@@ -52,7 +53,7 @@ extern void on_hold_packet_handler (void *ptr);
 // if the cerver requires authentication, we put the connection on hold
 // until it has a sucess authentication or it failed to, so it is dropped
 // returns 0 on success, 1 on error
-extern u8 on_hold_connection (struct _Cerver *cerver, Connection *connection);
+extern u8 on_hold_connection (struct _Cerver *cerver, struct _Connection *connection);
 
 // auxiliary structure passed to the user defined auth method
 typedef struct AuthPacket {
