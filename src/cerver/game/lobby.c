@@ -536,6 +536,23 @@ Lobby *lobby_create (Cerver *cerver, Client *client) {
 
 }
 
+// a client wants to join a game, so we create a new player and register him to the lobby
+// returns 0 on success, 1 on error
+u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
+
+    u8 retval = 1;
+
+    if (cerver && client && lobby) {
+        GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
+        if (game_cerver) {
+
+        }
+    }
+
+    return retval;
+
+}
+
 // FIXME: return a custom error code to handle by the server and client
 // called by a registered player that wants to join a lobby on progress
 // the lobby model gets updated with new values
@@ -602,148 +619,3 @@ u8 lobby_leave (GameCerver *game_cerver, Lobby *lobby, Player *player) {
 }
 
 u8 lobby_destroy (Cerver *server, Lobby *lobby) {}
-
-// FIXME: 19/april/2019 -- do we still need this?
-// a lobby should only be destroyed when there are no players left or if we teardown the server
-u8 destroyLobby (Cerver *server, Lobby *lobby) {
-
-    /* if (server && lobby) {
-        if (server->type == GAME_SERVER) {
-            GameCerver *gameData = (GameCerver *) server->serverData;
-            if (gameData) {
-                // the game function must have a check for this every loop!
-                if (lobby->inGame) lobby->inGame = false;
-                if (lobby->gameData) {
-                    if (lobby->deleteLobbyGameData) lobby->deleteLobbyGameData (lobby->gameData);
-                    else free (lobby->gameData);
-                }
-
-                if (lobby->players_nfds > 0) {
-                    // send the players the correct package so they can handle their own logic
-                    // expected player behaivor -> leave the lobby 
-                    size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
-                    void *destroyPacket = generatePacket (GAME_PACKET, packetSize);
-                    if (destroyPacket) {
-                        char *end = destroyPacket + sizeof (PacketHeader);
-                        RequestData *reqdata = (RequestData *) end;
-                        reqdata->type = LOBBY_DESTROY;
-
-                        broadcastToAllPlayers (lobby->players->root, server, destroyPacket, packetSize);
-                        free (destroyPacket);
-                    }
-
-                    else 
-                        cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, "Failed to create lobby destroy packet!");
-
-                    // this should stop the lobby poll thread
-                    lobby->isRunning = false;
-
-                    // remove the players from this structure and send them to the server's players
-                    Player *tempPlayer = NULL;
-                    while (lobby->players_nfds > 0) {
-                        tempPlayer = (Player *) lobby->players->root->id;
-                        if (tempPlayer) player_remove_from_lobby (server, lobby, tempPlayer);
-                    }
-                }
-
-                lobby->owner = NULL;
-                if (lobby->settings) free (lobby->settings);
-
-                // we are safe to clear the lobby structure
-                // first remove the lobby from the active ones, then send it to the inactive ones
-                ListElement *le = dlist_get_element (gameData->current_lobbys, lobby);
-                if (le) {
-                    void *temp = dlist_remove_element (gameData->current_lobbys, le);
-                    if (temp) pool_push (gameData->lobbyPool, temp);
-                }
-
-                else {
-                    cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, "A lobby wasn't found in the current lobby list.");
-                    deleteLobby (lobby);   // destroy the lobby forever
-                } 
-                
-                return 0;   // LOG_SUCCESS
-            }
-
-            else cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "No game data found in the server!");
-        }
-    }
-
-    return 1; */
-
-}
-
-// FIXME: client socket!!
-// FIXME: send packet!
-// TODO: add a timestamp when the player leaves
-
-// FIXME: finish refcatoring lobby_leaver with this!!
-u8 leaveLobby (Cerver *server, Lobby *lobby, Player *player) {
-
-    // make sure that the player is inside the lobby
-    // if (player_is_in_lobby (player, lobby)) {
-    //     // check to see if the player is the owner of the lobby
-    //     bool wasOwner = false;
-    //     // TODO: we should be checking for the player's id instead
-    //     // if (lobby->owner->client->clientSock == player->client->clientSock) 
-    //     //     wasOwner = true;
-
-    //     if (player_remove_from_lobby (server, lobby, player)) return 1;
-
-    //     // there are still players in the lobby
-    //     if (lobby->players_nfds > 0) {
-    //         if (lobby->inGame) {
-    //             // broadcast the other players that the player left
-    //             // we need to send an update lobby packet and the players handle the logic
-    //             sendLobbyPacket (server, lobby);
-
-    //             // if he was the owner -> set a new owner of the lobby -> first one in the array
-    //             if (wasOwner) {
-    //                 Player *temp = NULL;
-    //                 u8 i = 0;
-    //                 do {
-    //                     temp = getPlayerBySock (lobby->players->root, lobby->players_fds[i].fd);
-    //                     if (temp) {
-    //                         lobby->owner = temp;
-    //                         size_t packetSize = sizeof (PacketHeader) + sizeof (RequestData);
-    //                         void *packet = generatePacket (GAME_PACKET, packetSize);
-    //                         if (packet) {
-    //                             // server->protocol == IPPROTO_TCP ?
-    //                             // tcp_sendPacket (temp->client->clientSock, packet, packetSize, 0) :
-    //                             // udp_sendPacket (server, packet, packetSize, temp->client->address);
-    //                             free (packet);
-    //                         }
-    //                     }
-
-    //                     // we got a NULL player in the structures -> we don't expect this to happen!
-    //                     else {
-    //                         cerver_log_msg (stdout, LOG_WARNING, LOG_GAME, 
-    //                             "Got a NULL player when searching for new owner!");
-    //                         lobby->players_fds[i].fd = -1;
-    //                         lobby->compress_players = true; 
-    //                         i++;
-    //                     }
-    //                 } while (!temp);
-    //             }
-    //         }
-
-    //         // players are in the lobby screen -> owner destroyed the lobby
-    //         else destroyLobby (server, lobby);
-    //     }
-
-    //     // player that left was the last one 
-    //     // 21/11/2018 -- destroy lobby is in charge of correctly ending the game
-    //     else destroyLobby (server, lobby);
-        
-    //     return 0;   // the player left the lobby successfully
-    // }
-
-    // else {
-    //     #ifdef CERVER_DEBUG
-    //         cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "The player doesn't belong to the lobby!");
-    //     #endif
-    // }
-
-    // return 1;
-
-}
