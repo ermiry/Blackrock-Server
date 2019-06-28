@@ -104,7 +104,7 @@ u8 player_register_to_lobby (Lobby *lobby, Player *player) {
 
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stdout, LOG_SUCCESS, LOG_PLAYER, 
-                    c_string_create ("Registered a new player to lobby %s",
+                    c_string_create ("Registered a new player to lobby %s.",
                     lobby->id->str));
                 #endif
 
@@ -141,6 +141,22 @@ u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
                     connection = (Connection *) le->data;
                     lobby_poll_unregister_connection (lobby, player, connection);
                 }
+
+                lobby->current_players_fds--;
+
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_SUCCESS, LOG_PLAYER,
+                    c_string_create ("Unregistered a player from lobby %s.",
+                    lobby->id->str));
+                #endif
+
+                #ifdef CERVER_STATS
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+                    c_string_create ("Registered players to lobby %s: %i.",
+                    lobby->id->str, lobby->n_current_players));
+                #endif
+
+                retval = 0;
             }
         }
     }

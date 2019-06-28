@@ -125,6 +125,18 @@ extern Lobby *lobby_get (struct _GameCerver *game_cerver, Lobby *query);
 // starts the lobby's handler and/or update method in the cervers thpool
 extern u8 lobby_start (struct _Cerver *cerver, Lobby *lobby);
 
+// creates and inits a new lobby
+// creates a new user associated with the client and makes him the owner
+extern Lobby *lobby_create (struct _Cerver *cerver, struct _Client *client);
+
+// a client wants to join a game, so we create a new player and register him to the lobby
+// returns 0 on success, 1 on error
+extern u8 lobby_join (struct _Cerver *cerver, struct _Client *client, Lobby *lobby);
+
+// called when a player requests to leave the lobby
+// returns 0 on success, 1 on error
+extern u8 lobby_leave (struct _Cerver *cerver, Lobby *lobby, struct _Player *player);
+
 typedef struct CerverLobby {
 
     struct _Cerver *cerver;

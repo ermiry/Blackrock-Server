@@ -504,14 +504,20 @@ Lobby *lobby_create (Cerver *cerver, Client *client) {
                 if (owner) {
                     owner->client = client;
 
-                    // FIXME: do we want to the register the connection right away?? 
-                    // think in eduka
                     // register the owner to the lobby
+                    if (player_register_to_lobby (lobby, owner)) {
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_PLAYER, 
+                            c_string_create ("Failed to register the owner to the lobby %s.",
+                            lobby->id->str));
+
+                        lobby_delete (lobby);
+                        lobby = NULL;
+                    }
                 }
 
                 else {
                     #ifdef CERVER_DEBUG
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_PLAYER, 
                         c_string_create ("Failed to create the lobby owner for lobby %s.",
                         lobby->id->str));
                     #endif
@@ -545,7 +551,39 @@ u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
     if (cerver && client && lobby) {
         GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
         if (game_cerver) {
+            // check for lobby max players cap
+            if (lobby->current_players_fds < lobby->max_players) {
+                // make the client that make the request, a lobby member
+                Player *member = player_new ();
+                if (member) {
+                    member->client = client;
 
+                    // register the member to the lobby
+                    if (!player_register_to_lobby (lobby, member)) retval = 0;      // success
+                    else {
+                        cerver_log_msg (stderr, LOG_ERROR, LOG_PLAYER, 
+                            c_string_create ("Failed to register a new member to lobby %s",
+                            lobby->id->str));
+                    }
+                }
+
+                else {
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_PLAYER,
+                        c_string_create ("Failed to create a new lobby owner fro lobby %s",
+                        lobby->id->str));
+                    #endif
+                }
+            }
+
+            else {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stderr, LOG_WARNING, LOG_PLAYER, 
+                    c_string_create ("Lobby %s is already full!",
+                    lobby->id->str));
+                #endif
+            }
+            
         }
     }
 
@@ -553,69 +591,58 @@ u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
 
 }
 
-// FIXME: return a custom error code to handle by the server and client
-// called by a registered player that wants to join a lobby on progress
-// the lobby model gets updated with new values
-u8 lobby_join (GameCerver *game_cerver, Lobby *lobby, Player *player) {
-
-    /* u8 retval = 1;
-
-    if (lobby && player) {
-        // check if for whatever reason a player al ready inside the lobby wants to join...
-        if (!player_is_in_lobby (lobby, game_cerver->player_comparator, player)) {
-            // check if the lobby is al ready running the game
-            if (!lobby->in_game) {
-                // check lobby capacity
-                if (lobby->current_players < lobby->max_players) {
-                    // the player is clear to join the lobby
-                    if (!lobby_add_player (lobby, player)) {
-                        lobby->current_players += 1;
-                        retval = 0;
-                    }
-                }
-
-                else cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "A player tried to join a full lobby.");
-            }
-
-            else cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, "A player tried to join a lobby that is in game.");
-        }
-
-        else cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "A player tries to join the same lobby he is in.");
-    }
-
-    return retval; */
-
-}
-
 // called when a player requests to leave the lobby
-u8 lobby_leave (GameCerver *game_cerver, Lobby *lobby, Player *player) {
+// returns 0 on success, 1 on error
+u8 lobby_leave (Cerver *cerver, Lobby *lobby, Player *player) {
 
-    /* u8 retval = 1;
+    u8 retval = 1;
 
-    if (lobby && player) {
-        // first check if the player is inside the lobby
-        if (player_is_in_lobby (lobby, game_cerver->player_comparator, player)) {
-            // FIXME:
-            // now check if the player is the owner
-
+    if (cerver && lobby && player) {
+        // check that the player is in the lobby
+        Player *found = player_get_from_lobby (lobby, player);
+        if (found) {
             // remove the player from the lobby
-            if (!lobby_remove_player (lobby, player)) lobby->current_players -= 1;
+            player_unregister_from_lobby (lobby, player);
 
-            // check if there are still players in the lobby
-            if (lobby->current_players > 0) {
-                // TODO: what do we do to the players??
+            // check if there are players left inside the lobby
+            if (lobby->n_current_players <= 0) {
+                // destroy the lobby
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+                    c_string_create ("Destroying lobby %s -- it is empty.",
+                    lobby->id->str));
+                #endif
+                lobby_delete (lobby);
             }
 
-            else {  
-                // the player was the last one in, so we can safely delete the lobby
-                lobby_delete (lobby);
-                retval = 0;
-            } 
+            // check if the player was the owner
+            else if (!str_compare (lobby->owner->id, player->id)) {
+                // get a new owner
+                Player *new_owner = (Player *) (dlist_start (lobby->players))->data;
+                if (new_owner) {
+                    lobby->owner = new_owner;
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stdout, LOG_DEBUG, LOG_PLAYER,
+                        c_string_create ("Player %s is the new owner of lobby %s.",
+                        new_owner->id->str, lobby->id->str));
+                    #endif
+                }
+            }
+
+            player_delete (player);
+
+            retval = 0;
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_PLAYER,
+                c_string_create ("Player %s does not seem to be in lobby %s.",
+                player->id->str, lobby->id->str));
+            #endif
         }
     }
 
-    return retval; */
+    return retval;
 
 }
-
-u8 lobby_destroy (Cerver *server, Lobby *lobby) {}
