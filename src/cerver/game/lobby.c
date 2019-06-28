@@ -12,6 +12,7 @@
 #include "cerver/types/string.h"
 
 #include "cerver/cerver.h"
+#include "cerver/client.h"
 #include "cerver/handler.h"
 
 #include "cerver/game/game.h"
@@ -420,46 +421,48 @@ u8 lobby_start (Cerver *server, Lobby *lobby) {
 
 }
 
-// creates a new lobby and inits his values with an owner
-// pass a custom handler or NULL to use teh default one
-Lobby *lobby_create (Cerver *server, Player *owner, unsigned int max_players, Action handler) {
+// creates and inits a new lobby
+// creates a new user associated with the client and makes him the owner
+Lobby *lobby_create (Cerver *cerver, Client *client) {
 
     Lobby *lobby = NULL;
 
-    if (server && owner) {
-        GameCerver *game_cerver = (GameCerver *) server->cerver_data;
+    if (cerver && client) {
+        GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
         if (game_cerver) {
-            // we create a timestamp of the creation of the lobby
-            lobby = lobby_init (game_cerver, max_players, handler);
-            if (lobby) {
-                if (!lobby_add_player (lobby, owner)) {
-                    lobby->owner = owner;
-                    lobby->current_players = 1;
+            lobby = lobby_new ();
+            if (!lobby_init (game_cerver, lobby)) {
+                // make the client that make the request, the lobby owner
+                Player *owner = player_new ();
+                if (owner) {
+                    owner->client = client;
 
-                    // add the lobby the server active ones
-                    dlist_insert_after (game_cerver->current_lobbys, 
-                        dlist_end (game_cerver->current_lobbys), lobby);
+                    // FIXME: do we want to the register the connection right away?? 
+                    // think in eduka
+                    // register the owner to the lobby
                 }
 
                 else {
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to add owner to lobby!");
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
+                        c_string_create ("Failed to create the lobby owner for lobby %s.",
+                        lobby->id->str));
+                    #endif
+
                     lobby_delete (lobby);
                     lobby = NULL;
                 }
             }
 
             else {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to init new lobby!");
+                #ifdef
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, "Failed to init the new lobby!");
                 #endif
-            } 
-        }  
 
-        else {
-            cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
-                c_string_create ("Cerver %s doesn't have a reference to game data!", 
-                server->name->str));
-        } 
+                lobby_delete (lobby);
+                lobby = NULL;
+            }
+        }
     }
 
     return lobby;
