@@ -1,13 +1,11 @@
-#ifndef _BLACKROCK_MAP_H_
-#define _BLACKROCK_MAP_H_
+#ifndef _BLACK_MAP_H_
+#define _BLACK_MAP_H_
 
 #include <stdbool.h>
 
 #include "cerver/types/types.h"
 
 #include "cengine/game/go.h"
-
-#include "game/game.h"
 
 #include "cerver/collections/dllist.h"
 

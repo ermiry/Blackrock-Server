@@ -1,7 +1,7 @@
-#ifndef _BLACKROCK_ROOM_H_
-#define _BLACKROCK_ROOM_H_
+#ifndef _BLACK_ROOM_H_
+#define _BLACK_ROOM_H_
 
-#include "blackrock.h"
+#include "cerver/types/types.h"
 
 typedef struct Room {
 
