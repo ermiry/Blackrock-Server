@@ -2,12 +2,13 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "cengine/types/types.h"
-#include "cengine/types/string.h"
-#include "cengine/game/go.h"
-#include "cengine/animation.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
-#include "cengine/game/components/graphics.h"
+#include "cengine/game/go.h"
+// #include "cengine/animation.h"
+
+// #include "cengine/game/components/graphics.h"
 #include "cengine/game/components/transform.h"
 #include "cengine/game/components/collider.h"
 
@@ -197,7 +198,7 @@ static void game_object_init (GameObject *go, u32 id, const char *name, const ch
         go->user_components = dlist_init (user_component_delete, NULL);
 
         // all game objects are added to the dafult layer when they are initialized
-        layer_add_object ("default", go);
+        // layer_add_object ("default", go);
     }
 
 }
@@ -287,12 +288,12 @@ void game_object_destroy (GameObject *go) {
 
         if (go->children) free (go->children);
 
-        layer_remove_object (go->layer->name->str, go);
+        // layer_remove_object (go->layer->name->str, go);
 
         // individually destroy each component
         transform_destroy ((Transform *) go->components[TRANSFORM_COMP]);
-        graphics_destroy ((Graphics *) go->components[GRAPHICS_COMP]);
-        animator_destroy ((Animator *) go->components[ANIMATOR_COMP]);
+        // graphics_destroy ((Graphics *) go->components[GRAPHICS_COMP]);
+        // animator_destroy ((Animator *) go->components[ANIMATOR_COMP]);
 
         // destroy user defined components
         dlist_destroy (go->user_components);
@@ -309,8 +310,8 @@ static void game_object_delete (GameObject *go) {
 
         // individually destroy each component
         transform_destroy ((Transform *) go->components[TRANSFORM_COMP]);
-        graphics_destroy ((Graphics *) go->components[GRAPHICS_COMP]);
-        animator_destroy ((Animator *) go->components[ANIMATOR_COMP]);
+        // graphics_destroy ((Graphics *) go->components[GRAPHICS_COMP]);
+        // animator_destroy ((Animator *) go->components[ANIMATOR_COMP]);
 
         // destroy user defined components
         dlist_destroy (go->user_components);
@@ -366,10 +367,10 @@ void *game_object_add_component (GameObject *go, GameComponent component) {
                 retval = go->components[component] = transform_new (go->id); 
                 break;
             case GRAPHICS_COMP: 
-                retval = go->components[component] = graphics_new (go->id); 
+                // retval = go->components[component] = graphics_new (go->id); 
                 break;
             case ANIMATOR_COMP: 
-                retval = go->components[component] = animator_new (go->id); 
+                // retval = go->components[component] = animator_new (go->id); 
                 break;
 
             default: break;
@@ -394,10 +395,10 @@ void game_object_remove_component (GameObject *go, GameComponent component) {
                 transform_destroy (go->components[component]); 
                 break;
             case GRAPHICS_COMP: 
-                graphics_destroy (go->components[component]);
+                // graphics_destroy (go->components[component]);
                 break;
             case ANIMATOR_COMP: 
-                animator_destroy (go->components[component]);
+                // animator_destroy (go->components[component]);
                 break;
 
             default: break;

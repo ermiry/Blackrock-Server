@@ -1,18 +1,15 @@
 #ifndef _BLACK_ENEMY_H_
 #define _BLACK_ENEMY_H_
 
-#include "blackrock.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
-#include "cengine/animation.h"
-#include "cengine/collections/dlist.h"
+#include "cerver/collections/dllist.h"
 
-#include "game/game.h"
-#include "game/world.h"
-#include "game/entities/entity.h"
+#include "cengine/game/go.h"
 
-#include "collections/llist.h"
-
-#define N_MONSTER_TYPES       9
+#include "blackrock/world.h"
+#include "blackrock/entities/entity.h"
 
 typedef struct EnemyLoot {
 
@@ -46,13 +43,13 @@ typedef struct EnemyData {
     double probability;
     EnemyLoot loot;
 
-    SpriteSheet *sprite_sheet;
-    AnimData *anim_data;
+    // SpriteSheet *sprite_sheet;
+    // AnimData *anim_data;
 
 } EnemyData;
 
 // basic info of all of oour enemies
-extern LList *enemyData;
+extern DoubleList *enemyData;
 
 extern void enemy_data_delete_all (void);
 

@@ -1,8 +1,8 @@
 #ifndef _BLACK_ENTITY_H_
 #define _BLACK_ENTITY_H_
 
-#include "blackrock.h"
-#include "cengine/types/string.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
 typedef enum Genre {
 

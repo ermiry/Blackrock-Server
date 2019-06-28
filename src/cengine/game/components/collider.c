@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include "cengine/types/types.h"
+#include "cerver/types/types.h"
 #include "cengine/game/components/collider.h"
 
 BoxCollider *collider_box_new (u32 objectID) {

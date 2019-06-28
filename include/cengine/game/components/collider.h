@@ -1,9 +1,7 @@
 #ifndef _CENGINE_COMPONENTS_COLLIDER_H_
 #define _CENGINE_COMPONENTS_COLLIDER_H_
 
-#include <stdbool.h>
-
-#include "cengine/types/types.h"
+#include "cerver/types/types.h"
 
 typedef struct BoxCollider {
 

@@ -1,7 +1,6 @@
 #include <stdlib.h>
 
-#include "game/game.h"
-#include "game/world.h"
+#include "blackrock/world.h"
 
 World *world = NULL;
 

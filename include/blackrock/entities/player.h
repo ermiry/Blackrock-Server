@@ -1,11 +1,12 @@
 #ifndef _BLACK_PLAYER_H_
 #define _BLACK_PLAYER_H_
 
-#include "blackrock.h"
+#include "cerver/types/types.h"
+#include "cerver/collections/dllist.h"
 
-#include "game/entities/entity.h"
+#include "cengine/game/go.h"
 
-#include "cengine/collections/dlist.h"
+#include "blackrock/entities/entity.h"
 
 typedef enum PlayerState {
 
@@ -14,21 +15,6 @@ typedef enum PlayerState {
     PLAYER_ATTACK,
 
 } PlayerState;
-
-typedef struct PlayerProfile {
-
-    u32 profileID;
-    char *username;
-
-    u32 kills;
-    u32 gamesPlayed;
-    u32 highscore;
-
-    u32 n_friends;
-    char *friends;
-    // char *guild;
-
-} PlayerProfile;
 
 typedef struct Character {
 
@@ -48,13 +34,13 @@ typedef struct Player {
     u32 goID;
 
     PlayerState currState;
-    PlayerProfile *profile;
+    // PlayerProfile *profile;
     Character *character;
 
 } Player;
 
 extern void *player_comp_new (u32 goID);
-extern void player_comp_delete (void *ptr);_BLACK__
+extern void player_comp_delete (void *ptr);
 
 #define MAIN_HAND       0
 #define OFF_HAND        1
@@ -77,25 +63,5 @@ extern GameObject *player_init (void);
 extern void player_update (void *data);
 
 extern GameObject *main_player_go;
-
-/*** SERIALIZATION ***/
-
-// TODO:
-/* struct _SPlayerProfile {
-
-    u32 profileID;
-    char username[64];
-
-    u32 kills;
-    u32 gamesPlayed;
-    u32 highscore;
-
-    u32 n_friends;
-    // char friends[64];
-    // char guild[64];
-
-};
-
-typedef struct _SPlayerProfile SPlayerProfile; */
 
 #endif

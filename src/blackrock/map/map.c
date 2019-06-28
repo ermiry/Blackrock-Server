@@ -1,18 +1,20 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
 #include <time.h>
 
 #include "cerver/types/types.h"
 
+#include "cerver/collections/llist.h"
+#include "cerver/collections/dllist.h"
+
+#include "cerver/utils/utils.h"
+
 #include "cengine/game/go.h"
-#include "cengine/collections/dlist.h"
 
-#include "game/map/room.h"
-#include "game/map/map.h"
-
-#include "collections/llist.h"
-#include "utils/myUtils.h"
+#include "blackrock/map/room.h"
+#include "blackrock/map/map.h"
 
 static Segment *segment_new (void) {
 
@@ -388,7 +390,7 @@ static void dungeon_create (Dungeon *dungeon) {
 // FIXME: add the correct sprites with the resources manager
 static void dungeon_draw (Map *map, Dungeon *dungeon) {
 
-    GameObject *go = NULL;
+    /* GameObject *go = NULL;
     Transform *transform = NULL;
     Graphics *graphics  = NULL;
     for (u32 y = 0; y < dungeon->height; y++) {
@@ -415,7 +417,7 @@ static void dungeon_draw (Map *map, Dungeon *dungeon) {
             printf ("%i", dungeon->map[x][y]); 
         }
         printf ("\n");
-    }
+    } */
 
 }
 
@@ -595,7 +597,7 @@ static void cave_smooth_map (Cave *cave) {
 // create a game object for each cave
 static void cave_draw (Map *map, Cave *cave) {
 
-    GameObject *go = NULL;
+    /* GameObject *go = NULL;
     Transform *transform = NULL;
     Graphics *graphics = NULL;
     for (u32 y = 0; y < cave->heigth; y++) {
@@ -616,7 +618,7 @@ static void cave_draw (Map *map, Cave *cave) {
                 map->go_map[x][y] = go;
             }
         }
-    }
+    } */
 
 }
 

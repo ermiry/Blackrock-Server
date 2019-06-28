@@ -4,20 +4,17 @@
 
 #include <sqlite3.h>
 
-#include "blackrock.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
-#include "cengine/renderer.h"
-#include "cengine/animation.h"
-#include "cengine/collections/dlist.h"
+#include "cerver/collections/llist.h"
+#include "cerver/collections/dllist.h"
 
-#include "game/game.h"
-#include "game/entities/entity.h"
-#include "game/entities/enemy.h"
+#include "cerver/utils/utils.h"
+#include "cerver/utils/log.h"
 
-#include "collections/llist.h"
-
-#include "utils/log.h"
-#include "utils/myUtils.h"
+#include "blackrock/entities/entity.h"
+#include "blackrock/entities/enemy.h"
 
 const char *enemiesDbPath = "enemies.db";
 static sqlite3 *enemiesDb;
@@ -98,11 +95,11 @@ static int enemy_data_load_all (void *data, int argc, char **argv, char **azColN
     edata->name = str_new (argv[1]);
     edata->probability = atof (argv[2]);
 
-    edata->anim_data = animation_file_parse (argv[3]);
-    edata->sprite_sheet = sprite_sheet_load (argv[4], main_renderer);
-    sprite_sheet_set_sprite_size (edata->sprite_sheet, edata->anim_data->w, edata->anim_data->h);
-    sprite_sheet_set_scale_factor (edata->sprite_sheet, edata->anim_data->scale);
-    sprite_sheet_crop (edata->sprite_sheet);
+    // edata->anim_data = animation_file_parse (argv[3]);
+    // edata->sprite_sheet = sprite_sheet_load (argv[4], main_renderer);
+    // sprite_sheet_set_sprite_size (edata->sprite_sheet, edata->anim_data->w, edata->anim_data->h);
+    // sprite_sheet_set_scale_factor (edata->sprite_sheet, edata->anim_data->scale);
+    // sprite_sheet_crop (edata->sprite_sheet);
 
     if (enemy_loot_load (edata->dbId, &edata->loot)) {
         #ifdef DEV
@@ -123,8 +120,8 @@ static void enemy_data_delete (void *data) {
         str_delete (edata->name);
         if (edata->loot.drops) free (edata->loot.drops);
 
-        anim_data_delete (edata->anim_data);
-        sprite_sheet_destroy (edata->sprite_sheet);
+        // anim_data_delete (edata->anim_data);
+        // sprite_sheet_destroy (edata->sprite_sheet);
 
         free (edata);
     }
@@ -137,10 +134,11 @@ void enemy_data_delete_all (void) {
 
 }
 
+// FIXME:
 u8 enemies_connect_db (void) {
 
     // connect to the enemies db
-    if (sqlite3_open (createString ("%s%s", DATA_PATH, enemiesDbPath), &enemiesDb) != SQLITE_OK) {
+    /* if (sqlite3_open (createString ("%s%s", DATA_PATH, enemiesDbPath), &enemiesDb) != SQLITE_OK) {
         #ifdef DEV
         logMsg (stderr, ERROR, GAME, "Problems connecting to enemies db!");
         logMsg (stderr, ERROR, GAME, createString ("%s", sqlite3_errmsg (enemiesDb)));
@@ -177,7 +175,7 @@ u8 enemies_connect_db (void) {
             #endif
             return 0;
         }
-    }
+    } */
 
 }
 
@@ -227,12 +225,13 @@ void enemy_destroy_comp (void *ptr) {
 
 #pragma region Enemy
 
+// FIXME:
 void enemy_update (void *data) {
 
     GameObject *enemy_go = (GameObject *) data;
     Transform *trans = (Transform *) game_object_get_component (enemy_go, TRANSFORM_COMP);
-    Graphics *graphics = (Graphics *) game_object_get_component (enemy_go, GRAPHICS_COMP);
-    Animator *anim = (Animator *) game_object_get_component (enemy_go, ANIMATOR_COMP);
+    // Graphics *graphics = (Graphics *) game_object_get_component (enemy_go, GRAPHICS_COMP);
+    // Animator *anim = (Animator *) game_object_get_component (enemy_go, ANIMATOR_COMP);
     Enemy *enemy = (Enemy *) game_object_get_user_component (enemy_go, "enemy");
 
     enemy->curr_state = ENEMY_IDLE;
@@ -241,7 +240,7 @@ void enemy_update (void *data) {
     Vector2D new_vel = { 0, 0 };
 
     // handle enemy logic based on state
-    switch (enemy->curr_state) {
+    /* switch (enemy->curr_state) {
         case ENEMY_IDLE: 
             animator_set_current_animation (anim, animation_get_by_name (enemy->animations, "idle")); 
             break;
@@ -254,7 +253,7 @@ void enemy_update (void *data) {
             break;
 
         default: break;
-    }   
+    } */
 
 }
 
@@ -266,19 +265,19 @@ static void enemy_add_transform (GameObject *enemy_go) {
 
 static void enemy_add_graphics (GameObject *enemy_go, u32 dbID) {
 
-    if (enemy_go) {
+    /* if (enemy_go) {
         Graphics *graphics = game_object_add_component (enemy_go, GRAPHICS_COMP);
 
         // get common graphics data
         EnemyData *edata = enemy_data_get_by_id (dbID);
         graphics_ref_sprite_sheet (graphics, edata->sprite_sheet);
-    }
+    } */
 
 }
 
 static void enemy_add_animator (GameObject *enemy_go, u32 dbID) {
 
-    if (enemy_go) {
+    /* if (enemy_go) {
         Animator *anim = game_object_add_component (enemy_go, ANIMATOR_COMP);
 
         // get common animator data
@@ -287,7 +286,7 @@ static void enemy_add_animator (GameObject *enemy_go, u32 dbID) {
 
         animator_set_current_animation (anim, animation_get_by_name (enemy->animations, "idle"));
         animator_set_default_animation (anim, animation_get_by_name (enemy->animations, "idle"));
-    }
+    } */
 
 }
 
@@ -340,8 +339,8 @@ GameObject *enemy_create (u32 dbID) {
     if (enemy_go) {
         enemy_add_enemy_comp (enemy_go, dbID);
 
-        enemy_add_transform (enemy_go);
-        enemy_add_graphics (enemy_go, dbID);
+        // enemy_add_transform (enemy_go);
+        // enemy_add_graphics (enemy_go, dbID);
         // FIXME:
         // enemy_add_animator (enemy_go, dbID);
     }

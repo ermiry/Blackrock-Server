@@ -59,7 +59,7 @@ extern Player *player_get_from_lobby (struct _Lobby *lobby, Player *query);
 extern ListElement *player_get_le_from_lobby (struct _Lobby *lobby, Player *player);
 
 // broadcasts a packet to all the players in the lobby
-extern void player_broadcast_to_all (const struct _Lobby *lobby, Packet *packet, 
+extern void player_broadcast_to_all (const struct _Lobby *lobby, struct _Packet *packet, 
     Protocol protocol, int flags);
 
 #endif

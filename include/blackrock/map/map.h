@@ -7,7 +7,7 @@
 
 #include "cengine/game/go.h"
 
-#include "cerver/collections/dllist.h"
+#include "cerver/collections/llist.h"
 
 typedef struct Coord {
 

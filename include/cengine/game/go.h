@@ -5,22 +5,28 @@
 
 #define COMP_COUNT      4
 
-#include "cengine/types/types.h"
-#include "cengine/types/string.h"
+#include "cerver/types/types.h"
+#include "cerver/types/string.h"
 
-#include "cengine/renderer.h"
-
-#include "cengine/game/components/graphics.h"
+// #include "cengine/game/components/graphics.h"
 #include "cengine/game/components/transform.h"
 
-#include "cengine/collections/dlist.h"
+#include "cerver/collections/dllist.h"
+
+typedef struct Layer {
+
+    String *name;
+    u8 pos;
+    DoubleList *gos;
+
+} Layer;
 
 typedef struct GameObject {
     
     i32 id;
 
     char *name;
-    char *tag;      // FIXME: change this when adding to tags!!
+    char *tag;
 
     Layer *layer;
 

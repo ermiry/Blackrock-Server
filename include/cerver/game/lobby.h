@@ -20,6 +20,7 @@
 
 struct _Cerver;
 struct _Connection;
+struct _GameCerver;
 struct _Player;
 
 struct _GameSettings {
@@ -122,7 +123,7 @@ extern Lobby *lobby_get (struct _GameCerver *game_cerver, Lobby *query);
 /*** Public lobby functions ***/
 
 // starts the lobby's handler and/or update method in the cervers thpool
-extern u8 lobby_start (Cerver *cerver, Lobby *lobby);
+extern u8 lobby_start (struct _Cerver *cerver, Lobby *lobby);
 
 typedef struct CerverLobby {
 

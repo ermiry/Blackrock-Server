@@ -1,18 +1,10 @@
 #include <stdlib.h>
 
-#include "blackrock.h"
+#include "cerver/types/types.h"
 
-#include "cengine/input.h"
-#include "cengine/sprites.h"
-#include "cengine/animation.h"
 #include "cengine/game/go.h"
 
-#include "game/game.h"
-#include "game/entities/player.h"
-
-#include "cengine/collections/dlist.h"
-
-#include "utils/myUtils.h"
+#include "blackrock/entities/player.h"
 
 // TODO: do we still need this reference? how do we handle multiplayer?
 static Player *mainPlayer = NULL;
@@ -85,7 +77,7 @@ static void character_destroy (Character *character) {
             free (character->equipment);
         }
 
-        dlist_destroy (character->animations);
+        // dlist_destroy (character->animations);
 
         free (character);
     }
@@ -97,7 +89,7 @@ static void character_destroy (Character *character) {
 // FIXME:
 #pragma region PLAYER PROFILE
 
-PlayerProfile *main_player_profile = NULL;
+// PlayerProfile *main_player_profile = NULL;
 
 // FIXME:
 // TODO: how do we request the friend list from the server?
@@ -141,7 +133,7 @@ void *player_comp_new (u32 goID) {
         new_player->goID = goID;
 
         new_player->currState = PLAYER_IDLE;
-        new_player->profile = NULL;
+        // new_player->profile = NULL;
         new_player->character = character_new ();
     }
 
@@ -163,7 +155,7 @@ void player_comp_delete (void *ptr) {
 
 GameObject *player_init (void) {
 
-    GameObject *new_player_go = game_object_new ("player", "player");
+    /* GameObject *new_player_go = game_object_new ("player", "player");
     if (new_player_go) {
         Transform *trans = (Transform *) game_object_add_component (new_player_go, TRANSFORM_COMP);
         Graphics *graphics = (Graphics *) game_object_add_component (new_player_go, GRAPHICS_COMP);
@@ -191,7 +183,7 @@ GameObject *player_init (void) {
         animator_set_default_animation (anim, animation_get_by_name (mainPlayer->character->animations, "idle"));
     }
 
-    return new_player_go;
+    return new_player_go; */
 
 }
 
@@ -199,7 +191,7 @@ GameObject *player_init (void) {
 // updates the main player
 void player_update (void *data) {
 
-    GameObject *player_go = (GameObject *) data;
+    /* GameObject *player_go = (GameObject *) data;
     Transform *trans = (Transform *) game_object_get_component (player_go, TRANSFORM_COMP);
     Graphics *graphics = (Graphics *) game_object_get_component (player_go, GRAPHICS_COMP);
     Animator *anim = (Animator *) game_object_get_component (player_go, ANIMATOR_COMP);
@@ -245,7 +237,7 @@ void player_update (void *data) {
             break;
 
         default: break;
-    }
+    } */
 
 }
 
