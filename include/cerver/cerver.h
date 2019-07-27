@@ -50,7 +50,7 @@ typedef struct CerverInfo {
     String *welcome_msg;                            // this msg is sent to the client when it first connects
     struct _Packet *cerver_info_packet;             // useful info that we can send to clients
 
-    struct tm *time_started;                        // the actual time the cerver was started
+    time_t time_started;                            // the actual time the cerver was started
     u64 uptime;                                     // the seconds the cerver has been up
 
 } CerverInfo;

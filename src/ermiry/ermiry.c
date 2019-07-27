@@ -14,32 +14,34 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-const char *uri_string = "mongodb://localhost:27017";
-const char *db_name = "ermiry";
-
 // init ermiry data & processes
 int ermiry_init (void) {
 
     int errors = 0;
 
+    // set up mongo configuration
+    mongo_set_app_name ("black-cerver");
+    mongo_set_uri ("mongodb://localhost:27017");
+    mongo_set_db_name ("ermiry");
+
     // TODO: do we need to pass the username and the db?
     if (!mongo_connect ()) {
         // open handle to user collection
-        users_collection = mongoc_client_get_collection (mongo_client, db_name, USERS_COLL_NAME);
+        users_collection = mongo_get_collection (USERS_COLL_NAME);
         if (!users_collection) {
             cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to get handle to users collection!");
             errors = 1;
         }
         
         // open handle to blackrock profile collection
-        black_profile_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_COLL_NAME);
+        black_profile_collection = mongo_get_collection (BLACK_COLL_NAME);
         if (!black_profile_collection) {
             cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to get handle to black collection!");
             errors = 1;
         }
 
         // open handle to black guild collection
-        black_guild_collection = mongoc_client_get_collection (mongo_client, db_name, BLACK_GUILD_COLL_NAME);
+        black_guild_collection = mongo_get_collection (BLACK_GUILD_COLL_NAME);
         if (!black_guild_collection) {
             cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, "Failed to get handle to black guild collection!");
             errors = 1;
@@ -64,6 +66,10 @@ int ermiry_end (void) {
     if (black_guild_collection) mongoc_collection_destroy (black_guild_collection);
 
     mongo_disconnect ();
+
+    #ifdef ERMIRY_DEBUG
+    cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, "Ermiry has ended.");
+    #endif
 
 }
 

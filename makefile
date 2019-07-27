@@ -1,20 +1,14 @@
-TARGET      := server
+TARGET      := black_cerver
 
 # blackrock server specific
 
-PTHREAD := -l pthread
-MATH 	:= -lm
-SQLITE3 := -l sqlite3
-CMONGO 	:= `pkg-config --libs --cflags libmongoc-1.0`
+PTHREAD 	:= -l pthread
+MATH 		:= -lm
+SQLITE3 	:= -l sqlite3
+CMONGO 		:= `pkg-config --libs --cflags libmongoc-1.0`
 
 # print additional information
-DEFINES = -D CERVER_DEBUG -D THPOOL_DEBUG -D CERVER_STATS -D BLACK_DEBUG -D ERMIRY_DEBUG
-
-# run from parent folder
-RUN_BIN = -D RUN_FROM_BIN
-
-# run from bin folder
-RUN_MAKE = -D RUN_FROM_MAKE
+DEFINES 	:= -D CERVER_DEBUG -D THPOOL_DEBUG -D CERVER_STATS -D BLACK_DEBUG -D ERMIRY_DEBUG
 
 CC          := gcc
 
@@ -26,7 +20,7 @@ SRCEXT      := c
 DEPEXT      := d
 OBJEXT      := o
 
-CFLAGS      := -g $(DEFINES) $(RUN_MAKE)
+CFLAGS      := -g $(DEFINES)
 LIB         := $(PTHREAD) $(MATH) $(SQLITE3) $(CMONGO)
 INC         := -I $(INCDIR) -I /usr/local/include $(LIB)
 INCDEP      := -I $(INCDIR)

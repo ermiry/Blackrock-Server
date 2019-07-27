@@ -1,28 +1,31 @@
-#ifndef __MONGO_H__
-#define __MONGO_H__
+#ifndef _MONGO_H_
+#define _MONGO_H_
 
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
-// FIXME: we need to have more flexibility here!!
-// extern const char *uri_string;
-// extern const char *db_name;
+extern void mongo_set_app_name (const char *name);
 
-#pragma region MONGO
+extern void mongo_set_uri (const char *uri);
 
+extern void mongo_set_db_name (const char *name);
+
+// ping the db to test for connection
+// returns 0 on success, 1 on error
+extern int mongo_ping_db (void);
+
+// connect to the mongo db with db name
 extern int mongo_connect (void);
+
+// disconnects from the db
 extern void mongo_disconnect (void);
 
-extern mongoc_uri_t *mongo_uri;
-extern mongoc_client_t *mongo_client;
-extern mongoc_database_t *mongo_database;
+extern mongoc_collection_t *mongo_get_collection (const char *collection_name);
 
-#pragma endregion
-
-#pragma region CRUD OPERATIONS
+#pragma region CRUD
 
 // counts the docs in a collection by a matching query
-extern uint64_t mongo_count_docs (mongoc_collection_t *collection, bson_t *query);
+extern int64_t mongo_count_docs (mongoc_collection_t *collection, bson_t *query);
 
 // inserts a document into a collection
 extern int mongo_insert_document (mongoc_collection_t *collection, bson_t *doc);

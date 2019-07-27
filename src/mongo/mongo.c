@@ -4,62 +4,121 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
+#include "cerver/types/string.h"
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
-// FIXME: we need to have more flexibility here!!
-mongoc_uri_t *mongo_uri;
-mongoc_client_t *mongo_client;
-mongoc_database_t *mongo_database;
+static mongoc_uri_t *uri = NULL;
+static mongoc_client_t *client = NULL;
+static mongoc_database_t *database = NULL;
 
-#define APP_NAME        "blackrock-server"
+static String *app_name = NULL;
+static String *uri_string = NULL;
+static String *db_name = NULL;
 
-const char *uri_string;
+void mongo_set_app_name (const char *name) {
 
-#pragma region MONGO
-
-int mongo_connect (void) {
-
-    bson_error_t error;
-
-    mongoc_init ();     // init mongo internals
-
-    // safely create mongo uri object
-    mongo_uri = mongoc_uri_new_with_error (uri_string, &error);
-    if (!mongo_uri) {
-        fprintf (stderr,
-                "failed to parse URI: %s\n"
-                "error message:       %s\n",
-                uri_string,
-                error.message);
-        return 1;
-    }
-
-    // create a new client instance
-    mongo_client = mongoc_client_new_from_uri (mongo_uri);
-    if (!mongo_client) {
-        fprintf (stderr, "Failed to create a new client instance!\n");
-        return 1;
-    }
-
-    // register the app name -> for logging info
-    mongoc_client_set_appname (mongo_client, APP_NAME);
-
-    return 0;       // LOG_SUCCESS
+    if (name) app_name = str_new (name);
 
 }
 
+void mongo_set_uri (const char *uri) {
+
+    if (uri) uri_string = str_new (uri);
+
+}
+
+void mongo_set_db_name (const char *name) {
+
+    if (name) db_name = str_new (name);
+
+}
+
+// ping the db to test for connection
+// returns 0 on success, 1 on error
+int mongo_ping_db (void) {
+
+    bson_t *command, reply, *insert;
+    bson_error_t error;
+
+    command = BCON_NEW ("ping", BCON_INT32 (1));
+    int retval = mongoc_client_command_simple (
+        client, "admin", command, NULL, &reply, &error);
+
+    if (!retval) {
+        fprintf (stderr, "%s\n", error.message);
+        return 1;
+    }
+
+    char *str = bson_as_json (&reply, NULL);
+    if (str) {
+        fprintf (stdout, "%s", str);
+        free (str);
+    }
+
+    return 0;
+
+}
+
+// connect to the mongo db with db name
+int mongo_connect (void) {
+
+    int retval = 1;
+
+    if (uri_string && app_name) {
+        bson_error_t error;
+
+        mongoc_init ();     // init mongo internals
+
+        // safely create mongo uri object
+        uri = mongoc_uri_new_with_error (uri_string->str, &error);
+        if (uri) {
+            // create a new client instance
+            client = mongoc_client_new_from_uri (uri);
+            if (client) {
+                // register the app name -> for logging info
+                mongoc_client_set_appname (client, app_name->str);
+                retval = 0;
+            }
+
+            else {
+                fprintf (stderr, "Failed to create a new client instance!\n");
+            }
+        }
+
+        else {
+            fprintf (stderr,
+                    "failed to parse URI: %s\n"
+                    "error message:       %s\n",
+                    uri_string->str,
+                    error.message);
+        }
+    }
+
+    else {
+        fprintf (stderr, "Either the uri string or the app name is not set!\n");
+    }
+
+    return retval;
+
+}
+
+// disconnects from the db
 void mongo_disconnect (void) {
 
-    mongoc_database_destroy (mongo_database);
+    // mongoc_database_destroy (database);
 
-    mongoc_uri_destroy (mongo_uri);
-    mongoc_client_destroy (mongo_client);
+    mongoc_uri_destroy (uri);
+    mongoc_client_destroy (client);
     mongoc_cleanup ();
 
 }
 
-#pragma endregion
+mongoc_collection_t *mongo_get_collection (const char *collection_name) {
+
+    return (collection_name ? mongoc_client_get_collection (client, db_name->str, collection_name) : NULL);
+
+}
 
 #pragma region CRUD
 

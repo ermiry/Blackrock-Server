@@ -45,7 +45,6 @@ static CerverInfo *cerver_info_new (void) {
         cerver_info->name = NULL;
         cerver_info->welcome_msg = NULL;
         cerver_info->cerver_info_packet = NULL;
-        cerver_info->time_started = NULL;
     }
 
     return cerver_info;
@@ -649,7 +648,7 @@ static u8 cerver_start_tcp (Cerver *cerver) {
         if (!cerver->blocking) {
             if (!listen (cerver->sock, cerver->connection_queue)) {
                 // register the cerver start time
-                // TODO:
+                time (&cerver->info->time_started);
 
                 // set up the initial listening socket     
                 cerver->fds[cerver->current_n_fds].fd = cerver->sock;
