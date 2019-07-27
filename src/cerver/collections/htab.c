@@ -48,17 +48,20 @@ static HtabNode *htab_node_new (void) {
         node->val_size = 0;
     }
 
+    return node;
+
 }
 
 static void htab_node_delete (HtabNode *node, bool allow_copy, void (*destroy)(void *data)) {
 
     if (node) {
-        if (allow_copy) {
+        // if (allow_copy) {
             if (node->val) {
                 if (destroy) destroy (node->val);
-                else free (node->val);
+                // else free (node->val);
+                else if (allow_copy) free (node->val);
             }
-        }
+        // }
 
         if (node->key) free (node->key);
 
@@ -89,6 +92,8 @@ static Htab *htab_new (unsigned int size) {
         htab->kcopy_f = NULL;
         htab->vcopy_f = NULL;
 
+        htab->size = HTAB_INIT_SIZE;
+
         htab->table = (HtabNode **) calloc (htab->size, sizeof (HtabNode *));
         if (htab->table) {
             for (size_t i = 0; i < htab->size; ++i) htab->table[i] = NULL;
@@ -100,6 +105,8 @@ static Htab *htab_new (unsigned int size) {
         }
     }
 
+    return htab;
+
 }
 
 // creates a new htab
@@ -109,7 +116,7 @@ static Htab *htab_new (unsigned int size) {
 // kcopy_f --> ptr to a custom function to copy keys into the htab (generate a new copy)
 // allow_copy --> select if you want to create a new copy of the values
 // vcopy_f --> ptr to a custom function to copy values into the htab (generate a new copy)
-// destroy --> custom function to destroy copied values
+// destroy --> custom function to destroy copied values or delete values when calling hatb_destroy
 Htab *htab_init (unsigned int size, Hash hash_f, Compare compare_f, Copy kcopy_f, 
     bool allow_copy, Copy vcopy_f, void (*destroy)(void *data)) {
 
@@ -331,12 +338,13 @@ void htab_destroy (Htab *ht) {
                 if (ht->table[i]) {
                     node = ht->table[i];
                     while (node) {
-                        if (ht->allow_copy) {
+                        // if (ht->allow_copy) {
                             if (node->val) {
                                 if (ht->destroy) ht->destroy (node->val);
-                                else free (node->val);
+                                // else free (node->val);
+                                else if (ht->allow_copy) free (node->val);
                             }
-                        }
+                        // }
 
                         if (node->key) free (node->key);
 

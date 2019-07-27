@@ -13,8 +13,6 @@
 #include "cerver/collections/dllist.h"
 #include "cerver/collections/htab.h"
 
-#include "cerver/utils/objectPool.h"
-
 #define LOBBY_DEFAULT_POLL_TIMEOUT			2000
 #define DEFAULT_MAX_LOBBY_PLAYERS			4
 

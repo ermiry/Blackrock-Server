@@ -14,9 +14,6 @@
 #include "cerver/collections/dllist.h"
 #include "cerver/collections/avl.h"
 
-#include "cerver/utils/config.h"
-#include "cerver/utils/objectPool.h"
-
 struct _Cerver;
 struct _GameServerData;
 struct _Client;

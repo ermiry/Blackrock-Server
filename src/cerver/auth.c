@@ -100,7 +100,7 @@ static void auth_send_success_packet (const Cerver *cerver, const i32 sock_fd) {
         Packet *success_packet = packet_generate_request (AUTH_PACKET, SUCCESS_AUTH, NULL, 0);
         if (success_packet) {
             packet_set_network_values (success_packet, sock_fd, cerver->protocol);
-            packet_send (success_packet, 0);
+            packet_send (success_packet, 0, NULL);
             packet_delete (success_packet);
         }
 
@@ -108,7 +108,7 @@ static void auth_send_success_packet (const Cerver *cerver, const i32 sock_fd) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                 c_string_create ("Failed to create success auth packet in cerver %s",
-                cerver->name->str));
+                cerver->info->name->str));
             #endif
         }
     }
@@ -124,13 +124,15 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
     if (packet) {
         Connection *connection = on_hold_connection_remove (packet->cerver, packet->sock_fd);
         if (connection) {
-            Client *c = client_new ();
+            Client *c = client_create ();
             if (c) {
-                if (!client_connection_register (packet->cerver, c, connection)) {
+                if (!client_connection_register_to_client (c, connection)) {
+                    client_connection_register_to_cerver (packet->cerver, c, connection);
+
                     if (packet->cerver->use_sessions) {
                         // FIXME: generate the new session id - token
                         SessionData *session_data = session_data_new (packet, auth_data, c);
-                        String *session_id = packet->cerver->session_id_generator (session_data);
+                        String *session_id = (String *) packet->cerver->session_id_generator (session_data);
                         session_data_delete (session_data);
                     }
 
@@ -151,13 +153,13 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
                         #ifdef CERVER_DEBUG
                         cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
                             c_string_create ("Failed to register new lcient to cerver %s",
-                            packet->cerver->name->str));
+                            packet->cerver->info->name->str));
                         #endif
 
                         Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
                         if (error_packet) {
                             packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                            packet_send (error_packet, 0);
+                            packet_send (error_packet, 0, NULL);
                             packet_delete (error_packet);
                         }
                         
@@ -171,13 +173,13 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
                         c_string_create ("Failed to register connection to client in cerver %s",
-                        packet->cerver->name->str));
+                        packet->cerver->info->name->str));
                     #endif
 
                     Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
                     if (error_packet) {
                         packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                        packet_send (error_packet, 0);
+                        packet_send (error_packet, 0, NULL);
                         packet_delete (error_packet);
                     }
                     
@@ -191,13 +193,13 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                     c_string_create ("Failed to allocate a new client in cerver %s", 
-                    packet->cerver->name->str));
+                    packet->cerver->info->name->str));
                 #endif
                 
                 Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
                 if (error_packet) {
                     packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                    packet_send (error_packet, 0);
+                    packet_send (error_packet, 0, NULL);
                     packet_delete (error_packet);
                 }
 
@@ -211,13 +213,13 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                 c_string_create ("Failed to remove connection from cerver's %s on hold connections", 
-                packet->cerver->name->str));
+                packet->cerver->info->name->str));
             #endif
             
             Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
             if (error_packet) {
                 packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                packet_send (error_packet, 0);
+                packet_send (error_packet, 0, NULL);
                 packet_delete (error_packet);
             }
 
@@ -252,7 +254,7 @@ static void auth_failed (const Packet *packet) {
         Packet *error_packet = error_packet_generate (ERR_FAILED_AUTH, "Failed to authenticate!");
         if (error_packet) {
             packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-            packet_send (error_packet, 0);
+            packet_send (error_packet, 0, NULL);
             packet_delete (error_packet);
         }
 
@@ -282,7 +284,7 @@ static void auth_failed (const Packet *packet) {
                 Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Failed to authenticate!");
                 if (error_packet) {
                     packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                    packet_send (error_packet, 0);
+                    packet_send (error_packet, 0, NULL);
                     packet_delete (error_packet);
                 }
                 
@@ -295,14 +297,14 @@ static void auth_failed (const Packet *packet) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
                 c_string_create ("Failed to create connection query in cerver %s.",
-                packet->cerver->name));
+                packet->cerver->info->name->str));
             #endif
 
             // send a cerver error packet back to the client
             Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Failed to authenticate!");
             if (error_packet) {
                 packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                packet_send (error_packet, 0);
+                packet_send (error_packet, 0, NULL);
                 packet_delete (error_packet);
             }
 
@@ -327,15 +329,16 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT, 
                 c_string_create ("Found a client with session id %s in cerver %s.",
-                auth_data->token->str, packet->cerver->name->str));
+                auth_data->token->str, packet->cerver->info->name->str));
             #endif
 
             // get the connection
             // FIXME: make sure to remove the connection from the on hold
             Connection *connection = on_hold_connection_get_by_sock (packet->cerver, packet->sock_fd);
             if (connection) {
-                if (!client_connection_register (packet->cerver, client, connection)) {
-                    // FIXME: add the connection sock fd to the cerver poll fds
+                if (!client_connection_register_to_client (client, connection)) {
+                    // add the connection sock fd to the cerver poll fds
+                    client_connection_register_to_cerver (packet->cerver, client, connection);
 
                     // remove the connection from the on hold structures
                     on_hold_poll_remove_sock_fd (packet->cerver, packet->sock_fd);
@@ -351,7 +354,7 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
                 Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Failed to authenticate!");
                 if (error_packet) {
                     packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                    packet_send (error_packet, 0);
+                    packet_send (error_packet, 0, NULL);
                     packet_delete (error_packet);
                 }
                 
@@ -375,7 +378,7 @@ static void auth_with_defined_method (Packet *packet, AuthData *auth_data) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
                 c_string_create ("Client authenticated successfully to cerver %s",
-                packet->cerver->name->str));
+                packet->cerver->info->name->str));
             #endif
 
             auth_success (packet, auth_data);
@@ -385,7 +388,7 @@ static void auth_with_defined_method (Packet *packet, AuthData *auth_data) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_DEBUG, LOG_CLIENT, 
                 c_string_create ("Client failed to authenticate to cerver %s",
-                packet->cerver->name->str));
+                packet->cerver->info->name->str));
             #endif
 
             auth_failed (packet);
@@ -402,7 +405,7 @@ static AuthData *auth_strip_auth_data (Packet *packet) {
     if (packet) {
         // check we have a big enough packet
         if (packet->packet_size > sizeof (PacketHeader)) {
-            char *end = packet->packet;
+            char *end = (char *) packet->packet;
 
             // check if we have a token
             if (packet->packet_size == (sizeof (PacketHeader) + sizeof (SToken))) {
@@ -456,7 +459,7 @@ static void auth_try (Packet *packet) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                     c_string_create ("Failed to get auth data from packet in cerver %s",
-                    packet->cerver->name->str));
+                    packet->cerver->info->name->str));
                 #endif
 
                 auth_failed (packet);
@@ -467,7 +470,7 @@ static void auth_try (Packet *packet) {
         else {
             cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
                 c_string_create ("Cerver %s does not have an authenticate method!",
-                packet->cerver->name->str));
+                packet->cerver->info->name->str));
 
             // close the on hold connection assocaited with sock fd 
             // and remove it from the cerver
@@ -482,7 +485,7 @@ static void cerver_auth_packet_handler (Packet *packet) {
 
     if (packet) {
         if (packet->packet_size >= (sizeof (PacketHeader) + sizeof (RequestData))) {
-            char *end = packet->packet;
+            char *end = (char *) packet->packet;
             RequestData *req = (RequestData *) (end += sizeof (PacketHeader));
 
             switch (req->type) {
@@ -521,7 +524,7 @@ void on_hold_packet_handler (void *ptr) {
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
                         c_string_create ("Got an on hold packet of unknown type in cerver %s.", 
-                        packet->cerver->name->str));
+                        packet->cerver->info->name->str));
                     #endif
                     break;
             }
@@ -540,7 +543,7 @@ static u8 cerver_realloc_on_hold_poll_fds (Cerver *cerver) {
 
     if (cerver) {
         cerver->max_on_hold_connections = cerver->max_on_hold_connections * 2;
-        cerver->hold_fds = realloc (cerver->hold_fds, 
+        cerver->hold_fds = (struct pollfd *) realloc (cerver->hold_fds, 
             cerver->max_on_hold_connections * sizeof (struct pollfd));
         if (cerver->hold_fds) retval = 0;
     }
@@ -597,7 +600,7 @@ static u8 on_hold_poll (void *ptr) {
         Cerver *cerver = (Cerver *) ptr;
 
         cerver_log_msg (stdout, LOG_SUCCESS, LOG_CERVER, 
-            c_string_create ("Cerver %s on hold handler has started!", cerver->name->str));
+            c_string_create ("Cerver %s on hold handler has started!", cerver->info->name->str));
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, "Waiting for connections to put on hold...");
         #endif
@@ -610,7 +613,7 @@ static u8 on_hold_poll (void *ptr) {
             // poll failed
             if (poll_retval < 0) {
                 cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, 
-                    c_string_create ("Cerver %s on hold poll has failed!", cerver->name->str));
+                    c_string_create ("Cerver %s on hold poll has failed!", cerver->info->name->str));
                 perror ("Error");
                 cerver->holding_connections = false;
                 cerver->isRunning = false;
@@ -621,7 +624,7 @@ static u8 on_hold_poll (void *ptr) {
             if (poll_retval == 0) {
                 // #ifdef CERVER_DEBUG
                 // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
-                //    c_string_create ("Cerver %s on hold poll timeout", cerver->name->str));
+                //    c_string_create ("Cerver %s on hold poll timeout", cerver->info->name->str));
                 // #endif
                 continue;
             }
@@ -635,14 +638,14 @@ static u8 on_hold_poll (void *ptr) {
                     cerver_receive_new (cerver, cerver->hold_fds[i].fd, true))) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
-                        cerver->name->str));
+                        cerver->info->name->str));
                 }
             }
         }
 
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
-            c_string_create ("Cerver %s on hold poll has stopped!", cerver->name->str));
+            c_string_create ("Cerver %s on hold poll has stopped!", cerver->info->name->str));
         #endif
 
         retval = 0;
@@ -669,16 +672,16 @@ u8 on_hold_connection (Cerver *cerver, Connection *connection) {
                 cerver->hold_fds[idx].events = POLLIN;
                 cerver->current_on_hold_nfds++; 
 
-                cerver->n_hold_clients++;
+                cerver->stats->current_n_hold_connections;
 
                 avl_insert_node (cerver->on_hold_connections, connection);
 
                 if (cerver->holding_connections == false) {
                     cerver->holding_connections = true;
-                    if (thpool_add_work (cerver->thpool, (void *) on_hold_poll, cerver)) {
+                    if (thpool_add_work (cerver->thpool, (void (*)(void*)) on_hold_poll, cerver)) {
                         cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                             c_string_create ("Failed to add on_hold_poll () to cerver's %s thpool!", 
-                            cerver->name->str));
+                            cerver->info->name->str));
                         cerver->holding_connections = false;
                     }
                 }
@@ -686,13 +689,13 @@ u8 on_hold_connection (Cerver *cerver, Connection *connection) {
                 #ifdef CERVER_DEBUG
                     cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER,
                         c_string_create ("Connection is on hold on cerver %s.",
-                        cerver->name->str));
+                        cerver->info->name->str));
                 #endif
 
                 #ifdef CERVER_STATS
                     cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
                         c_string_create ("Cerver %s current on hold connections: %i.", 
-                        cerver->name->str, cerver->n_hold_clients));
+                        cerver->info->name->str, cerver->stats->current_n_hold_connections));
                 #endif
 
                 retval = 0;
@@ -702,12 +705,12 @@ u8 on_hold_connection (Cerver *cerver, Connection *connection) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
                     c_string_create ("Cerver %s on hold poll is full -- we need to realloc...", 
-                    cerver->name->str));
+                    cerver->info->name->str));
                 #endif
                 if (cerver_realloc_on_hold_poll_fds (cerver)) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Failed to realloc cerver %s on hold poll fds!", 
-                        cerver->name->str));
+                        cerver->info->name->str));
                 }
 
                 else retval = on_hold_connection (cerver, connection);
@@ -731,7 +734,7 @@ static void on_hold_poll_remove_sock_fd (Cerver *cerver, const i32 sock_fd) {
             #ifdef CERVER_STATS
                 cerver_log_msg (stdout, LOG_CERVER, LOG_NO_TYPE, 
                     c_string_create ("Cerver %s current on hold connections: %i.", 
-                    cerver->name->str, cerver->n_hold_clients));
+                    cerver->info->name->str, cerver->stats->current_n_hold_connections));
             #endif
 
             // check if we are holding any more connections, if not, we stop the on hold poll
@@ -739,7 +742,7 @@ static void on_hold_poll_remove_sock_fd (Cerver *cerver, const i32 sock_fd) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER,
                     c_string_create ("Stoping cerver's %s on hold poll.",
-                    cerver->name->str));
+                    cerver->info->name->str));
                 #endif
                 cerver->holding_connections = false;
             }
@@ -749,7 +752,7 @@ static void on_hold_poll_remove_sock_fd (Cerver *cerver, const i32 sock_fd) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
                 c_string_create ("Couldn't find %i sock fd in cerver's %s on hold poll fds.",
-                sock_fd, cerver->name->str));
+                sock_fd, cerver->info->name->str));
             #endif
         }
     }
@@ -804,7 +807,7 @@ static void on_hold_connection_drop (Cerver *cerver, const i32 sock_fd) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
                 c_string_create ("Couldn't find a connection associated with %i sock fd in cerver's %s on hold connections tree.",
-                sock_fd, cerver->name->str));
+                sock_fd, cerver->info->name->str));
             #endif
 
             // unregister the fd from the on hold structures
@@ -841,7 +844,7 @@ static Connection *on_hold_connection_get_by_sock (const Cerver *cerver, const i
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
                 c_string_create ("Failed to create connection query in cerver %s.",
-                cerver->name->str));
+                cerver->info->name->str));
             #endif
         }    
     }

@@ -16,6 +16,16 @@
 struct _Cerver;
 struct _Client;
 
+typedef struct ConnectionStats {
+    
+    time_t connection_threshold_time;       // every time we want to reset the connection's stats
+    u64 total_bytes_received;               // total amount of bytes received from this connection
+    u64 total_bytes_sent;                   // total amount of bytes that have been sent to the connection
+    u64 n_packets_received;                 // total number of packets received from this connection (packet header + data)
+    u64 n_packets_sent;                     // total number of packets sent to this connection
+
+} ConnectionStats;
+
 // a connection from a client
 struct _Connection {
 
@@ -25,13 +35,14 @@ struct _Connection {
     String *ip;
     struct sockaddr_storage address;
 
-    time_t raw_time;
-    struct tm *time_info;
+    time_t timestamp;                       // connected timestamp
 
     // authentication
-    u8 auth_tries;           // remaining attemps to authenticate
+    u8 auth_tries;                          // remaining attemps to authenticate
 
     bool active;
+
+    ConnectionStats *stats;
 
 };
 
@@ -47,33 +58,54 @@ Connection *client_connection_create (const i32 sock_fd,
 // compare two connections by their socket fds
 extern int client_connection_comparator (const void *a, const void *b);
 
-// sets the connection time stamp
-extern void client_connection_set_time (Connection *connection);
-
 // get from where the client is connecting
 extern void client_connection_get_values (Connection *connection);
-
-// returns connection time stamp in a string that should be deleted
-extern const String *client_connection_get_time (const Connection *connection);
 
 // ends a client connection
 extern void client_connection_end (Connection *connection);
 
-// registers a new connection to a client
+// gets the connection from the client by its sock fd
+extern Connection *client_connection_get_by_sock_fd (struct _Client *client, i32 sock_fd);
+
+// checks if the connection belongs to the client
+extern bool client_connection_check_owner (struct _Client *client, Connection *connection);
+
+// registers a new connection to a client without adding it to the cerver poll
 // returns 0 on success, 1 on error
-extern u8 client_connection_register (struct _Cerver *cerver, 
+extern u8 client_connection_register_to_client (struct _Client *client, Connection *connection);
+
+// unregisters a connection from a client, if the connection is active, it is stopped and removed 
+// from the cerver poll as there can't be a free connection withput client
+// returns 0 on success, 1 on error
+extern u8 client_connection_unregister_from_client (struct _Cerver *cerver, 
     struct _Client *client, Connection *connection);
 
-// unregisters a connection from a client and stops and deletes it
-// returns 0 on success, 1 on error
-extern u8 client_connection_unregister (struct _Cerver *cerver, 
+// wrapper function for easy access
+// registers a client connection to the cerver and maps the sock fd to the client
+extern u8 client_connection_register_to_cerver (struct _Cerver *cerver, 
     struct _Client *client, Connection *connection);
+
+// wrapper function for easy access
+// unregisters a client connection from the cerver and unmaps the sock fd from the client
+extern u8 client_connection_unregister_from_cerver (struct _Cerver *cerver, 
+    struct _Client *client, Connection *connection);
+
+typedef struct ClientStats {
+
+    time_t client_threshold_time;           // every time we want to reset the client's stats
+    u64 total_bytes_received;               // total amount of bytes received from this client
+    u64 total_bytes_sent;                   // total amount of bytes that have been sent to the client (all of its connections)
+    u64 n_packets_received;                 // total number of packets received from this client (packet header + data)
+    u64 n_packets_send;                     // total number of packets sent to this client (all connections)
+
+} ClientStats;
 
 // anyone that connects to the cerver
 struct _Client {
 
     // generated using connection values
-    String *client_id;
+    u64 id;
+    time_t connected_timestamp;
 
     DoubleList *connections;
 
@@ -85,6 +117,8 @@ struct _Client {
     void *data;
     Action delete_data;
 
+    ClientStats *stats;
+
 };
 
 typedef struct _Client Client;
@@ -92,14 +126,21 @@ typedef struct _Client Client;
 extern Client *client_new (void);
 extern void client_delete (void *ptr);
 
+// creates a new client and inits its values
+extern Client *client_create (void);
+
 // creates a new client and registers a new connection
-extern Client *client_create (struct _Cerver *cerver, 
+extern Client *client_create_with_connection (struct _Cerver *cerver, 
     const i32 sock_fd, const struct sockaddr_storage address);
 
 // sets the client's session id
 extern void client_set_session_id (Client *client, const char *session_id);
 
+// returns the client's app data
+extern void *client_get_data (Client *client);
+
 // sets client's data and a way to destroy it
+// deletes the previous data of the client
 extern void client_set_data (Client *client, void *data, Action delete_data);
 
 // compare clients based on their client ids
@@ -111,6 +152,24 @@ extern int client_comparator_session_id (const void *a, const void *b);
 // closes all client connections
 // returns 0 on success, 1 on error
 extern u8 client_disconnect (Client *client);
+
+// drops a client form the cerver
+// unregisters the client from the cerver and the deletes him
+extern void client_drop (struct _Cerver *cerver, Client *client);
+
+// removes the connection from the client
+// and also checks if there is another active connection in the client, if not it will be dropped
+// returns 0 on success, 1 on error
+extern u8 client_remove_connection (struct _Cerver *cerver, Client *client, Connection *connection);
+
+// removes the connection from the client referred to by the sock fd
+// and also checks if there is another active connection in the client, if not it will be dropped
+// returns 0 on success, 1 on error
+extern u8 client_remove_connection_by_sock_fd (struct _Cerver *cerver, Client *client, i32 sock_fd);
+
+// register all the active connections from a client to a cerver
+// returns 0 on success, 1 if one or more connections failed to register
+extern u8 client_register_connections_to_cerver (struct _Cerver *cerver, Client *client);
 
 // registers a client to the cerver --> add it to cerver's structures
 // returns 0 on success, 1 on error

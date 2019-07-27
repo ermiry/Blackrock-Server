@@ -69,17 +69,13 @@ void player_set_data (Player *player, void *data, Action data_delete) {
 
 int player_comparator_by_id (const void *a, const void *b) {
 
-    if (a && b) 
-        return str_compare (((Player *) a)->id, ((Player *) b)->id);
+    return str_compare (((Player *) a)->id, ((Player *) b)->id);
 
 }
 
 int player_comparator_client_id (const void *a, const void *b) {
 
-    if (a && b) {
-        return str_compare (((Player *) a)->client->client_id, 
-            ((Player *) b)->client->client_id);
-    }
+    return client_comparator_client_id (((Player *) a)->client, ((Player *) b)->client);
 
 }
 
@@ -192,7 +188,7 @@ void player_broadcast_to_all (const Lobby *lobby, Packet *packet,
             for (ListElement *le_sub = dlist_start (player->client->connections); le_sub; le_sub = le_sub->next) {
                 connection = (Connection *) le_sub->data;
                 packet_set_network_values (packet, connection->sock_fd, protocol);
-                packet_send (packet, flags);
+                packet_send (packet, flags, NULL);
             }
         }
     }

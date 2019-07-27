@@ -21,19 +21,19 @@
 #include "cerver/collections/avl.h"
 #include "cerver/collections/htab.h"
 
-#include "cerver/utils/config.h"
-
 #define DEFAULT_USE_IPV6                0
 #define DEFAULT_PORT                    7001
 #define DEFAULT_CONNECTION_QUEUE        7
 #define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
 
-#define DEFAULT_TH_POOL_INIT            8
+#define DEFAULT_TH_POOL_INIT            4
 
 #define MAX_PORT_NUM            65535
 #define MAX_UDP_PACKET_SIZE     65515
 
 #define poll_n_fds              100           // n of fds for the pollfd array
+
+struct _Cerver;
 
 typedef enum CerverType {
 
@@ -44,7 +44,52 @@ typedef enum CerverType {
 
 } CerverType;
 
-// this is the generic server struct, used to create different server types
+typedef struct CerverInfo {
+
+    String *name;
+    String *welcome_msg;                            // this msg is sent to the client when it first connects
+    struct _Packet *cerver_info_packet;             // useful info that we can send to clients
+
+    struct tm *time_started;                        // the actual time the cerver was started
+    u64 uptime;                                     // the seconds the cerver has been up
+
+} CerverInfo;
+
+// sets the cerver msg to be sent when a client connects
+// retuns 0 on success, 1 on error
+extern u8 cerver_set_welcome_msg (struct _Cerver *cerver, const char *msg);
+
+typedef struct CerverStats {
+
+    time_t cerver_threshold_time;                   // every time we want to reset cerver stats (like packets), defaults 24hrs
+    u64 n_cerver_packets_receive;                   // total number of cerver packets received (packet header + data)
+    u64 n_cerver_receives_done;                     // total amount of actual calls to recv ()
+    u64 total_bytes_recived;                        // total amount of bytes received in the cerver
+    u64 total_bytes_sent;                           // total amount of bytes sent by the cerver
+
+    u64 current_active_client_connections;          // all of the current active connections for all current clients
+    u64 current_n_connected_clients;                // the current number of clients connected 
+    u64 current_n_hold_connections;                 // current numbers of on hold connections (only if the cerver requires authentication)
+    u64 total_n_client;                             // the total amount of clients that were registered to the cerver (no auth required)
+    u64 unique_clients;                             // n unique clients connected in a threshold time (check used authentication)
+    u64 total_client_connections;                   // the total amount of client connections that have been done to the cerver
+
+    // n packets received per packet type
+    u64 n_error_packets;
+    u64 n_auth_packets;
+    u64 n_request_packets;
+    u64 n_game_packets;
+    u64 n_app_packets;
+    u64 n_app_error_packets;
+    u64 n_custom_packets;
+    u64 n_test_packets;
+    u64 n_unknown_packets;
+
+    u64 n_bad_packets;
+
+} CerverStats;
+
+// this is the generic cerver struct, used to create different server types
 struct _Cerver {
 
     i32 sock;                           // server socket
@@ -60,20 +105,23 @@ struct _Cerver {
     void *cerver_data;
     Action delete_cerver_data;
 
-    threadpool *thpool;
+    u16 n_thpool_threads;
+    // threadpool *thpool;
+    threadpool thpool;
 
     AVLTree *clients;                   // connected clients 
     Htab *client_sock_fd_map;           // direct indexing by sokcet fd as key
     // action to be performed when a new client connects
+    // FIXME: make sure that this is also executed for on hold clients!! (23/07/2019)
     Action on_client_connected;   
-    void *on_client_connected_data;
-    Action delete_on_client_connected_data;
 
     struct pollfd *fds;
     u32 max_n_fds;                      // current max n fds in pollfd
     u16 current_n_fds;                  // n of active fds in the pollfd array
     bool compress_clients;              // compress the fds array?
     u32 poll_timeout;           
+
+    Htab *sock_buffer_map;
 
     /*** auth ***/
     bool auth_required;                 // does the server requires authentication?
@@ -100,19 +148,11 @@ struct _Cerver {
     Action app_error_packet_handler;
     Action custom_packet_handler;
 
-    /*** server info/stats ***/
-    String *name;
-    String *welcome_msg;                 // this msg is sent to the client when it first connects
-    struct _Packet *cerver_info_packet;          // useful info that we can send to clients 
-    // TODO: 26/06/2019 -- we are not doing nothing with these!!
-    u32 n_connected_clients;
-    u32 n_hold_clients;
+    Action cerver_update;                           // function to be executed every tick
+    u8 ticks;                                       // like fps
 
-    struct tm *time_started;
-    u64 uptime;
-
-    Action cerver_update;                  
-    u8 ticks;                              // like fps
+    CerverInfo *info;
+    CerverStats *stats;
 
 };
 
@@ -130,9 +170,11 @@ extern void cerver_set_network_values (Cerver *cerver, const u16 port, const Pro
 // sets the cerver's data and a way to free it
 extern void cerver_set_cerver_data (Cerver *cerver, void *data, Action delete_data);
 
+// sets the cerver's thpool number of threads
+extern void cerver_set_thpool_n_threads (Cerver *cerver, u16 n_threads);
+
 // sets an action to be performed by the cerver when a new client connects
-extern u8 cerver_set_on_client_connected  (Cerver *cerver, 
-    Action on_client_connected, void *data, Action delete_data);
+extern void cerver_set_on_client_connected  (Cerver *cerver, Action on_client_connected);
 
 // sets the cerver poll timeout
 extern void cerver_set_poll_time_out (Cerver *cerver, const u32 poll_timeout);
@@ -151,10 +193,6 @@ extern void cerver_set_app_handlers (Cerver *cerver, Action app_handler, Action 
 // sets a custom packet handler
 extern void cerver_set_custom_handler (Cerver *cerver, Action custom_handler);
 
-// sets the cerver msg to be sent when a client connects
-// retuns 0 on success, 1 on error
-extern u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg);
-
 // sets a custom cerver update function to be executed every n ticks
 extern void cerver_set_update (Cerver *cerver, Action update, const u8 ticks);
 
@@ -164,7 +202,8 @@ extern Cerver *cerver_create (const CerverType type, const char *name,
     u16 connection_queue, u32 poll_timeout);
 
 // teardowns the cerver and creates a fresh new one with the same parameters
-extern Cerver *cerver_restart (Cerver *cerver);
+// returns 0 on success, 1 on error
+extern u8 cerver_restart (Cerver *cerver);
 
 // starts the cerver
 extern u8 cerver_start (Cerver *cerver);

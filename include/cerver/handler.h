@@ -6,9 +6,13 @@
 #include "cerver/types/types.h"
 #include "cerver/cerver.h"
 
+#define RECEIVE_PACKET_BUFFER_SIZE      8192
+
 struct _Cerver;
 struct _Client;
 struct _Connection;
+
+extern void sock_receive_delete (void *sock_receive_ptr);
 
 typedef struct CerverReceive {
 

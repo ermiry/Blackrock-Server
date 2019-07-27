@@ -47,18 +47,13 @@ extern void dlist_reset (DoubleList *);
 extern void dlist_clean (DoubleList *);
 extern void dlist_destroy (DoubleList *);
 
-// insserts a new element in the list with the passed data after the specified list element
+// Elements
 extern bool dlist_insert_after (DoubleList *, ListElement *, void *data);
-// removes the specified list element and returns the data
 extern void *dlist_remove_element (DoubleList *, ListElement *);
 
 // Searching
-
-// can use the list compare method to search for the specified data inside the list
 extern void *dlist_search (DoubleList *, void *data);
-// can use the list compare method to check if the specified data is inside the list
 extern bool dlist_is_in_list (DoubleList *, void *data);
-// can use the list compare method to return the list element associated with the data
 ListElement *dlist_get_element (DoubleList *, void *data);
 
 // merge sort

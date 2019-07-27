@@ -155,8 +155,10 @@ u8 lobby_init (GameCerver *game_cerver, Lobby *lobby) {
 //compares two lobbys based on their ids
 int lobby_comparator (const void *one, const void *two) {
 
-    if (one && two) 
-        return str_compare (((Lobby *) one)->id, ((Lobby *) two)->id);
+    if (one && two) return str_compare (((Lobby *) one)->id, ((Lobby *) two)->id);
+    else if (!one && two) return -1;
+    else if (one && ! two) return 1;
+    return 0;
 
 }
 
@@ -232,7 +234,7 @@ static u8 lobby_realloc_poll_fds (Lobby *lobby) {
 
     if (lobby) {
         lobby->max_players_fds = lobby->max_players_fds * 2;
-        lobby->players_fds = realloc (lobby->players_fds,
+        lobby->players_fds = (struct pollfd *) realloc (lobby->players_fds,
             lobby->max_players_fds * sizeof (struct pollfd));
         if (lobby->players_fds) retval = 0;
     }
@@ -396,7 +398,7 @@ static u8 lobby_poll (void *ptr) {
                     cerver_receive_new (cerver, lobby->players_fds[i].fd, false))) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
                         c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
-                        cerver->name->str));
+                        cerver->info->name->str));
                 }
             }
         }
@@ -443,7 +445,7 @@ u8 lobby_start (Cerver *cerver, Lobby *lobby) {
             else {
                 cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
                     c_string_create ("Failed to add lobby %s handler to cerver's thpool!",
-                    lobby->id->str, cerver->name->str));
+                    lobby->id->str, cerver->info->name->str));
             }
         }
 
@@ -469,7 +471,7 @@ u8 lobby_start (Cerver *cerver, Lobby *lobby) {
             else {
                 cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
                     c_string_create ("Failed to add lobby %s update to cerver's thpool!",
-                    lobby->id->str, cerver->name->str));
+                    lobby->id->str, cerver->info->name->str));
             }
         }
 

@@ -52,7 +52,7 @@ void game_type_delete (void *ptr) {
         GameType *type = (GameType *) ptr;
         str_delete (type->name);
         if (type->delete_data) type->delete_data (type->data);
-        else free (type->delete_data);
+        else free (type->data);
 
         free (type);
     }

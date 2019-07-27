@@ -376,7 +376,7 @@ User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
                         "No valid blackrock profile associated with your account.");
                     if (error_packet) {
                         packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                        packet_send (error_packet, 0);
+                        packet_send (error_packet, 0, NULL);
                         packet_delete (error_packet);
                     }
                 }
@@ -462,7 +462,7 @@ u8 user_send (const User *user, const i32 sock_fd, const Protocol protocol) {
             Packet *user_packet = packet_generate_request (APP_PACKET, ERMIRY_USER, suser, sizeof (SUser));
             if (user_packet) {
                 packet_set_network_values (user_packet, sock_fd, protocol);
-                retval = packet_send (user_packet, 0);
+                retval = packet_send (user_packet, 0, NULL);
                 packet_delete (user_packet);
             }
 

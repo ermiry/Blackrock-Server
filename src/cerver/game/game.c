@@ -100,7 +100,7 @@ void game_packet_handler (Packet *packet) {
 
     if (packet) {
         if (packet->packet_size >= (sizeof (PacketHeader) + sizeof (RequestData))) {
-            char *end = packet->packet;
+            char *end = (char *) packet->packet;
             RequestData *req = (RequestData *) (end += sizeof (PacketHeader));
 
             switch (req->type) {

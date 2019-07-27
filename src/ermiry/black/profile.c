@@ -473,7 +473,7 @@ u8 black_profile_send (const BlackProfile *black_profile, const i32 sock_fd, con
             Packet *profile_packet = packet_generate_request (APP_PACKET, ERMIRY_BLACK_PROFILE, sprofile, sizeof (SBlackProfile));
             if (profile_packet) {
                 packet_set_network_values (profile_packet, sock_fd, protocol);
-                retval = packet_send (profile_packet, 0);
+                retval = packet_send (profile_packet, 0, NULL);
                 packet_delete (profile_packet);
             }
 
