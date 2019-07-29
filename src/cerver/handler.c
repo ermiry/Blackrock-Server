@@ -195,7 +195,7 @@ static void cerver_packet_handler (void *ptr) {
                     break;
 
                 default:
-                    packet->cerver->stats->n_custom_packets += 1;
+                    packet->cerver->stats->n_bad_packets += 1;
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
                         c_string_create ("Got a packet of unknown type in cerver %s.", 

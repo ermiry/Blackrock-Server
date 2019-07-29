@@ -59,6 +59,22 @@ typedef struct CerverInfo {
 // retuns 0 on success, 1 on error
 extern u8 cerver_set_welcome_msg (struct _Cerver *cerver, const char *msg);
 
+typedef struct PacketsPerType {
+
+    u64 n_error_packets;
+    u64 n_auth_packets;
+    u64 n_request_packets;
+    u64 n_game_packets;
+    u64 n_app_packets;
+    u64 n_app_error_packets;
+    u64 n_custom_packets;
+    u64 n_test_packets;
+    u64 n_unknown_packets;
+
+    u64 n_bad_packets;
+
+} PacketsPerType;
+
 typedef struct CerverStats {
 
     time_t cerver_threshold_time;                   // every time we want to reset cerver stats (like packets), defaults 24hrs
@@ -74,18 +90,8 @@ typedef struct CerverStats {
     u64 unique_clients;                             // n unique clients connected in a threshold time (check used authentication)
     u64 total_client_connections;                   // the total amount of client connections that have been done to the cerver
 
-    // n packets received per packet type
-    u64 n_error_packets;
-    u64 n_auth_packets;
-    u64 n_request_packets;
-    u64 n_game_packets;
-    u64 n_app_packets;
-    u64 n_app_error_packets;
-    u64 n_custom_packets;
-    u64 n_test_packets;
-    u64 n_unknown_packets;
-
-    u64 n_bad_packets;
+    PacketsPerType received_packets;
+    PacketsPerType sent_packets;
 
 } CerverStats;
 
