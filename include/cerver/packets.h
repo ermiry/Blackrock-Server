@@ -30,31 +30,57 @@ extern void packets_set_protocol_version (ProtocolVersion version);
 // these indicate what type of packet we are sending/recieving
 typedef enum PacketType {
 
-    SERVER_PACKET = 0,
-    CLIENT_PACKET = 1,
-    ERROR_PACKET = 2,
-	REQUEST_PACKET = 3,
-    AUTH_PACKET = 4,
-    GAME_PACKET = 5,
+    SERVER_PACKET       = 0,
+    CLIENT_PACKET       = 1,
+    ERROR_PACKET        = 2,
+	REQUEST_PACKET      = 3,
+    AUTH_PACKET         = 4,
+    GAME_PACKET         = 5,
 
-    APP_PACKET = 6,
-    APP_ERROR_PACKET = 7,
+    APP_PACKET          = 6,
+    APP_ERROR_PACKET    = 7,
 
-    CUSTOM_PACKET = 70,
+    CUSTOM_PACKET       = 70,
 
-    TEST_PACKET = 100,
-    DONT_CHECK_TYPE = 101,
+    TEST_PACKET         = 100,
+    DONT_CHECK_TYPE     = 101,
 
 } PacketType;
 
-typedef struct PacketHeader {
+struct _PacketsPerType {
+
+    u64 n_error_packets;
+    u64 n_auth_packets;
+    u64 n_request_packets;
+    u64 n_game_packets;
+    u64 n_app_packets;
+    u64 n_app_error_packets;
+    u64 n_custom_packets;
+    u64 n_test_packets;
+    u64 n_unknown_packets;
+
+    u64 n_bad_packets;
+
+};
+
+typedef struct _PacketsPerType PacketsPerType;
+
+extern PacketsPerType *packets_per_type_new (void);
+
+extern void packets_per_type_delete (void *ptr);
+
+extern void packets_per_type_print (PacketsPerType *packets_per_type);
+
+struct _PacketHeader {
 
 	ProtocolID protocol_id;
 	ProtocolVersion protocol_version;
 	PacketType packet_type;
     size_t packet_size;
 
-} PacketHeader;
+};
+
+typedef struct _PacketHeader PacketHeader;
 
 // allocates space for the dest packet header and copies the data from source
 // returns 0 on success, 1 on error
@@ -63,37 +89,43 @@ extern u8 packet_header_copy (PacketHeader **dest, PacketHeader *source);
 // these indicate the data and more info about the packet type
 typedef enum RequestType {
 
-    SERVER_INFO = 0,
-    SERVER_TEARDOWN = 1,
+    SERVER_INFO                 = 0,
+    SERVER_TEARDOWN             = 1,
 
-    CLIENT_CLOSE_CONNECTION = 2,
-    CLIENT_DISCONNET = 3,
+    CLIENT_CLOSE_CONNECTION     = 2,
+    CLIENT_DISCONNET            = 3,
 
-    REQ_GET_FILE = 4,
-    POST_SEND_FILE = 5,
+    REQ_GET_FILE                = 4,
+    POST_SEND_FILE              = 5,
     
-    REQ_AUTH_CLIENT = 6,
-    CLIENT_AUTH_DATA = 7,
-    SUCCESS_AUTH = 8,
-
-    LOBBY_CREATE = 9,
-    LOBBY_JOIN = 10,
-    LOBBY_LEAVE = 11,
-    LOBBY_UPDATE = 12,
-    LOBBY_DESTROY = 13,
-
-    GAME_INIT = 14,                  // prepares the game structures
-    GAME_START = 15,                 // strat running the game
-    GAME_INPUT_UPDATE = 16,
-    GAME_SEND_MSG = 17,
+    REQ_AUTH_CLIENT             = 6,
+    CLIENT_AUTH_DATA            = 7,
+    SUCCESS_AUTH                = 8,
 
 } RequestType;
 
-typedef struct RequestData {
+typedef enum GamePacket {
+
+    GAME_LOBBY_CREATE           = 0,
+    GAME_LOBBY_JOIN             = 1,
+    GAME_LOBBY_LEAVE            = 2,
+    GAME_LOBBY_UPDATE           = 3,
+    GAME_LOBBY_DESTROY          = 4,
+
+    GAME_INIT                   = 5,   // prepares the game structures
+    GAME_START                  = 6,   // strat running the game
+    GAME_INPUT_UPDATE           = 7,
+    GAME_SEND_MSG               = 8,
+
+} GamePacket;
+
+struct _RequestData {
 
     u32 type;
 
-} RequestData;
+};
+
+typedef struct _RequestData RequestData;
 
 struct _Packet {
 
@@ -101,9 +133,6 @@ struct _Packet {
     struct _Cerver *cerver;
     struct _Client *client;
     struct _Connection *connection;
-
-    i32 sock_fd;
-    Protocol protocol;
 
     PacketType packet_type;
     String *custom_type;
@@ -131,8 +160,8 @@ extern void packet_delete (void *ptr);
 extern Packet *packet_create (PacketType type, void *data, size_t data_size);
 
 // sets the pakcet destinatary is directed to and the protocol to use
-extern void packet_set_network_values (Packet *packet, 
-    const i32 sock_fd, const Protocol protocol);
+extern void packet_set_network_values (Packet *packet, struct _Cerver *cerver, 
+    struct _Client *client, struct _Connection *connection);
 
 // sets the data of the packet -> copies the data into the packet
 // if the packet had data before it is deleted and replaced with the new one

@@ -17,13 +17,39 @@
 #include "cerver/utils/log.h"
 #endif
 
-
 static ProtocolID protocol_id = 0;
 static ProtocolVersion protocol_version = { 0, 0 };
 
 void packets_set_protocol_id (ProtocolID proto_id) { protocol_id = proto_id; }
 
 void packets_set_protocol_version (ProtocolVersion version) { protocol_version = version; }
+
+PacketsPerType *packets_per_type_new (void) {
+
+    PacketsPerType *packets_per_type = (PacketsPerType *) malloc (sizeof (PacketsPerType));
+    if (packets_per_type) memset (packets_per_type, 0, sizeof (PacketsPerType));
+    return packets_per_type;
+
+}
+
+void packets_per_type_delete (void *ptr) { if (ptr) free (ptr); }
+
+void packets_per_type_print (PacketsPerType *packets_per_type) {
+
+    if (packets_per_type) {
+        printf ("Error:             %ld\n", packets_per_type->n_error_packets);
+        printf ("Auth:              %ld\n", packets_per_type->n_auth_packets);
+        printf ("Request:           %ld\n", packets_per_type->n_request_packets);
+        printf ("Game:              %ld\n", packets_per_type->n_game_packets);
+        printf ("App:               %ld\n", packets_per_type->n_app_packets);
+        printf ("App Error:         %ld\n", packets_per_type->n_app_error_packets);
+        printf ("Custom:            %ld\n", packets_per_type->n_custom_packets);
+        printf ("Test:              %ld\n", packets_per_type->n_test_packets);
+        printf ("Unknown:           %ld\n", packets_per_type->n_unknown_packets);
+        printf ("Bad:               %ld\n", packets_per_type->n_bad_packets);
+    }
+
+}
 
 static PacketHeader *packet_header_new (PacketType packet_type, size_t packet_size) {
 
@@ -118,11 +144,13 @@ void packet_delete (void *ptr) {
 }
 
 // sets the pakcet destinatary is directed to and the protocol to use
-void packet_set_network_values (Packet *packet, const i32 sock_fd, const Protocol protocol) {
+void packet_set_network_values (Packet *packet, Cerver *cerver, 
+    Client *client, Connection *connection) {
 
     if (packet) {
-        packet->sock_fd = sock_fd;
-        packet->protocol = protocol;
+        packet->cerver = cerver;
+        packet->client = client;
+        packet->connection = connection;
     }
 
 }
@@ -318,7 +346,7 @@ u8 packet_send_tcp (const Packet *packet, int flags, size_t *total_sent) {
         size_t packet_size = packet->packet_size;
 
         while (packet_size > 0) {
-            sent = send (packet->sock_fd, p, packet_size, flags);
+            sent = send (packet->connection->sock_fd, p, packet_size, flags);
             if (sent < 0) return 1;
             p += sent;
             packet_size -= sent;
@@ -350,16 +378,95 @@ u8 packet_send_udp (const void *packet, size_t packet_size) {
 
 }
 
+static void packet_send_update_stats (PacketType packet_type, size_t sent,
+    Cerver *cerver, Client *client, Connection *connection) {
+
+    cerver->stats->n_packets_sent += 1;
+    cerver->stats->total_bytes_sent += sent;
+    if (client) {
+        client->stats->n_packets_send += 1;
+        client->stats->total_bytes_sent += sent;
+    }
+
+    connection->stats->n_packets_sent += 1;
+    connection->stats->total_bytes_sent += sent; 
+
+    switch (packet_type) {
+        case ERROR_PACKET: 
+            cerver->stats->sent_packets->n_error_packets += 1;
+            if (client) client->stats->sent_packets->n_error_packets += 1;
+            connection->stats->sent_packets->n_error_packets += 1;
+            break;
+
+        case AUTH_PACKET: 
+            cerver->stats->sent_packets->n_auth_packets += 1;
+            if (client) client->stats->sent_packets->n_auth_packets += 1;
+            connection->stats->sent_packets->n_auth_packets += 1;
+            break;
+
+        case REQUEST_PACKET: 
+            cerver->stats->sent_packets->n_request_packets += 1;
+            if (client) client->stats->sent_packets->n_request_packets += 1;
+            connection->stats->sent_packets->n_request_packets += 1;
+            break;
+
+        case GAME_PACKET:
+            cerver->stats->sent_packets->n_game_packets += 1; 
+            if (client) client->stats->sent_packets->n_game_packets += 1;
+            connection->stats->sent_packets->n_game_packets += 1;
+            break;
+
+        case APP_PACKET:
+            cerver->stats->sent_packets->n_app_packets += 1;
+            if (client) client->stats->sent_packets->n_app_packets += 1;
+            connection->stats->sent_packets->n_app_packets += 1;
+            break;
+
+        case APP_ERROR_PACKET: 
+            cerver->stats->sent_packets->n_app_error_packets += 1;
+            if (client) client->stats->sent_packets->n_app_error_packets += 1;
+            connection->stats->sent_packets->n_app_error_packets += 1;
+            break;
+
+        case CUSTOM_PACKET:
+            cerver->stats->sent_packets->n_custom_packets += 1;
+            if (client) client->stats->sent_packets->n_custom_packets += 1;
+            connection->stats->sent_packets->n_custom_packets += 1;
+            break;
+
+        case TEST_PACKET: 
+            cerver->stats->sent_packets->n_test_packets += 1;
+            if (client) client->stats->sent_packets->n_test_packets += 1;
+            connection->stats->sent_packets->n_test_packets += 1;
+            break;
+    }
+
+}
+
 // sends a packet using its network values
 u8 packet_send (const Packet *packet, int flags, size_t *total_sent) {
 
     u8 retval = 1;
 
     if (packet) {
-        switch (packet->protocol) {
-            case PROTOCOL_TCP: 
-                retval = packet_send_tcp (packet, flags, total_sent);
-                break;
+        switch (packet->connection->protocol) {
+            case PROTOCOL_TCP: {
+                size_t sent = 0;
+                if (!packet_send_tcp (packet, flags, &sent)) {
+                    packet_send_update_stats (packet->packet_type, sent,
+                        packet->cerver, packet->client, packet->connection);
+
+                    retval = 0;
+                }
+
+                else {
+                    packet->cerver->stats->sent_packets->n_bad_packets += 1;
+                    if (packet->client) packet->client->stats->sent_packets->n_bad_packets += 1;
+                    packet->connection->stats->sent_packets->n_bad_packets += 1;
+
+                    if (total_sent) *total_sent = 0;
+                }
+            } break;
             case PROTOCOL_UDP:
                 break;
 

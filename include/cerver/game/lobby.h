@@ -6,8 +6,11 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
+#include "cerver/cerver.h"
+#include "cerver/client.h"
+
 #include "cerver/game/game.h"
-#include "cerver/game/gameType.h"
+#include "cerver/game/gametype.h"
 #include "cerver/game/player.h"
 
 #include "cerver/collections/dllist.h"
@@ -17,6 +20,7 @@
 #define DEFAULT_MAX_LOBBY_PLAYERS			4
 
 struct _Cerver;
+struct _Client;
 struct _Connection;
 struct _GameCerver;
 struct _Player;
@@ -25,7 +29,7 @@ struct _GameSettings {
 
 	// config
 	GameType *game_type;
-	u8 player_timeout;		// secons until we drop the player 
+	u8 player_timeout;		// seconds until we drop the player 
 	u8 fps;
 
 	// rules
@@ -58,6 +62,8 @@ struct _Lobby {
 
 	Action handler;						// lobby handler (lobby poll)
 	Action packet_handler;				// lobby packet handler
+
+	GameType *game_type;
 
 	void *game_settings;
 	Action game_settings_delete;
@@ -118,10 +124,13 @@ extern u8 lobby_poll_unregister_connection (Lobby *lobby,
 // searches a lobby in the game cerver and returns a reference to it
 extern Lobby *lobby_get (struct _GameCerver *game_cerver, Lobby *query);
 
-/*** Public lobby functions ***/
+// seraches for a lobby with matching id
+extern Lobby *lobby_search_by_id (struct _Cerver *cerver, const char *id);
 
-// starts the lobby's handler and/or update method in the cervers thpool
-extern u8 lobby_start (struct _Cerver *cerver, Lobby *lobby);
+// lobby default handler
+extern void lobby_poll (void *ptr);
+
+/*** Public lobby functions ***/
 
 // creates and inits a new lobby
 // creates a new user associated with the client and makes him the owner
@@ -135,11 +144,61 @@ extern u8 lobby_join (struct _Cerver *cerver, struct _Client *client, Lobby *lob
 // returns 0 on success, 1 on error
 extern u8 lobby_leave (struct _Cerver *cerver, Lobby *lobby, struct _Player *player);
 
+// starts the lobby's handler and/or update method in the cervers thpool
+extern u8 lobby_start (struct _Cerver *cerver, Lobby *lobby);
+
 typedef struct CerverLobby {
 
     struct _Cerver *cerver;
     Lobby *lobby;
 
 } CerverLobby;
+
+/*** serialization ***/
+
+typedef struct SGameSettings {
+
+	// config
+	SStringS game_type;
+	u8 player_timeout;
+	u8 fps;
+
+	// rules
+	u8 min_players;
+	u8 max_players;
+	int duration;
+
+} SGameSettings;
+
+typedef struct SLobby {
+
+	// lobby info
+	SStringS id;
+	time_t creation_timestamp;
+
+	// lobby status
+	bool running;
+	bool in_game;
+
+	// game / players
+	SGameSettings settings;
+	unsigned int n_players;
+	// TODO: owner
+	
+} SLobby;
+
+extern SLobby *lobby_serialize (Lobby *lobby);
+
+// sends a lobby and all of its data to the client
+// created: if the lobby was just created
+extern void lobby_send (Lobby *lobby, bool created,
+    struct _Cerver *cerver, struct _Client *client, struct _Connection *connection);
+
+typedef struct LobbyJoin {
+
+    SStringS lobby_id;
+    SStringS game_type;
+
+} LobbyJoin;
 
 #endif

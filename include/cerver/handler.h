@@ -16,7 +16,7 @@ extern void sock_receive_delete (void *sock_receive_ptr);
 
 typedef struct CerverReceive {
 
-    Cerver *cerver;
+    struct _Cerver *cerver;
     i32 sock_fd;
     bool on_hold;
 

@@ -13,6 +13,7 @@
 #include "cerver/auth.h"
 #include "cerver/handler.h"
 #include "cerver/client.h"
+#include "cerver/packets.h"
 
 #include "cerver/collections/avl.h"
 #include "cerver/collections/dllist.h"
@@ -30,12 +31,26 @@ void client_connection_get_values (Connection *connection);
 static ConnectionStats *connection_stats_new (void) {
 
     ConnectionStats *stats = (ConnectionStats *) malloc (sizeof (ConnectionStats));
-    if (stats) memset (stats, 0, sizeof (ConnectionStats));
+    if (stats) {
+        memset (stats, 0, sizeof (ConnectionStats));
+        stats->received_packets = packets_per_type_new ();
+        stats->sent_packets = packets_per_type_new ();
+    } 
+
     return stats;
 
 }
 
-static inline void connection_stats_delete (ConnectionStats *stats) { if (stats) free (stats); }
+static inline void connection_stats_delete (ConnectionStats *stats) { 
+    
+    if (stats) {
+        packets_per_type_delete (stats->received_packets);
+        packets_per_type_delete (stats->sent_packets);
+
+        free (stats); 
+    } 
+    
+}
 
 Connection *client_connection_new (void) {
 
@@ -52,7 +67,8 @@ Connection *client_connection_new (void) {
 
 }
 
-Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_storage address) {
+Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_storage address,
+    Protocol protocol) {
 
     Connection *connection = client_connection_new ();
     if (connection) {
@@ -60,6 +76,7 @@ Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_s
         time (&connection->timestamp);
         memcpy (&connection->address, &address, sizeof (struct sockaddr_storage));
         client_connection_get_values (connection);
+        connection->protocol = protocol;
         connection->stats = connection_stats_new ();
     }
 
@@ -253,12 +270,26 @@ u8 client_connection_unregister_from_cerver (Cerver *cerver, Client *client, Con
 static ClientStats *client_stats_new (void) {
 
     ClientStats *client_stats = (ClientStats *) malloc (sizeof (ClientStats));
-    if (client_stats) memset (client_stats, 0, sizeof (ClientStats));
+    if (client_stats) {
+        memset (client_stats, 0, sizeof (ClientStats));
+        client_stats->received_packets = packets_per_type_new ();
+        client_stats->sent_packets = packets_per_type_new ();
+    } 
+
     return client_stats;
 
 }
 
-static inline void client_stats_delete (ClientStats *client_stats) { if (client_stats) free (client_stats); }
+static inline void client_stats_delete (ClientStats *client_stats) { 
+    
+    if (client_stats) {
+        packets_per_type_delete (client_stats->received_packets);
+        packets_per_type_delete (client_stats->sent_packets);
+
+        free (client_stats); 
+    } 
+    
+}
 
 Client *client_new (void) {
 
@@ -326,7 +357,7 @@ Client *client_create_with_connection (Cerver *cerver,
 
     Client *client = client_create ();
     if (client) {
-        Connection *connection = client_connection_create (sock_fd, address);
+        Connection *connection = client_connection_create (sock_fd, address, cerver->protocol);
         if (connection) client_connection_register_to_client (client, connection);
         else {
             // failed to create a new connection
@@ -538,6 +569,7 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
                 c_string_create ("Registered a new client to cerver %s.", cerver->info->name->str));
             #endif
             
+            cerver->stats->total_n_clients++;
             cerver->stats->current_n_connected_clients++;
             #ifdef CERVER_STATS
             cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 

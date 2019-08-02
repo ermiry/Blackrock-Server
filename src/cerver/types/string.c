@@ -82,9 +82,12 @@ void str_copy (String *to, String *from) {
 
 }
 
-void str_concat (String *des, String *s1, String *s2) {
+String *str_concat (String *s1, String *s2) {
 
-    if (des && s1 && s2) {
+    if (s1 && s2) {
+        String *des = str_new (NULL);
+        des->str = (char *) calloc (s1->len + s2->len + 1, sizeof (char));
+
         while (*s1->str) *des->str++ = *s1->str++;
         while (*s2->str) *des->str++ = *s2->str++;
 
@@ -92,6 +95,8 @@ void str_concat (String *des, String *s1, String *s2) {
 
         des->len = s1->len + s2->len;
     }
+
+    return NULL;
 
 }
 

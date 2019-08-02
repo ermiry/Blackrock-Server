@@ -24,10 +24,21 @@ struct _Packet;
 #define DEFAULT_MIN_PLAYERS         2
 #define DEFAULT_MAX_PLAYERS         4    
 
+typedef struct GameCerverStats {
+
+    u32 current_active_lobbys;      // total current lobbys 
+    u32 lobbys_created;             // total amount of lobbys that were created in cerver life span
+
+} GameCerverStats;
+
+extern void game_cerver_stats_print (struct _Cerver *cerver);
+
 struct _GameCerver {
 
     DoubleList *current_lobbys;                     // a list of the current lobbys
     void *(*lobby_id_generator) (const void *);
+
+    DoubleList *game_types;
 
     Comparator player_comparator;
 
@@ -41,6 +52,8 @@ struct _GameCerver {
     Action final_game_action;
     void *final_action_args;
 
+    GameCerverStats *stats;
+
 };
 
 typedef struct _GameCerver GameCerver;
@@ -50,6 +63,8 @@ extern GameCerver *game_new (void);
 extern void game_delete (void *game_ptr);
 
 /*** Game Cerver Configuration ***/
+
+extern void *lobby_default_id_generator (const void *data_ptr);
 
 // option to set the game cerver lobby id generator
 extern void game_set_lobby_id_generator (GameCerver *game_cerver, 

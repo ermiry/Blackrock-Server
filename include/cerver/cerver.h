@@ -28,12 +28,14 @@
 
 #define DEFAULT_TH_POOL_INIT            4
 
-#define MAX_PORT_NUM            65535
-#define MAX_UDP_PACKET_SIZE     65515
+#define MAX_PORT_NUM                    65535
+#define MAX_UDP_PACKET_SIZE             65515
 
-#define poll_n_fds              100           // n of fds for the pollfd array
+#define poll_n_fds                      100         // n of fds for the pollfd array
 
 struct _Cerver;
+struct _Packet;
+struct _PacketsPerType;
 
 typedef enum CerverType {
 
@@ -59,41 +61,28 @@ typedef struct CerverInfo {
 // retuns 0 on success, 1 on error
 extern u8 cerver_set_welcome_msg (struct _Cerver *cerver, const char *msg);
 
-typedef struct PacketsPerType {
-
-    u64 n_error_packets;
-    u64 n_auth_packets;
-    u64 n_request_packets;
-    u64 n_game_packets;
-    u64 n_app_packets;
-    u64 n_app_error_packets;
-    u64 n_custom_packets;
-    u64 n_test_packets;
-    u64 n_unknown_packets;
-
-    u64 n_bad_packets;
-
-} PacketsPerType;
-
 typedef struct CerverStats {
 
-    time_t cerver_threshold_time;                   // every time we want to reset cerver stats (like packets), defaults 24hrs
-    u64 n_cerver_packets_receive;                   // total number of cerver packets received (packet header + data)
-    u64 n_cerver_receives_done;                     // total amount of actual calls to recv ()
-    u64 total_bytes_recived;                        // total amount of bytes received in the cerver
+    time_t threshold_time;                          // every time we want to reset cerver stats (like packets), defaults 24hrs
+    u64 n_packets_received;                         // total number of cerver packets received (packet header + data)
+    u64 n_receives_done;                            // total amount of actual calls to recv ()
+    u64 total_bytes_received;                       // total amount of bytes received in the cerver
+    u64 n_packets_sent;                             // total number of packets that were sent
     u64 total_bytes_sent;                           // total amount of bytes sent by the cerver
 
     u64 current_active_client_connections;          // all of the current active connections for all current clients
     u64 current_n_connected_clients;                // the current number of clients connected 
     u64 current_n_hold_connections;                 // current numbers of on hold connections (only if the cerver requires authentication)
-    u64 total_n_client;                             // the total amount of clients that were registered to the cerver (no auth required)
+    u64 total_n_clients;                            // the total amount of clients that were registered to the cerver (no auth required)
     u64 unique_clients;                             // n unique clients connected in a threshold time (check used authentication)
     u64 total_client_connections;                   // the total amount of client connections that have been done to the cerver
 
-    PacketsPerType received_packets;
-    PacketsPerType sent_packets;
+    struct _PacketsPerType *received_packets;
+    struct _PacketsPerType *sent_packets;
 
 } CerverStats;
+
+extern void cerver_stats_print (struct _Cerver *cerver);
 
 // this is the generic cerver struct, used to create different server types
 struct _Cerver {

@@ -6,17 +6,18 @@
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
 
-#include "network.h"
-#include "cerver.h"
-#include "client.h"
+#include "cerver/network.h"
+#include "cerver/cerver.h"
+#include "cerver/packets.h"
 
-#include "collections/avl.h"
-#include "collections/dllist.h"
+#include "cerver/collections/avl.h"
+#include "cerver/collections/dllist.h"
 
 struct _Cerver;
 struct _Client;
+struct _PacketsPerType;
 
-typedef struct ConnectionStats {
+struct _ConnectionStats {
     
     time_t connection_threshold_time;       // every time we want to reset the connection's stats
     u64 total_bytes_received;               // total amount of bytes received from this connection
@@ -24,7 +25,12 @@ typedef struct ConnectionStats {
     u64 n_packets_received;                 // total number of packets received from this connection (packet header + data)
     u64 n_packets_sent;                     // total number of packets sent to this connection
 
-} ConnectionStats;
+    struct _PacketsPerType *received_packets;
+    struct _PacketsPerType *sent_packets;
+
+};
+
+typedef struct _ConnectionStats ConnectionStats;
 
 // a connection from a client
 struct _Connection {
@@ -34,6 +40,7 @@ struct _Connection {
     u16 port;
     String *ip;
     struct sockaddr_storage address;
+    Protocol protocol;
 
     time_t timestamp;                       // connected timestamp
 
@@ -52,8 +59,8 @@ extern Connection *client_connection_new (void);
 extern void client_connection_delete (void *ptr);
 
 // creates a new lcient connection with the specified values
-Connection *client_connection_create (const i32 sock_fd, 
-    const struct sockaddr_storage address);
+extern Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_storage address,
+    Protocol protocol);
 
 // compare two connections by their socket fds
 extern int client_connection_comparator (const void *a, const void *b);
@@ -90,7 +97,7 @@ extern u8 client_connection_register_to_cerver (struct _Cerver *cerver,
 extern u8 client_connection_unregister_from_cerver (struct _Cerver *cerver, 
     struct _Client *client, Connection *connection);
 
-typedef struct ClientStats {
+struct _ClientStats {
 
     time_t client_threshold_time;           // every time we want to reset the client's stats
     u64 total_bytes_received;               // total amount of bytes received from this client
@@ -98,7 +105,12 @@ typedef struct ClientStats {
     u64 n_packets_received;                 // total number of packets received from this client (packet header + data)
     u64 n_packets_send;                     // total number of packets sent to this client (all connections)
 
-} ClientStats;
+    struct _PacketsPerType *received_packets;
+    struct _PacketsPerType *sent_packets;
+
+};
+
+typedef struct _ClientStats ClientStats;
 
 // anyone that connects to the cerver
 struct _Client {

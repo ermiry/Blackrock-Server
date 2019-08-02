@@ -26,7 +26,7 @@
 #include "cerver/utils/log.h"
 #include "cerver/utils/sha-256.h"
 
-void lobby_default_id_generator (char *lobby_id) {
+void *lobby_default_id_generator (const void *data_ptr) {
 
     time_t rawtime = time (NULL);
     struct tm *timeinfo = localtime (&rawtime);
@@ -41,7 +41,7 @@ void lobby_default_id_generator (char *lobby_id) {
     sha_256_calc (hash, temp, len);
     sha_256_hash_to_string (hash_string, hash);
 
-    lobby_id = c_string_create ("%s", hash_string);
+    return str_new (hash_string);
 
 }
 
@@ -86,6 +86,8 @@ Lobby *lobby_new (void) {
         lobby->owner = NULL;
 
         lobby->packet_handler = NULL;
+
+        lobby->game_type = NULL;
 
         lobby->game_settings = NULL;
         lobby->game_settings_delete = NULL;
@@ -141,6 +143,10 @@ u8 lobby_init (GameCerver *game_cerver, Lobby *lobby) {
         void *id = game_cerver->lobby_id_generator (lobby);
         if (id) {
             lobby->id = (String *) id;
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
+                c_string_create ("Lobby id: %s", lobby->id->str));
+            #endif
 
             lobby->players = dlist_init (player_delete, player_comparator_by_id);
 
@@ -356,9 +362,25 @@ Lobby *lobby_get (GameCerver *game_cerver, Lobby *query) {
 
 }
 
-static u8 lobby_poll (void *ptr) {
+// seraches for a lobby with matching id
+Lobby *lobby_search_by_id (Cerver *cerver, const char *id) {
 
-    u8 retval = 1;
+    if (cerver && id) {
+        GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
+
+        Lobby *lobby = NULL;
+        for (ListElement *le =  dlist_start (game_cerver->current_lobbys); le; le = le->next) {
+            lobby = (Lobby *) le->data;
+            if (!strcmp (lobby->id->str, id)) return lobby;
+        }
+    }
+
+    return NULL;
+
+}
+
+// lobby default handler
+void lobby_poll (void *ptr) {
 
     if (ptr) {
         CerverLobby *cerver_lobby = (CerverLobby *) ptr;
@@ -394,12 +416,12 @@ static u8 lobby_poll (void *ptr) {
                 if (lobby->players_fds[i].revents == 0) continue;
                 if (lobby->players_fds[i].revents != POLLIN) continue;
 
-                if (thpool_add_work (cerver->thpool, lobby->handler, 
-                    cerver_receive_new (cerver, lobby->players_fds[i].fd, false))) {
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
-                        c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
-                        cerver->info->name->str));
-                }
+                // if (thpool_add_work (cerver->thpool, lobby->handler, 
+                //     cerver_receive_new (cerver, lobby->players_fds[i].fd, false))) {
+                //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                //         c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
+                //         cerver->info->name->str));
+                // }
             }
         }
 
@@ -407,8 +429,6 @@ static u8 lobby_poll (void *ptr) {
         cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
             c_string_create ("Lobby %s poll has stopped!", lobby->id->str));
         #endif
-
-        retval = 0;
     }
 
     else {
@@ -416,79 +436,9 @@ static u8 lobby_poll (void *ptr) {
             "Can't handle players on a NULL client");
     } 
 
-    return retval;
-
 }
 
 /*** Public lobby functions ***/
-
-// starts the lobby's handler and/or update method in the cervers thpool
-u8 lobby_start (Cerver *cerver, Lobby *lobby) {
-
-    u8 retval = 1;
-
-    if (cerver && lobby) {
-        bool started = false;
-        CerverLobby *cerver_lobby = cerver_lobby_new (cerver, lobby);
-
-        // check if the lobby has a handler method
-        if (lobby->handler) {
-            if (!thpool_add_work (cerver->thpool, lobby->handler, cerver_lobby)) {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
-                    c_string_create ("Started lobby %s handler",
-                    lobby->id->str));
-                #endif
-                started = true;
-            }
-
-            else {
-                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
-                    c_string_create ("Failed to add lobby %s handler to cerver's thpool!",
-                    lobby->id->str, cerver->info->name->str));
-            }
-        }
-
-        else {
-            #ifdef CERVER_DEBUG
-            cerver_log_msg (stderr, LOG_WARNING, LOG_GAME, 
-                c_string_create ("lobby_start () -- lobby %s does not have a handler.",
-                lobby->id->str));
-            #endif
-        }
-
-        // check if the lobby has an update method
-        if (lobby->update) {
-            if (!thpool_add_work (cerver->thpool, lobby->update, cerver_lobby)) {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
-                    c_string_create ("Started lobby %s update",
-                    lobby->id->str));
-                #endif
-                started = true;
-            }
-
-            else {
-                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
-                    c_string_create ("Failed to add lobby %s update to cerver's thpool!",
-                    lobby->id->str, cerver->info->name->str));
-            }
-        }
-
-        else {
-            #ifdef CERVER_DEBUG
-            cerver_log_msg (stderr, LOG_WARNING, LOG_GAME,
-                c_string_create ("lobby_start () -- lobby %s does not have an update.",
-                lobby->id->str));
-            #endif
-        }
-
-        if (!started) cerver_lobby_delete (cerver_lobby);
-    }
-
-    return retval;
-
-}
 
 // creates and inits a new lobby
 // creates a new user associated with the client and makes him the owner
@@ -544,6 +494,7 @@ Lobby *lobby_create (Cerver *cerver, Client *client) {
 
 }
 
+// FIXME: check if the lobby is already full
 // a client wants to join a game, so we create a new player and register him to the lobby
 // returns 0 on success, 1 on error
 u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
@@ -554,7 +505,7 @@ u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
         GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
         if (game_cerver) {
             // check for lobby max players cap
-            if (lobby->current_players_fds < lobby->max_players) {
+            // if (lobby->current_players_fds < lobby->max_players) {
                 // make the client that make the request, a lobby member
                 Player *member = player_new ();
                 if (member) {
@@ -567,6 +518,8 @@ u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
                             c_string_create ("Failed to register a new member to lobby %s",
                             lobby->id->str));
                     }
+
+                    return 0;
                 }
 
                 else {
@@ -576,15 +529,15 @@ u8 lobby_join (Cerver *cerver, Client *client, Lobby *lobby) {
                         lobby->id->str));
                     #endif
                 }
-            }
+            // }
 
-            else {
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_WARNING, LOG_PLAYER, 
-                    c_string_create ("Lobby %s is already full!",
-                    lobby->id->str));
-                #endif
-            }
+            // else {
+            //     #ifdef CERVER_DEBUG
+            //     cerver_log_msg (stderr, LOG_WARNING, LOG_PLAYER, 
+            //         c_string_create ("Lobby %s is already full!",
+            //         lobby->id->str));
+            //     #endif
+            // }
             
         }
     }
@@ -648,3 +601,136 @@ u8 lobby_leave (Cerver *cerver, Lobby *lobby, Player *player) {
     return retval;
 
 }
+
+// starts the lobby's handler and/or update method in the cervers thpool
+u8 lobby_start (Cerver *cerver, Lobby *lobby) {
+
+    u8 retval = 1;
+
+    if (cerver && lobby) {
+        bool started = false;
+        CerverLobby *cerver_lobby = cerver_lobby_new (cerver, lobby);
+        lobby->running = true;
+
+        // check if the lobby has a handler method
+        if (lobby->handler) {
+            if (!thpool_add_work (cerver->thpool, lobby->handler, cerver_lobby)) {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+                    c_string_create ("Started lobby %s handler",
+                    lobby->id->str));
+                #endif
+                started = true;
+            }
+
+            else {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
+                    c_string_create ("Failed to add lobby %s handler to cerver's thpool!",
+                    lobby->id->str, cerver->info->name->str));
+            }
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_GAME, 
+                c_string_create ("lobby_start () -- lobby %s does not have a handler.",
+                lobby->id->str));
+            #endif
+        }
+
+        // check if the lobby has an update method
+        if (lobby->update) {
+            if (!thpool_add_work (cerver->thpool, lobby->update, cerver_lobby)) {
+                #ifdef CERVER_DEBUG
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+                    c_string_create ("Started lobby %s update",
+                    lobby->id->str));
+                #endif
+                started = true;
+            }
+
+            else {
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
+                    c_string_create ("Failed to add lobby %s update to cerver's thpool!",
+                    lobby->id->str, cerver->info->name->str));
+            }
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_GAME,
+                c_string_create ("lobby_start () -- lobby %s does not have an update.",
+                lobby->id->str));
+            #endif
+        }
+
+        if (started) retval = 0;
+        else {
+            cerver_lobby_delete (cerver_lobby);
+            lobby->running = false;
+        } 
+    }
+
+    return retval;
+
+}
+
+/*** seralization ***/
+
+#pragma region serialization
+
+static SLobby *slobby_new (void) {
+
+    SLobby *slobby = (SLobby *) malloc (sizeof (SLobby));
+    if (slobby) memset (slobby, 0, sizeof (SLobby));
+    return slobby;
+
+}
+
+// FIXME: game settings
+SLobby *lobby_serialize (Lobby *lobby) {
+
+    SLobby *slobby = NULL;
+
+    if (lobby) {
+        slobby = slobby_new ();
+        if (slobby) {
+            strncpy (slobby->id.string, lobby->id->str, 64);
+            slobby->id.len = (lobby->id->len >= 64) ? 64 : lobby->id->len;
+            slobby->creation_timestamp = lobby->creation_time_stamp;
+            slobby->in_game = lobby->in_game;
+            slobby->running = lobby->running;
+            slobby->n_players = lobby->n_current_players;
+        }
+    }
+
+    return slobby;
+
+}
+
+// FIXME: send players inside the lobby
+// sends a lobby and all of its data to the client
+// created: if the lobby was just created
+void lobby_send (Lobby *lobby, bool created,
+    Cerver *cerver, Client *client, Connection *connection) {
+
+    if (lobby) {
+        // serialize and send back the lobby
+        SLobby *slobby = lobby_serialize (lobby);
+        if (slobby) {
+            Packet *lobby_packet = packet_generate_request (GAME_PACKET, 
+                created ? GAME_LOBBY_CREATE : GAME_LOBBY_JOIN, 
+                slobby, sizeof (SLobby));
+            if (lobby_packet) {
+                packet_set_network_values (lobby_packet, cerver, client, connection);
+                packet_send (lobby_packet, 0, NULL);
+                packet_delete (lobby_packet);
+            }
+
+            free (slobby);
+        }
+    }
+
+}
+
+#pragma endregion

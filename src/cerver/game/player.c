@@ -79,6 +79,7 @@ int player_comparator_client_id (const void *a, const void *b) {
 
 }
 
+// FIXME:
 // registers a player to the lobby --> add him to lobby's structures
 u8 player_register_to_lobby (Lobby *lobby, Player *player) {
 
@@ -86,16 +87,16 @@ u8 player_register_to_lobby (Lobby *lobby, Player *player) {
 
     if (lobby && player) {
         if (player->client) {
-            bool failed = false;
+            // bool failed = false;
 
-            // register all the player's client connections to the lobby poll
-            Connection *connection = NULL;
-            for (ListElement *le = dlist_start (player->client->connections); le; le = le->next) {
-                connection = (Connection *) le->data;
-                failed = lobby_poll_register_connection (lobby, player, connection);
-            }
+            // // register all the player's client connections to the lobby poll
+            // Connection *connection = NULL;
+            // for (ListElement *le = dlist_start (player->client->connections); le; le = le->next) {
+            //     connection = (Connection *) le->data;
+            //     failed = lobby_poll_register_connection (lobby, player, connection);
+            // }
 
-            if (!failed) {
+            // if (!failed) {
                 dlist_insert_after (lobby->players, dlist_end (lobby->players), player);
 
                 #ifdef CERVER_DEBUG
@@ -112,7 +113,7 @@ u8 player_register_to_lobby (Lobby *lobby, Player *player) {
                 #endif
 
                 retval = 0;
-            }
+            // }
         }
     }
 
@@ -176,7 +177,7 @@ ListElement *player_get_le_from_lobby (Lobby *lobby, Player *player) {
 }
 
 // broadcasts a packet to all the players in the lobby
-void player_broadcast_to_all (const Lobby *lobby, Packet *packet, 
+void player_broadcast_to_all (const Cerver *cerver, const Lobby *lobby, Packet *packet, 
     Protocol protocol, int flags) {
 
     if (lobby && packet) {
@@ -187,7 +188,7 @@ void player_broadcast_to_all (const Lobby *lobby, Packet *packet,
             Connection *connection = NULL;
             for (ListElement *le_sub = dlist_start (player->client->connections); le_sub; le_sub = le_sub->next) {
                 connection = (Connection *) le_sub->data;
-                packet_set_network_values (packet, connection->sock_fd, protocol);
+                packet_set_network_values (packet, cerver, player->client, connection);
                 packet_send (packet, flags, NULL);
             }
         }

@@ -15,7 +15,7 @@ extern String *str_create (const char *format, ...);
 extern void str_delete (void *str_ptr);
 
 extern void str_copy (String *to, String *from);
-extern void str_concat (String *des, String *s1, String *s2);
+extern String *str_concat (String *s1, String *s2);
 
 extern void str_to_upper (String *string);
 extern void str_to_lower (String *string);

@@ -6,7 +6,7 @@
 #include "cerver/types/types.h"
 #include "cerver/collections/dllist.h"
 
-#include "cerver/game/gameType.h"
+#include "cerver/game/gametype.h"
 
 #include "cengine/game/go.h"
 
@@ -113,9 +113,10 @@ void *blackrock_arcade_end (void *data_ptr) {
 // register blackrock game types to the cerver
 void blackrock_register_game_types (void) {
 
+    // FIXME:
     // create and register arcade game type
-    GameType *arcade = game_type_create ("arcade", NULL, NULL, 
-        blackrock_arcade_start, blackrock_arcade_end);
-    game_type_register (arcade);
+    // GameType *arcade = game_type_create ("arcade", NULL, NULL, 
+    //     blackrock_arcade_start, blackrock_arcade_end);
+    // game_type_register (arcade);
 
 }

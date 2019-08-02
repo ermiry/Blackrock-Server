@@ -86,14 +86,64 @@ u8 cerver_set_welcome_msg (Cerver *cerver, const char *msg) {
 static CerverStats *cerver_stats_new (void) {
 
     CerverStats *cerver_stats = (CerverStats *) malloc (sizeof (CerverStats));
-    if (cerver_stats) memset (cerver_stats, 0, sizeof (CerverStats));
+    if (cerver_stats) {
+        memset (cerver_stats, 0, sizeof (CerverStats));
+        cerver_stats->received_packets = packets_per_type_new ();
+        cerver_stats->sent_packets = packets_per_type_new ();
+    } 
+
     return cerver_stats;
 
 }
 
 static void cerver_stats_delete (CerverStats *cerver_stats) {
 
-    if (cerver_stats) free (cerver_stats);
+    if (cerver_stats) {
+        packets_per_type_delete (cerver_stats->received_packets);
+        packets_per_type_delete (cerver_stats->sent_packets);
+        
+        free (cerver_stats);
+    } 
+
+}
+
+void cerver_stats_print (Cerver *cerver) {
+
+    if (cerver) {
+        if (cerver->stats) {
+            printf ("\nCerver's %s stats: ", cerver->info->name->str);
+            printf ("\nThreshold time:            %ld\n", cerver->stats->threshold_time);
+            printf ("N packets received:        %ld\n", cerver->stats->n_packets_received);
+            printf ("N receives done:           %ld\n", cerver->stats->n_receives_done);
+            printf ("Total bytes received:      %ld\n", cerver->stats->total_bytes_received);
+            printf ("N packets sent:            %ld\n", cerver->stats->n_packets_sent);
+            printf ("Total bytes sent:          %ld\n", cerver->stats->total_bytes_sent);
+
+            printf ("\nCurrent active client connections:         %ld\n", cerver->stats->current_active_client_connections);
+            printf ("Current connected clients:                 %ld\n", cerver->stats->current_n_connected_clients);
+            printf ("Current on hold connections:               %ld\n", cerver->stats->current_n_hold_connections);
+            printf ("Total clients:                             %ld\n", cerver->stats->total_n_clients);
+            printf ("Unique clients:                            %ld\n", cerver->stats->unique_clients);
+            printf ("Total client connections:                  %ld\n", cerver->stats->total_client_connections);
+
+            printf ("\nReceived packets:\n");
+            packets_per_type_print (cerver->stats->received_packets);
+
+            printf ("\nSent packets:\n");
+            packets_per_type_print (cerver->stats->sent_packets);
+        }
+
+        else {
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER,
+                c_string_create ("Cerver %s does not have a reference to cerver stats!",
+                cerver->info->name->str));
+        }
+    }
+
+    else {
+        cerver_log_msg (stderr, LOG_WARNING, LOG_CERVER, 
+            "Cant print stats of a NULL cerver!");
+    }
 
 }
 
@@ -165,7 +215,8 @@ void cerver_delete (void *ptr) {
         if (cerver->fds) free (cerver->fds);
         if (cerver->sock_buffer_map) htab_destroy (cerver->sock_buffer_map);
 
-        if (cerver->auth) auth_delete (cerver->auth);
+        // FIXME:
+        // if (cerver->auth) auth_delete (cerver->auth);
 
         if (cerver->on_hold_connections) avl_delete (cerver->on_hold_connections);
         if (cerver->hold_fds) free (cerver->hold_fds);
@@ -260,17 +311,18 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
     u8 retval = 1;
 
     if (cerver) {
-        cerver->auth = auth_new ();
-        if (cerver->auth) {
-            cerver->auth->max_auth_tries = max_auth_tries;
-            cerver->auth->authenticate = authenticate;
-            cerver->auth->auth_packet = auth_packet_generate ();
+        // FIXME:
+        // cerver->auth = auth_new ();
+        // if (cerver->auth) {
+        //     cerver->auth->max_auth_tries = max_auth_tries;
+        //     cerver->auth->authenticate = authenticate;
+        //     cerver->auth->auth_packet = auth_packet_generate ();
 
-            if (!cerver_on_hold_init (cerver)) {
-                cerver->auth_required = true;
-                retval = 0;
-            } 
-        }
+        //     if (!cerver_on_hold_init (cerver)) {
+        //         cerver->auth_required = true;
+        //         retval = 0;
+        //     } 
+        // }
     }
 
     return retval;
@@ -800,12 +852,21 @@ static void cerver_clean (Cerver *cerver) {
             case CUSTOM_CERVER: break;
             case FILE_CERVER: break;
             case GAME_CERVER: {
-                GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
+                if (cerver->cerver_data) {
+                    GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
 
-                if (game_cerver->final_game_action)
-                    game_cerver->final_game_action (game_cerver->final_action_args);
-                
-                game_delete (game_cerver);      // delete game cerver data
+                    if (game_cerver->final_game_action)
+                        game_cerver->final_game_action (game_cerver->final_action_args);
+
+                    Lobby *lobby = NULL;
+                    for (ListElement *le = dlist_start (game_cerver->current_lobbys); le; le = le->next) {
+                        lobby = (Lobby *) le->data;
+                        lobby->running = false;
+                    }
+                    
+                    game_delete (game_cerver);      // delete game cerver data
+                    cerver->cerver_data = NULL;
+                }
             } break;
             case WEB_CERVER: break;
 

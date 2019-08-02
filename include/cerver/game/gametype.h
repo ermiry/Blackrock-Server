@@ -2,6 +2,7 @@
 #define _CENGINE_GAME_TYPE_H_
 
 #include "cerver/types/string.h"
+#include "cerver/collections/dllist.h"
 
 struct _GameType {
 
@@ -29,12 +30,12 @@ extern GameType *game_type_create (const char *name, void *data, void (*delete_d
 extern void game_type_delete (void *ptr);
 
 // registers a new game type, returns 0 on LOG_SUCCESS, 1 on error
-extern int game_type_register (GameType *game_type);
+extern int game_type_register (DoubleList *game_types, GameType *game_type);
 
 // unregister a game type, returns 0 on LOG_SUCCESS, 1 on error
-extern int game_type_unregister (const char *name);
+extern int game_type_unregister (DoubleList *game_types, const char *name);
 
 // gets a registered game type by its name
-extern GameType *game_type_get_by_name (const char *name);
+extern GameType *game_type_get_by_name (DoubleList *game_types, const char *name);
 
 #endif

@@ -91,7 +91,8 @@ static void cerver_request_packet_handler (Packet *packet) {
                 // but will remain in the cerver if it has another connection active
                 // if not, it will be dropped
                 case CLIENT_CLOSE_CONNECTION: 
-                    client_remove_connection_by_sock_fd (packet->cerver, packet->client, packet->sock_fd); 
+                    client_remove_connection_by_sock_fd (packet->cerver, 
+                        packet->client, packet->connection->sock_fd); 
                     break;
 
                 // the client is going to disconnect and will close all of its active connections
@@ -122,7 +123,7 @@ void cerver_test_packet_handler (Packet *packet) {
 
         Packet *test_packet = packet_new ();
         if (test_packet) {
-            packet_set_network_values (test_packet, packet->sock_fd, packet->cerver->protocol);
+            packet_set_network_values (test_packet, packet->cerver, packet->client, packet->connection);
             test_packet->packet_type = TEST_PACKET;
             if (packet_send (test_packet, 0, NULL)) {
                 cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
@@ -141,61 +142,80 @@ static void cerver_packet_handler (void *ptr) {
 
     if (ptr) {
         Packet *packet = (Packet *) ptr;
+        packet->cerver->stats->n_packets_received += 1;
         // if (!packet_check (packet)) {
             switch (packet->header->packet_type) {
                 // handles an error from the client
                 case ERROR_PACKET: 
-                    packet->cerver->stats->n_error_packets += 1;
+                    packet->cerver->stats->received_packets->n_error_packets += 1;
+                    packet->client->stats->received_packets->n_error_packets += 1;
+                    packet->connection->stats->received_packets->n_error_packets += 1;
                     /* TODO: */ 
                     break;
 
                 // handles authentication packets
                 case AUTH_PACKET: 
-                    packet->cerver->stats->n_auth_packets += 1;
+                    packet->cerver->stats->received_packets->n_auth_packets += 1;
+                    packet->client->stats->received_packets->n_auth_packets += 1;
+                    packet->connection->stats->received_packets->n_auth_packets += 1;
                     /* TODO: */ 
                     break;
 
                 // handles a request made from the client
                 case REQUEST_PACKET: 
-                    packet->cerver->stats->n_request_packets += 1;
+                    packet->cerver->stats->received_packets->n_request_packets += 1;
+                    packet->client->stats->received_packets->n_request_packets += 1;
+                    packet->connection->stats->received_packets->n_request_packets += 1;
                     cerver_request_packet_handler (packet); 
                     break;
 
                 // handles a game packet sent from the client
                 case GAME_PACKET: 
-                    packet->cerver->stats->n_game_packets += 1;
+                    packet->cerver->stats->received_packets->n_game_packets += 1;
+                    packet->client->stats->received_packets->n_game_packets += 1;
+                    packet->connection->stats->received_packets->n_game_packets += 1;
                     game_packet_handler (packet); 
                     break;
 
                 // user set handler to handle app specific packets
                 case APP_PACKET:
-                    packet->cerver->stats->n_app_packets += 1;
+                    packet->cerver->stats->received_packets->n_app_packets += 1;
+                    packet->client->stats->received_packets->n_app_packets += 1;
+                    packet->connection->stats->received_packets->n_app_packets += 1;
                     if (packet->cerver->app_packet_handler)
                         packet->cerver->app_packet_handler (packet);
                     break;
 
                 // user set handler to handle app specific errors
                 case APP_ERROR_PACKET: 
-                    packet->cerver->stats->n_app_error_packets += 1;
+                    packet->cerver->stats->received_packets->n_app_error_packets += 1;
+                    packet->client->stats->received_packets->n_app_error_packets += 1;
+                    packet->connection->stats->received_packets->n_app_error_packets += 1;
                     if (packet->cerver->app_error_packet_handler)
                         packet->cerver->app_error_packet_handler (packet);
                     break;
 
                 // custom packet hanlder
                 case CUSTOM_PACKET: 
-                    packet->cerver->stats->n_custom_packets += 1;
+                    packet->cerver->stats->received_packets->n_custom_packets += 1;
+                    packet->client->stats->received_packets->n_custom_packets += 1;
+                    packet->connection->stats->received_packets->n_custom_packets += 1;
                     if (packet->cerver->custom_packet_handler)
                         packet->cerver->custom_packet_handler (packet);
                     break;
 
                 // acknowledge the client we have received his test packet
                 case TEST_PACKET: 
-                    packet->cerver->stats->n_test_packets += 1;
+                    packet->cerver->stats->received_packets->n_test_packets += 1;
+                    packet->client->stats->received_packets->n_test_packets += 1;
+                    packet->connection->stats->received_packets->n_test_packets += 1;
                     cerver_test_packet_handler (packet); 
                     break;
 
                 default:
-                    packet->cerver->stats->n_bad_packets += 1;
+                    packet->cerver->stats->received_packets->n_bad_packets += 1;
+                    packet->client->stats->received_packets->n_bad_packets += 1;
+                    packet->connection->stats->received_packets->n_bad_packets += 1;
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stdout, LOG_WARNING, LOG_PACKET, 
                         c_string_create ("Got a packet of unknown type in cerver %s.", 
@@ -213,11 +233,17 @@ static void cerver_packet_handler (void *ptr) {
 static void cerver_packet_select_handler (Cerver *cerver, i32 sock_fd,
     Packet *packet, bool on_hold) {
 
-    if (on_hold) on_hold_packet_handler (packet);
+    if (on_hold) {
+        // FIXME: we need to create a map for connections and sock fd
+        // Connection *connection;
+        // on_hold_packet_handler (packet);
+        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Fix cerver_packet_select_handler ()!");
+    } 
+
     else {
         Client *client = client_get_by_sock_fd (cerver, sock_fd);
         if (client) {
-            Connection *connection =  client_connection_get_by_sock_fd (client, sock_fd);
+            Connection *connection = client_connection_get_by_sock_fd (client, sock_fd);
             packet->client = client;
             packet->connection = connection;
 
@@ -324,7 +350,6 @@ static void cerver_receive_handle_buffer (Cerver *cerver, i32 sock_fd,
                     Packet *packet = packet_new ();
                     if (packet) {
                         packet->cerver = cerver;
-                        packet->sock_fd = sock_fd;
                         packet_header_copy (&packet->header, header);
                         packet->packet_size = packet->header->packet_size;
 
@@ -463,11 +488,12 @@ void cerver_receive (void *ptr) {
                     }
 
                     else {
+                        // FIXME: check if we receive form auth or normal
                         // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                         //     c_string_create ("Cerver %s rc: %ld for sock fd: %d",
                         //     cr->cerver->info->name->str, rc, cr->sock_fd));
-                        cr->cerver->stats->n_cerver_receives_done += 1;
-                        cr->cerver->stats->total_bytes_recived += rc;
+                        cr->cerver->stats->n_receives_done += 1;
+                        cr->cerver->stats->total_bytes_received += rc;
 
                         // handle the received packet buffer -> split them in packets of the correct size
                         cerver_receive_handle_buffer (cr->cerver, cr->sock_fd, 
@@ -499,7 +525,7 @@ void cerver_receive (void *ptr) {
 static void cerver_register_new_connection (Cerver *cerver, 
     const i32 new_fd, const struct sockaddr_storage client_address) {
 
-    Connection *connection = client_connection_create (new_fd, client_address);
+    Connection *connection = client_connection_create (new_fd, client_address, cerver->protocol);
     if (connection) {
         #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_DEBUG, LOG_CLIENT,
@@ -507,15 +533,17 @@ static void cerver_register_new_connection (Cerver *cerver,
                 connection->ip->str, connection->port));
         #endif
 
+        Client *client = NULL;
         bool failed = false;
 
+        // FIXME:
         // if the cerver requires auth, we put the connection on hold
-        if (cerver->auth_required) 
-            on_hold_connection (cerver, connection);
+        // if (cerver->auth_required) 
+        //     on_hold_connection (cerver, connection);
 
         // if not, we create a new client and we register the connection
-        else {
-            Client *client = client_create ();
+        // else {
+            client = client_create ();
             if (client) {
                 client_connection_register_to_client (client, connection);
 
@@ -553,12 +581,13 @@ static void cerver_register_new_connection (Cerver *cerver,
                     }
                 } 
             }
-        }
+        // }
 
         if (!failed) {
             // send cerver info packet
             if (cerver->type != WEB_CERVER) {
-                packet_set_network_values (cerver->info->cerver_info_packet, new_fd, cerver->protocol);
+                packet_set_network_values (cerver->info->cerver_info_packet, 
+                    cerver, client, connection);
                 if (packet_send (cerver->info->cerver_info_packet, 0, NULL)) {
                     cerver_log_msg (stderr, LOG_ERROR, LOG_PACKET, 
                         c_string_create ("Failed to send cerver %s info packet!", cerver->info->name->str));

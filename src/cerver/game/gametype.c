@@ -3,10 +3,8 @@
 #include <stdbool.h>
 
 #include "cerver/types/string.h"
-#include "cerver/game/gameType.h"
+#include "cerver/game/gametype.h"
 #include "cerver/collections/dllist.h"
-
-static DoubleList *game_types = NULL;       // registered game types
 
 GameType *game_type_new (void) {
 
@@ -60,7 +58,7 @@ void game_type_delete (void *ptr) {
 }
 
 // registers a new game type, returns 0 on LOG_SUCCESS, 1 on error
-int game_type_register (GameType *game_type) {
+int game_type_register (DoubleList *game_types, GameType *game_type) {
 
     int retval = 1;
 
@@ -74,7 +72,7 @@ int game_type_register (GameType *game_type) {
 }
 
 // unregister a game type, returns 0 on LOG_SUCCESS, 1 on error
-int game_type_unregister (const char *name) {
+int game_type_unregister (DoubleList *game_types, const char *name) {
 
     int retval = 1;
 
@@ -94,7 +92,7 @@ int game_type_unregister (const char *name) {
 }
 
 // gets a registered game type by its name
-GameType *game_type_get_by_name (const char *name) {
+GameType *game_type_get_by_name (DoubleList *game_types, const char *name) {
 
     GameType *game_type = NULL;
 
