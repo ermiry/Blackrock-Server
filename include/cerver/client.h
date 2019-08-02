@@ -71,8 +71,11 @@ extern void client_connection_get_values (Connection *connection);
 // ends a client connection
 extern void client_connection_end (Connection *connection);
 
+// gets the connection from the on hold connections map in cerver
+extern Connection *client_connection_get_by_sock_fd_from_on_hold (struct _Cerver *cerver, i32 sock_fd);
+
 // gets the connection from the client by its sock fd
-extern Connection *client_connection_get_by_sock_fd (struct _Client *client, i32 sock_fd);
+extern Connection *client_connection_get_by_sock_fd_from_client (struct _Client *client, i32 sock_fd);
 
 // checks if the connection belongs to the client
 extern bool client_connection_check_owner (struct _Client *client, Connection *connection);

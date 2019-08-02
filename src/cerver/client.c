@@ -136,8 +136,24 @@ void client_connection_end (Connection *connection) {
 
 }
 
+// gets the connection from the on hold connections map in cerver
+Connection *client_connection_get_by_sock_fd_from_on_hold (Cerver *cerver, i32 sock_fd) {
+
+    Connection *connection = NULL;
+
+    if (cerver) {
+        const i32 *key = &sock_fd;
+        void *connection_data = htab_get_data (cerver->on_hold_connection_sock_fd_map,
+            key, sizeof (i32));
+        if (connection_data) connection = (Connection *) connection_data;
+    }
+
+    return connection;
+
+}
+
 // gets the connection from the client by its sock fd
-Connection *client_connection_get_by_sock_fd (Client *client, i32 sock_fd) {
+Connection *client_connection_get_by_sock_fd_from_client (Client *client, i32 sock_fd) {
 
     if (client) {
         Connection *query = client_connection_new ();
@@ -492,7 +508,7 @@ u8 client_remove_connection_by_sock_fd (Cerver *cerver, Client *client, i32 sock
 
     if (cerver && client) {
         // remove the connection from the cerver and from the client
-        Connection *connection = client_connection_get_by_sock_fd (client, sock_fd);
+        Connection *connection = client_connection_get_by_sock_fd_from_client (client, sock_fd);
         if (connection) {
             client_connection_unregister_from_client (cerver, client, connection);
 

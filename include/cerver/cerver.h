@@ -21,10 +21,7 @@
 #include "cerver/collections/avl.h"
 #include "cerver/collections/htab.h"
 
-#define DEFAULT_USE_IPV6                0
-#define DEFAULT_PORT                    7001
 #define DEFAULT_CONNECTION_QUEUE        7
-#define DEFAULT_POLL_TIMEOUT            180000      // 3 min in mili secs
 
 #define DEFAULT_TH_POOL_INIT            4
 
@@ -64,9 +61,19 @@ extern u8 cerver_set_welcome_msg (struct _Cerver *cerver, const char *msg);
 typedef struct CerverStats {
 
     time_t threshold_time;                          // every time we want to reset cerver stats (like packets), defaults 24hrs
-    u64 n_packets_received;                         // total number of cerver packets received (packet header + data)
-    u64 n_receives_done;                            // total amount of actual calls to recv ()
+    
+    u64 client_n_packets_received;                  // packets received from clients
+    u64 client_receives_done;                       // receives done to clients
+    u64 client_bytes_received;                      // bytes received from clients
+
+    u64 on_hold_n_packets_received;                 // packets received from on hold connections
+    u64 on_hold_receives_done;                      // received done to on hold connections
+    u64 on_hold_bytes_received;                     // bytes received from on hold connections
+
+    u64 total_n_packets_received;                   // total number of cerver packets received (packet header + data)
+    u64 total_n_receives_done;                      // total amount of actual calls to recv ()
     u64 total_bytes_received;                       // total amount of bytes received in the cerver
+    
     u64 n_packets_sent;                             // total number of packets that were sent
     u64 total_bytes_sent;                           // total amount of bytes sent by the cerver
 
@@ -107,7 +114,6 @@ struct _Cerver {
     AVLTree *clients;                   // connected clients 
     Htab *client_sock_fd_map;           // direct indexing by sokcet fd as key
     // action to be performed when a new client connects
-    // FIXME: make sure that this is also executed for on hold clients!! (23/07/2019)
     Action on_client_connected;   
 
     struct pollfd *fds;
@@ -123,6 +129,7 @@ struct _Cerver {
     Auth *auth;                         // server auth info
      
     AVLTree *on_hold_connections;       // hold on the connections until they authenticate
+    Htab *on_hold_connection_sock_fd_map;
     struct pollfd *hold_fds;
     u32 max_on_hold_connections;
     u16 current_on_hold_nfds;

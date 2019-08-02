@@ -13,7 +13,10 @@
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 #include "cerver/auth.h"
+
 #include "cerver/threads/thpool.h"
+
+#include "cerver/collections/htab.h"
 
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
@@ -634,12 +637,13 @@ static u8 on_hold_poll (void *ptr) {
                 if (cerver->hold_fds[i].revents == 0) continue;
                 if (cerver->hold_fds[i].revents != POLLIN) continue;
 
-                if (thpool_add_work (cerver->thpool, cerver_receive, 
-                    cerver_receive_new (cerver, cerver->hold_fds[i].fd, true))) {
-                    cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
-                        c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
-                        cerver->info->name->str));
-                }
+                cerver_receive (cerver_receive_new (cerver, cerver->fds[i].fd, true));
+                // if (thpool_add_work (cerver->thpool, cerver_receive, 
+                //     cerver_receive_new (cerver, cerver->hold_fds[i].fd, true))) {
+                //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
+                //         c_string_create ("Failed to add cerver_receive () to cerver's %s thpool!", 
+                //         cerver->info->name->str));
+                // }
             }
         }
 
@@ -675,6 +679,9 @@ u8 on_hold_connection (Cerver *cerver, Connection *connection) {
                 cerver->stats->current_n_hold_connections;
 
                 avl_insert_node (cerver->on_hold_connections, connection);
+                const void *key = &connection->sock_fd;
+                htab_insert (cerver->on_hold_connection_sock_fd_map, key, sizeof (i32),
+                    connection, sizeof (Connection));
 
                 if (cerver->holding_connections == false) {
                     cerver->holding_connections = true;

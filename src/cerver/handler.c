@@ -13,6 +13,8 @@
 #include "cerver/auth.h"
 #include "cerver/game/game.h"
 
+#include "cerver/collections/htab.h"
+
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
@@ -142,7 +144,9 @@ static void cerver_packet_handler (void *ptr) {
 
     if (ptr) {
         Packet *packet = (Packet *) ptr;
-        packet->cerver->stats->n_packets_received += 1;
+        packet->cerver->stats->client_n_packets_received += 1;
+        packet->cerver->stats->total_n_packets_received += 1;
+
         // if (!packet_check (packet)) {
             switch (packet->header->packet_type) {
                 // handles an error from the client
@@ -234,16 +238,31 @@ static void cerver_packet_select_handler (Cerver *cerver, i32 sock_fd,
     Packet *packet, bool on_hold) {
 
     if (on_hold) {
-        // FIXME: we need to create a map for connections and sock fd
-        // Connection *connection;
-        // on_hold_packet_handler (packet);
-        cerver_log_msg (stderr, LOG_ERROR, LOG_CERVER, "Fix cerver_packet_select_handler ()!");
+        Connection *connection = client_connection_get_by_sock_fd_from_on_hold (cerver, sock_fd);
+        if (connection) {
+            packet->connection = connection;
+
+            packet->connection->stats->n_packets_received += 1;
+            packet->connection->stats->total_bytes_received += packet->packet_size;
+
+            on_hold_packet_handler (packet);
+        }
+
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE,
+                c_string_create ("Failed to get on hold connection associated with sock: %i",
+                sock_fd));
+            #endif
+            // no connection - discard the data
+            packet_delete (packet);
+        }
     } 
 
     else {
         Client *client = client_get_by_sock_fd (cerver, sock_fd);
         if (client) {
-            Connection *connection = client_connection_get_by_sock_fd (client, sock_fd);
+            Connection *connection = client_connection_get_by_sock_fd_from_client (client, sock_fd);
             packet->client = client;
             packet->connection = connection;
 
@@ -488,11 +507,21 @@ void cerver_receive (void *ptr) {
                     }
 
                     else {
-                        // FIXME: check if we receive form auth or normal
                         // cerver_log_msg (stdout, LOG_DEBUG, LOG_CERVER, 
                         //     c_string_create ("Cerver %s rc: %ld for sock fd: %d",
                         //     cr->cerver->info->name->str, rc, cr->sock_fd));
-                        cr->cerver->stats->n_receives_done += 1;
+
+                        if (cr->cerver->auth_required) {
+                            cr->cerver->stats->on_hold_receives_done += 1;
+                            cr->cerver->stats->on_hold_bytes_received += rc;
+                        }
+
+                        else {
+                            cr->cerver->stats->client_receives_done += 1;
+                            cr->cerver->stats->client_bytes_received += rc;
+                        }
+
+                        cr->cerver->stats->total_n_receives_done += 1;
                         cr->cerver->stats->total_bytes_received += rc;
 
                         // handle the received packet buffer -> split them in packets of the correct size
@@ -536,13 +565,12 @@ static void cerver_register_new_connection (Cerver *cerver,
         Client *client = NULL;
         bool failed = false;
 
-        // FIXME:
         // if the cerver requires auth, we put the connection on hold
-        // if (cerver->auth_required) 
-        //     on_hold_connection (cerver, connection);
+        if (cerver->auth_required) 
+            on_hold_connection (cerver, connection);
 
         // if not, we create a new client and we register the connection
-        // else {
+        else {
             client = client_create ();
             if (client) {
                 client_connection_register_to_client (client, connection);
@@ -581,7 +609,7 @@ static void cerver_register_new_connection (Cerver *cerver,
                     }
                 } 
             }
-        // }
+        }
 
         if (!failed) {
             // send cerver info packet
