@@ -20,6 +20,7 @@
 
 #pragma region auxiliary structures
 
+// FIXME: allocate and deallocate this for  each new connection!!!!
 typedef struct SockReceive {
 
     Packet *spare_packet;
@@ -426,7 +427,18 @@ static void cerver_receive_handle_buffer (Cerver *cerver, i32 sock_fd,
 static void cerver_receive_handle_failed (CerverReceive *cr) {
 
     if (cr->on_hold) {
-        // TODO: drop the connection
+        Connection *connection = client_connection_get_by_sock_fd_from_on_hold (cr->cerver, cr->sock_fd);
+        if (connection) on_hold_connection_drop (cr->cerver, connection);
+
+        // for what ever reason we have a rogue connection
+        else {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_WARNING, LOG_NO_TYPE, 
+                c_string_create ("Sock fd %d is not associated with an on hold connection in cerver %s",
+                cr->sock_fd, cr->cerver->info->name->str));
+            #endif
+            close (cr->sock_fd);
+        }
     }
 
     else {

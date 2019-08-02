@@ -113,11 +113,23 @@ void cerver_stats_print (Cerver *cerver) {
         if (cerver->stats) {
             printf ("\nCerver's %s stats: ", cerver->info->name->str);
             printf ("\nThreshold time:            %ld\n", cerver->stats->threshold_time);
-            printf ("N packets received:        %ld\n", cerver->stats->n_packets_received);
-            printf ("N receives done:           %ld\n", cerver->stats->n_receives_done);
-            printf ("Total bytes received:      %ld\n", cerver->stats->total_bytes_received);
-            printf ("N packets sent:            %ld\n", cerver->stats->n_packets_sent);
-            printf ("Total bytes sent:          %ld\n", cerver->stats->total_bytes_sent);
+
+            if (cerver->auth_required) {
+                printf ("\nClient packets received:       %ld\n", cerver->stats->client_n_packets_received);
+                printf ("Client receives done:          %ld\n", cerver->stats->client_receives_done);
+                printf ("Client bytes received:         %ld\n\n", cerver->stats->client_bytes_received);
+
+                printf ("On hold packets received:       %ld\n", cerver->stats->on_hold_n_packets_received);
+                printf ("On hold receives done:          %ld\n", cerver->stats->on_hold_receives_done);
+                printf ("On hold bytes received:         %ld\n\n", cerver->stats->on_hold_bytes_received);
+            }
+
+            printf ("Total packets received:        %ld\n", cerver->stats->total_n_packets_received);
+            printf ("Total receives done:           %ld\n", cerver->stats->total_n_receives_done);
+            printf ("Total bytes received:          %ld\n\n", cerver->stats->total_bytes_received);
+
+            printf ("N packets sent:                %ld\n", cerver->stats->n_packets_sent);
+            printf ("Total bytes sent:              %ld\n", cerver->stats->total_bytes_sent);
 
             printf ("\nCurrent active client connections:         %ld\n", cerver->stats->current_active_client_connections);
             printf ("Current connected clients:                 %ld\n", cerver->stats->current_n_connected_clients);
@@ -178,6 +190,7 @@ Cerver *cerver_new (void) {
         c->auth = NULL;
 
         c->on_hold_connections = NULL;
+        c->on_hold_connection_sock_fd_map = NULL;
         c->hold_fds = NULL;
         c->compress_on_hold = false;
         c->holding_connections = false;
@@ -218,6 +231,7 @@ void cerver_delete (void *ptr) {
         if (cerver->auth) auth_delete (cerver->auth);
 
         if (cerver->on_hold_connections) avl_delete (cerver->on_hold_connections);
+        if (cerver->on_hold_connection_sock_fd_map) htab_destroy (cerver->on_hold_connection_sock_fd_map);
         if (cerver->hold_fds) free (cerver->hold_fds);
 
         cerver_info_delete (cerver->info);
@@ -279,7 +293,8 @@ static u8 cerver_on_hold_init (Cerver *cerver) {
 
     if (cerver) {
         cerver->on_hold_connections = avl_init (client_connection_comparator, client_connection_delete);
-        if (cerver->on_hold_connections) {
+        cerver->on_hold_connection_sock_fd_map = htab_init (poll_n_fds / 2, NULL, NULL, NULL, false, NULL, NULL);
+        if (cerver->on_hold_connections && cerver->on_hold_connection_sock_fd_map) {
             cerver->max_on_hold_connections = poll_n_fds;
             cerver->hold_fds = (struct pollfd *) calloc (cerver->max_on_hold_connections, sizeof (struct pollfd));
             if (cerver->hold_fds) {

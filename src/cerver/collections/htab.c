@@ -192,25 +192,27 @@ int htab_insert (Htab *ht, const void *key, size_t key_size, void *val, size_t v
 // returns a ptr to the data associated with the key
 void *htab_get_data (Htab *ht, const void *key, size_t key_size) {
 
-    size_t index;
-    HtabNode *node = NULL;  
+    if (ht) {
+        size_t index;
+        HtabNode *node = NULL;  
 
-    index = ht->hash_f(key, key_size, ht->size);
-    node = ht->table[index];
+        index = ht->hash_f(key, key_size, ht->size);
+        node = ht->table[index];
 
-    while (node && node->key && node->val) {
-        if (node->key_size == key_size) {
-            if (!ht->compare_f (key, key_size, node->key, node->key_size)) {
-                return node->val;
-                // ht->vcopy_f(val, node->val, node->val_size);
-                // *val_size = node->val_size;
-                // return 0;
+        while (node && node->key && node->val) {
+            if (node->key_size == key_size) {
+                if (!ht->compare_f (key, key_size, node->key, node->key_size)) {
+                    return node->val;
+                    // ht->vcopy_f(val, node->val, node->val_size);
+                    // *val_size = node->val_size;
+                    // return 0;
+                }
+
+                else node = node->next;
             }
 
             else node = node->next;
         }
-
-        else node = node->next;
     }
 
     return NULL;
