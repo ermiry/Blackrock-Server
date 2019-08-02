@@ -8,7 +8,7 @@ SQLITE3 	:= -l sqlite3
 CMONGO 		:= `pkg-config --libs --cflags libmongoc-1.0`
 
 # print additional information
-DEFINES 	:= -D CERVER_DEBUG -D THPOOL_DEBUG -D CERVER_STATS -D BLACK_DEBUG -D ERMIRY_DEBUG
+DEFINES 	:= -D CERVER_DEBUG -D CERVER_STATS -D ERMIRY_DEBUG -D BLACK_DEBUG -D THPOOL_DEBUG
 
 CC          := gcc
 

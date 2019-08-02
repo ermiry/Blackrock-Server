@@ -215,8 +215,7 @@ void cerver_delete (void *ptr) {
         if (cerver->fds) free (cerver->fds);
         if (cerver->sock_buffer_map) htab_destroy (cerver->sock_buffer_map);
 
-        // FIXME:
-        // if (cerver->auth) auth_delete (cerver->auth);
+        if (cerver->auth) auth_delete (cerver->auth);
 
         if (cerver->on_hold_connections) avl_delete (cerver->on_hold_connections);
         if (cerver->hold_fds) free (cerver->hold_fds);
@@ -311,18 +310,17 @@ u8 cerver_set_auth (Cerver *cerver, u8 max_auth_tries, delegate authenticate) {
     u8 retval = 1;
 
     if (cerver) {
-        // FIXME:
-        // cerver->auth = auth_new ();
-        // if (cerver->auth) {
-        //     cerver->auth->max_auth_tries = max_auth_tries;
-        //     cerver->auth->authenticate = authenticate;
-        //     cerver->auth->auth_packet = auth_packet_generate ();
+        cerver->auth = auth_new ();
+        if (cerver->auth) {
+            cerver->auth->max_auth_tries = max_auth_tries;
+            cerver->auth->authenticate = authenticate;
+            cerver->auth->auth_packet = auth_packet_generate ();
 
-        //     if (!cerver_on_hold_init (cerver)) {
-        //         cerver->auth_required = true;
-        //         retval = 0;
-        //     } 
-        // }
+            if (!cerver_on_hold_init (cerver)) {
+                cerver->auth_required = true;
+                retval = 0;
+            } 
+        }
     }
 
     return retval;
@@ -993,7 +991,7 @@ Packet *cerver_packet_generate (Cerver *cerver) {
     if (cerver) {
         SCerver *scerver = cerver_serliaze (cerver);
         if (scerver) {
-            packet = packet_generate_request (SERVER_PACKET, SERVER_INFO, scerver, sizeof (SCerver));
+            packet = packet_generate_request (CERVER_PACKET, CERVER_INFO, scerver, sizeof (SCerver));
             scerver_delete (scerver);
         }
     }

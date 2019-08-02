@@ -177,7 +177,7 @@ ListElement *player_get_le_from_lobby (Lobby *lobby, Player *player) {
 }
 
 // broadcasts a packet to all the players in the lobby
-void player_broadcast_to_all (const Cerver *cerver, const Lobby *lobby, Packet *packet, 
+void player_broadcast_to_all (Cerver *cerver, const Lobby *lobby, Packet *packet, 
     Protocol protocol, int flags) {
 
     if (lobby && packet) {

@@ -326,6 +326,7 @@ User *user_get_by_username (const String *username, bool populate) {
 
 }
 
+// FIXME:
 // searches a user by emaila nd authenticates it using the provided password
 // on success, returns the user associated with the credentials
 User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
@@ -351,16 +352,16 @@ User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
                     user->black_profile = black_profile;
 
                     // serialize and send user 
-                    user_send (user, packet->sock_fd, packet->cerver->protocol);
+                    // user_send (user, packet->sock_fd, packet->cerver->protocol);
 
-                    // send inbox file
-                    user_send_inbox (user, packet->sock_fd, packet->cerver->protocol);
+                    // // send inbox file
+                    // user_send_inbox (user, packet->sock_fd, packet->cerver->protocol);
 
-                    // send friends request file
-                    user_send_requests (user, packet->sock_fd, packet->cerver->protocol);
+                    // // send friends request file
+                    // user_send_requests (user, packet->sock_fd, packet->cerver->protocol);
 
-                    // serialize and send blackrock profile
-                    black_profile_send (black_profile, packet->sock_fd, packet->cerver->protocol);
+                    // // serialize and send blackrock profile
+                    // black_profile_send (black_profile, packet->sock_fd, packet->cerver->protocol);
 
                     retval = user;
                 }
@@ -375,7 +376,7 @@ User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
                     Packet *error_packet = error_packet_generate (ERR_NO_PROFILE, 
                         "No valid blackrock profile associated with your account.");
                     if (error_packet) {
-                        packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
+                        // packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
                         packet_send (error_packet, 0, NULL);
                         packet_delete (error_packet);
                     }
@@ -451,6 +452,7 @@ static SUser *user_serialize (const User *user) {
 
 /*** user packets ***/
 
+// FIXME:
 // serializes a user and sends it to the client
 u8 user_send (const User *user, const i32 sock_fd, const Protocol protocol) {
 
@@ -461,7 +463,7 @@ u8 user_send (const User *user, const i32 sock_fd, const Protocol protocol) {
         if (suser) {
             Packet *user_packet = packet_generate_request (APP_PACKET, ERMIRY_USER, suser, sizeof (SUser));
             if (user_packet) {
-                packet_set_network_values (user_packet, sock_fd, protocol);
+                // packet_set_network_values (user_packet, sock_fd, protocol);
                 retval = packet_send (user_packet, 0, NULL);
                 packet_delete (user_packet);
             }

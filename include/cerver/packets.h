@@ -30,7 +30,7 @@ extern void packets_set_protocol_version (ProtocolVersion version);
 // these indicate what type of packet we are sending/recieving
 typedef enum PacketType {
 
-    SERVER_PACKET       = 0,
+    CERVER_PACKET       = 0,
     CLIENT_PACKET       = 1,
     ERROR_PACKET        = 2,
 	REQUEST_PACKET      = 3,
@@ -89,9 +89,6 @@ extern u8 packet_header_copy (PacketHeader **dest, PacketHeader *source);
 // these indicate the data and more info about the packet type
 typedef enum RequestType {
 
-    SERVER_INFO                 = 0,
-    SERVER_TEARDOWN             = 1,
-
     CLIENT_CLOSE_CONNECTION     = 2,
     CLIENT_DISCONNET            = 3,
 
@@ -103,6 +100,16 @@ typedef enum RequestType {
     SUCCESS_AUTH                = 8,
 
 } RequestType;
+
+typedef enum CerverPacket {
+
+    CERVER_INFO                 = 0,
+    CERVER_TEARDOWN             = 1,
+
+    CERVER_INFO_STATS           = 2,
+    CERVER_GAME_STATS           = 3
+
+} CerverPacket;
 
 typedef enum GamePacket {
 

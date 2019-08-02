@@ -33,6 +33,7 @@ int main (void) {
         if (black_cerver) {
             // set cerver configuration
             cerver_set_thpool_n_threads (black_cerver, 4);
+            cerver_set_auth (black_cerver, 3, NULL);
             // cerver_set_app_handlers (black_cerver, black_packet_handler, NULL);
             // cerver_set_on_client_connected (black_cerver, black_on_new_client_action);
 
