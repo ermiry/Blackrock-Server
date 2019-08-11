@@ -77,7 +77,7 @@ static void character_destroy (Character *character) {
             free (character->equipment);
         }
 
-        // dlist_destroy (character->animations);
+        // dlist_delete (character->animations);
 
         free (character);
     }

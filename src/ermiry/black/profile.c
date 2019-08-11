@@ -64,7 +64,7 @@ void black_profile_delete (BlackProfile *profile) {
         if (profile->date_purchased) free (profile->date_purchased);
         if (profile->last_time) free (profile->last_time);
 
-        // dlist_destroy (profile->achievements);
+        // dlist_delete (profile->achievements);
 
         black_pve_stats_destroy (profile->pve_stats);
         black_pvp_stats_destroy (profile->pvp_stats);
@@ -474,7 +474,7 @@ u8 black_profile_send (const BlackProfile *black_profile, const i32 sock_fd, con
             Packet *profile_packet = packet_generate_request (APP_PACKET, ERMIRY_BLACK_PROFILE, sprofile, sizeof (SBlackProfile));
             if (profile_packet) {
                 // packet_set_network_values (profile_packet, sock_fd, protocol);
-                retval = packet_send (profile_packet, 0, NULL);
+                retval = packet_send (profile_packet, 0, NULL, false);
                 packet_delete (profile_packet);
             }
 

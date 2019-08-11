@@ -22,8 +22,8 @@ void world_destroy (World *world) {
     if (world) {
         if (world->game_map) map_destroy (world->game_map);
 
-        dlist_destroy (world->players);
-        dlist_destroy (world->enemies);
+        dlist_delete (world->players);
+        dlist_delete (world->enemies);
 
         free (world);
     }

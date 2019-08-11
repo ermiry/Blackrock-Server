@@ -88,9 +88,9 @@ void game_delete (void *game_ptr) {
     if (game_ptr) {
         GameCerver *game = (GameCerver *) game_ptr;
 
-        dlist_destroy (game->current_lobbys);
+        dlist_delete (game->current_lobbys);
 
-        dlist_destroy (game->game_types);
+        dlist_delete (game->game_types);
 
         if (game->game_data) {
             if (game->delete_game_data)

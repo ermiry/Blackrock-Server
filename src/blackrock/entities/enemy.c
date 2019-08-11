@@ -215,7 +215,7 @@ void enemy_destroy_comp (void *ptr) {
     if (ptr) {
         Enemy *enemy = (Enemy *) ptr;
         entity_destroy (enemy->entity);
-        dlist_destroy (enemy->animations);
+        dlist_delete (enemy->animations);
         free (enemy);
     }
 

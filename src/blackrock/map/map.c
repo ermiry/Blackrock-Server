@@ -372,7 +372,7 @@ static void dungeon_create (Dungeon *dungeon) {
             }
         }    
 
-        dlist_destroy (segments);
+        dlist_delete (segments);
 
         // continue looping through the rooms
         preptr = preptr->next;
@@ -384,7 +384,7 @@ static void dungeon_create (Dungeon *dungeon) {
 
     // cleanning up 
     firstRoom = deleteList (firstRoom);
-    dlist_destroy (hallways);
+    dlist_delete (hallways);
 
 }
 

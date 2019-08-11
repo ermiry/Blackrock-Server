@@ -16,6 +16,7 @@
 #include "cerver/collections/dllist.h"
 
 struct _Cerver;
+struct _Packet;
 struct _PacketsPerType;
 struct _Connection;
 

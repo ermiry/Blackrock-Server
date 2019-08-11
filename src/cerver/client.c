@@ -81,7 +81,7 @@ void client_delete (void *ptr) {
 
         str_delete (client->session_id);
 
-        dlist_destroy (client->connections);
+        dlist_delete (client->connections);
 
         if (client->data) {
             if (client->delete_data) client->delete_data (client->data);

@@ -61,7 +61,7 @@ mongoc_collection_t *black_guild_collection = NULL;
 //         if (guild->creation_date) free (guild->creation_date);
 
 //         user_destroy (guild->leader);
-//         dlist_destroy (guild->members);
+//         dlist_delete (guild->members);
 
 //         free (guild);
 //     }

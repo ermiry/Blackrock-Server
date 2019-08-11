@@ -191,7 +191,7 @@ void lobby_delete (void *lobby_ptr) {
 
         str_delete (lobby->id);
 
-        dlist_destroy (lobby->players);
+        dlist_delete (lobby->players);
         htab_destroy (lobby->sock_fd_player_map);
 
         if (lobby->players_fds) free (lobby->players_fds);

@@ -71,12 +71,12 @@ void user_delete (void *ptr) {
         if (user->member_since) free (user->member_since);
         if (user->last_time) free (user->last_time);
 
-        dlist_destroy (user->friends);
+        dlist_delete (user->friends);
 
         str_delete (user->inbox);
         str_delete (user->requests);
 
-        dlist_destroy (user->achievements);
+        dlist_delete (user->achievements);
 
         free (user);
     }
@@ -377,7 +377,7 @@ User *user_authenticate (const Packet *packet, const SErmiryAuth *ermiry_auth) {
                         "No valid blackrock profile associated with your account.");
                     if (error_packet) {
                         // packet_set_network_values (error_packet, packet->sock_fd, packet->cerver->protocol);
-                        packet_send (error_packet, 0, NULL);
+                        packet_send (error_packet, 0, NULL, false);
                         packet_delete (error_packet);
                     }
                 }
@@ -464,7 +464,7 @@ u8 user_send (const User *user, const i32 sock_fd, const Protocol protocol) {
             Packet *user_packet = packet_generate_request (APP_PACKET, ERMIRY_USER, suser, sizeof (SUser));
             if (user_packet) {
                 // packet_set_network_values (user_packet, sock_fd, protocol);
-                retval = packet_send (user_packet, 0, NULL);
+                retval = packet_send (user_packet, 0, NULL, false);
                 packet_delete (user_packet);
             }
 
