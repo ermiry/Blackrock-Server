@@ -13,7 +13,10 @@
 #include "cerver/auth.h"
 #include "cerver/handler.h"
 #include "cerver/client.h"
+#include "cerver/connection.h"
 #include "cerver/packets.h"
+
+#include "cerver/threads/thread.h"
 
 #include "cerver/collections/avl.h"
 #include "cerver/collections/dllist.h"
@@ -22,266 +25,6 @@
 #include "cerver/utils/utils.h"
 
 static u64 next_client_id = 0;
-
-void client_connection_end (Connection *connection);
-void client_connection_get_values (Connection *connection);
-
-#pragma region Client Connection
-
-static ConnectionStats *connection_stats_new (void) {
-
-    ConnectionStats *stats = (ConnectionStats *) malloc (sizeof (ConnectionStats));
-    if (stats) {
-        memset (stats, 0, sizeof (ConnectionStats));
-        stats->received_packets = packets_per_type_new ();
-        stats->sent_packets = packets_per_type_new ();
-    } 
-
-    return stats;
-
-}
-
-static inline void connection_stats_delete (ConnectionStats *stats) { 
-    
-    if (stats) {
-        packets_per_type_delete (stats->received_packets);
-        packets_per_type_delete (stats->sent_packets);
-
-        free (stats); 
-    } 
-    
-}
-
-Connection *client_connection_new (void) {
-
-    Connection *connection = (Connection *) malloc (sizeof (Connection));
-    if (connection) {
-        memset (connection, 0, sizeof (Connection));
-        connection->ip = NULL;
-        connection->active = false;
-        connection->auth_tries = DEFAULT_AUTH_TRIES;
-        connection->stats = NULL;   
-    }
-
-    return connection;
-
-}
-
-Connection *client_connection_create (const i32 sock_fd, const struct sockaddr_storage address,
-    Protocol protocol) {
-
-    Connection *connection = client_connection_new ();
-    if (connection) {
-        connection->sock_fd = sock_fd;
-        time (&connection->timestamp);
-        memcpy (&connection->address, &address, sizeof (struct sockaddr_storage));
-        client_connection_get_values (connection);
-        connection->protocol = protocol;
-        connection->stats = connection_stats_new ();
-    }
-
-    return connection;
-
-}
-
-void client_connection_delete (void *ptr) {
-
-    if (ptr) {
-        Connection *connection = (Connection *) ptr;
-
-        if (connection->active) client_connection_end (connection);
-
-        str_delete (connection->ip);
-        connection_stats_delete (connection->stats);
-
-        free (connection);
-    }
-
-}
-
-// compare two connections by their socket fds
-int client_connection_comparator (const void *a, const void *b) {
-
-    if (a && b) {
-        Connection *con_a = (Connection *) a;
-        Connection *con_b = (Connection *) b;
-
-        if (con_a->sock_fd < con_b->sock_fd) return -1;
-        else if (con_a->sock_fd == con_b->sock_fd) return 0;
-        else return 1; 
-    }
-
-    return 0;
-
-}
-
-// get from where the client is connecting
-void client_connection_get_values (Connection *connection) {
-
-    if (connection) {
-        connection->ip = str_new (sock_ip_to_string ((const struct sockaddr *) &connection->address));
-        connection->port = sock_ip_port ((const struct sockaddr *) &connection->address);
-    }
-
-}
-
-// ends a client connection
-void client_connection_end (Connection *connection) {
-
-    if (connection) {
-        close (connection->sock_fd);
-        connection->sock_fd = -1;
-        connection->active = false;
-    }
-
-}
-
-// gets the connection from the on hold connections map in cerver
-Connection *client_connection_get_by_sock_fd_from_on_hold (Cerver *cerver, i32 sock_fd) {
-
-    Connection *connection = NULL;
-
-    if (cerver) {
-        const i32 *key = &sock_fd;
-        void *connection_data = htab_get_data (cerver->on_hold_connection_sock_fd_map,
-            key, sizeof (i32));
-        if (connection_data) connection = (Connection *) connection_data;
-    }
-
-    return connection;
-
-}
-
-// gets the connection from the client by its sock fd
-Connection *client_connection_get_by_sock_fd_from_client (Client *client, i32 sock_fd) {
-
-    if (client) {
-        Connection *query = client_connection_new ();
-        if (query) {
-            query->sock_fd = sock_fd;
-            void *connection_data = dlist_search (client->connections, query);
-            client_connection_delete (query);
-            return (connection_data ? (Connection *) connection_data : NULL);
-        }
-    }
-
-    return NULL;
-
-}
-
-// checks if the connection belongs to the client
-bool client_connection_check_owner (Client *client, Connection *connection) {
-
-    if (client && connection) {
-        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
-            if (connection->sock_fd == ((Connection *) le->data)->sock_fd) return true;
-        }
-    }
-
-    return false;
-
-}
-
-// registers a new connection to a client without adding it to the cerver poll
-// returns 0 on success, 1 on error
-u8 client_connection_register_to_client (Client *client, Connection *connection) {
-
-    u8 retval = 1;
-
-    if (client && connection) {
-        if (dlist_insert_after (client->connections, dlist_end (client->connections), connection)) {
-            #ifdef CERVER_DEBUG
-            if (client->session_id) {
-                cerver_log_msg (stdout, LOG_SUCCESS, LOG_CLIENT, 
-                    c_string_create ("Registered a new connection to client with session id: %s",
-                    client->session_id->str));
-            }
-            #endif
-
-            retval = 0;
-        }
-
-        // for wahtever reason failed to register the connection to the client
-        // we close the connection, as it can not be a free connection
-        else {
-            client_connection_end (connection);
-            client_connection_delete (connection);
-        }
-    }
-
-    return retval;
-
-}
-
-// unregisters a connection from a client, if the connection is active, it is stopped and removed 
-// from the cerver poll as there can't be a free connection withput client
-// returns 0 on success, 1 on error
-u8 client_connection_unregister_from_client (Cerver *cerver, Client *client, Connection *connection) {
-
-    u8 retval = 1;
-
-    if (client && connection) {
-        if (client->connections->size > 1) {
-            Connection *con = NULL;
-            for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
-                con = (Connection *) le->data;
-                if (connection->sock_fd == con->sock_fd) {
-                    // unmap the client connection from the cerver poll
-                    cerver_poll_unregister_connection (cerver, client, connection);
-
-                    client_connection_end (connection);
-                    client_connection_delete (dlist_remove_element (client->connections, le));
-
-                    retval = 0;
-                    
-                    break;
-                }
-            }
-        }
-
-        else {
-            cerver_poll_unregister_connection (cerver, client, connection);
-
-            client_connection_end (connection);
-            client_connection_delete (dlist_remove_element (client->connections, NULL));
-
-            retval = 0;
-        }
-    }
-
-    return retval;
-
-}
-
-// wrapper function for easy access
-// registers a client connection to the cerver and maps the sock fd to the client
-u8 client_connection_register_to_cerver (Cerver *cerver, Client *client, Connection *connection) {
-
-    if (!cerver_poll_register_connection (cerver, client, connection)) {
-        connection->active = true;
-        return 0;
-    }
-
-    return 1;
-
-}
-
-// wrapper function for easy access
-// unregisters a client connection from the cerver and unmaps the sock fd from the client
-u8 client_connection_unregister_from_cerver (Cerver *cerver, Client *client, Connection *connection) {
-
-    if (!cerver_poll_unregister_connection (cerver, client, connection)) {
-        connection->active = false;
-        return 0;
-    }
-
-    return 1;
-
-}
-
-#pragma endregion
-
-#pragma region Client
 
 static ClientStats *client_stats_new (void) {
 
@@ -322,6 +65,8 @@ Client *client_new (void) {
         client->data = NULL;
         client->delete_data = NULL;
 
+        client->running = false;
+
         client->stats = NULL;   
     }
 
@@ -359,7 +104,7 @@ Client *client_create (void) {
         client->id = next_client_id;
         next_client_id += 1;
         time (&client->connected_timestamp);
-        client->connections = dlist_init (client_connection_delete, client_connection_comparator);
+        client->connections = dlist_init (connection_delete, connection_comparator);
         client->stats = client_stats_new ();
     }
 
@@ -373,8 +118,8 @@ Client *client_create_with_connection (Cerver *cerver,
 
     Client *client = client_create ();
     if (client) {
-        Connection *connection = client_connection_create (sock_fd, address, cerver->protocol);
-        if (connection) client_connection_register_to_client (client, connection);
+        Connection *connection = connection_create (sock_fd, address, cerver->protocol);
+        if (connection) connection_register_to_client (client, connection);
         else {
             // failed to create a new connection
             client_delete (client);
@@ -391,7 +136,7 @@ void client_set_session_id (Client *client, const char *session_id) {
 
     if (client) {
         if (client->session_id) str_delete (client->session_id);
-        client->session_id = str_new (session_id);
+        client->session_id = session_id ? str_new (session_id) : NULL;
     }
 
 }
@@ -446,7 +191,7 @@ u8 client_disconnect (Client *client) {
         Connection *connection = NULL;
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
             connection = (Connection *) le->data;
-            client_connection_end (connection);
+            connection_end (connection);
         }
 
         return 0;
@@ -476,8 +221,8 @@ u8 client_remove_connection (Cerver *cerver, Client *client, Connection *connect
 
     if (cerver && client && connection) {
         // check if the connection actually belongs to the client
-        if (client_connection_check_owner (client, connection)) {
-            client_connection_unregister_from_client (cerver, client, connection);
+        if (connection_check_owner (client, connection)) {
+            connection_unregister_from_client (cerver, client, connection);
 
             // if the client does not have any active connection, drop it
             if (client->connections->size <= 0) client_drop (cerver, client);
@@ -508,9 +253,9 @@ u8 client_remove_connection_by_sock_fd (Cerver *cerver, Client *client, i32 sock
 
     if (cerver && client) {
         // remove the connection from the cerver and from the client
-        Connection *connection = client_connection_get_by_sock_fd_from_client (client, sock_fd);
+        Connection *connection = connection_get_by_sock_fd_from_client (client, sock_fd);
         if (connection) {
-            client_connection_unregister_from_client (cerver, client, connection);
+            connection_unregister_from_client (cerver, client, connection);
 
             // if the client does not have any active connection, drop it
             if (client->connections->size <= 0) client_drop (cerver, client);
@@ -533,9 +278,77 @@ u8 client_remove_connection_by_sock_fd (Cerver *cerver, Client *client, i32 sock
 
 }
 
-// register all the active connections from a client to a cerver
-// returns 0 on success, 1 if one or more connections failed to register
+// registers all the active connections from a client to the cerver's structures (like maps)
+// returns 0 on success registering at least one, 1 if all connections failed
 u8 client_register_connections_to_cerver (Cerver *cerver, Client *client) {
+
+    u8 retval = 1;
+
+    if (cerver && client) {
+        u8 n_failed = 0;          // n connections that failed to be registered
+
+        Connection *connection = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            connection = (Connection *) le->data;
+            if (connection_register_to_cerver (cerver, client, connection))
+                n_failed++;
+        }
+
+         // check how many connections have failed
+        if (n_failed == client->connections->size) {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                c_string_create ("Failed to register all the connections for client %ld (id) to cerver %s",
+                client->id, cerver->info->name->str));
+            #endif
+
+            client_drop (cerver, client);       // drop the client ---> no active connections
+        }
+
+        else retval = 0;        // at least one connection is active
+    }
+
+    return retval;
+
+}
+
+// unregiters all the active connections from a client from the cerver's structures (like maps)
+// returns 0 on success unregistering at least 1 connection, 1 failed to unregister all
+u8 client_unregister_connections_from_cerver (Cerver *cerver, Client *client) {
+
+    u8 retval = 1;
+
+    if (cerver && client) {
+        u8 n_failed = 0;        // n connections that failed to unregister
+
+        Connection *connection = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            connection = (Connection *) le->data;
+            if (connection_unregister_from_cerver (cerver, client, connection))
+                n_failed++;
+        }
+
+        // check how many connections have failed
+        if ((n_failed > 0) && (n_failed == client->connections->size)) {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                c_string_create ("Failed to unregister all the connections for client %ld (id) from cerver %s",
+                client->id, cerver->info->name->str));
+            #endif
+
+            // client_drop (cerver, client);       // drop the client ---> no active connections
+        }
+
+        else retval = 0;        // at least one connection is active
+    }
+
+    return retval;
+
+}
+
+// registers all the active connections from a client to the cerver's poll
+// returns 0 on success registering at least one, 1 if all connections failed
+u8 client_register_connections_to_cerver_poll (Cerver *cerver, Client *client) {
 
     u8 retval = 1;
 
@@ -546,7 +359,7 @@ u8 client_register_connections_to_cerver (Cerver *cerver, Client *client) {
         Connection *connection = NULL;
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
             connection = (Connection *) le->data;
-            if (client_connection_register_to_cerver (cerver, client, connection))
+            if (connection_register_to_cerver_poll (cerver, client, connection))
                 n_failed++;
         }
 
@@ -554,7 +367,42 @@ u8 client_register_connections_to_cerver (Cerver *cerver, Client *client) {
         if (n_failed == client->connections->size) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
-                c_string_create ("Failed to register all the connections for client %ld (id) to cerver %s",
+                c_string_create ("Failed to register all the connections for client %ld (id) to cerver %s poll",
+                client->id, cerver->info->name->str));
+            #endif
+
+            client_drop (cerver, client);       // drop the client ---> no active connections
+        }
+
+        else retval = 0;        // at least one connection is active
+    }
+
+    return retval;
+
+}
+
+// unregisters all the active connections from a client from the cerver's poll 
+// returns 0 on success unregistering at least 1 connection, 1 failed to unregister all
+u8 client_unregister_connections_from_cerver_poll (Cerver *cerver, Client *client) {
+
+    u8 retval = 1;
+
+    if (cerver && client) {
+        u8 n_failed = 0;        // n connections that failed to unregister
+
+        // unregister all the client connections from the cerver poll
+        Connection *connection = NULL;
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            connection = (Connection *) le->data;
+            if (connection_unregister_from_cerver_poll (cerver, client, connection))
+                n_failed++;
+        }
+
+        // check how many connections have failed
+        if (n_failed == client->connections->size) {
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stderr, LOG_ERROR, LOG_CLIENT, 
+                c_string_create ("Failed to unregister all the connections for client %ld (id) from cerver %s poll",
                 client->id, cerver->info->name->str));
             #endif
 
@@ -576,7 +424,8 @@ u8 client_register_to_cerver (Cerver *cerver, Client *client) {
     u8 retval = 1;
 
     if (cerver && client) {
-        if (!client_register_connections_to_cerver (cerver, client)) {
+        if (!client_register_connections_to_cerver (cerver, client) 
+            && !client_register_connections_to_cerver_poll (cerver, client)) {
             // register the client to the cerver client's
             avl_insert_node (cerver->clients, client);
 
@@ -607,11 +456,15 @@ Client *client_unregister_from_cerver (Cerver *cerver, Client *client) {
     Client *retval = NULL;
 
     if (cerver && client) {
+        // unregister the connections from the cerver
+        client_unregister_connections_from_cerver (cerver, client);
+
         // unregister all the client connections from the cerver
+        // client_unregister_connections_from_cerver (cerver, client);
         Connection *connection = NULL;
         for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
             connection = (Connection *) le->data;
-            cerver_poll_unregister_connection (cerver, client, connection);
+            connection_unregister_from_cerver_poll (cerver, client, connection);
         }
 
         // remove the client from the cerver's clients
@@ -684,4 +537,160 @@ Client *client_get_by_session_id (Cerver *cerver, char *session_id) {
 
 }
 
-#pragma endregion
+// broadcast a packet to all clients inside an avl structure
+void client_broadcast_to_all_avl (AVLNode *node, Cerver *cerver, Packet *packet) {
+
+    if (node && cerver && packet) {
+        client_broadcast_to_all_avl (node->right, cerver, packet);
+
+        // send the packet to current client
+        if (node->id) {
+            Client *client = (Client *) node->id;
+
+            // send the packet to all of its active connections
+            Connection *connection = NULL;
+            for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+                connection = (Connection *) le->data;
+                packet_set_network_values (packet, cerver, client, connection, NULL);
+                packet_send (packet, 0, NULL, false);
+            }
+        }
+
+        client_broadcast_to_all_avl (node->left, cerver, packet);
+    }
+
+}
+
+static ClientConnection *client_connection_aux_new (Client *client, Connection *connection) {
+
+    ClientConnection *cc = (ClientConnection *) malloc (sizeof (ClientConnection));
+    if (cc) {
+        cc->client = client;
+        cc->connection = connection;
+    }
+
+    return cc;
+
+}
+
+void client_connection_aux_delete (ClientConnection *cc) { if (cc) free (cc); }
+
+static u8 client_start (Client *client) {
+
+    u8 retval = 1;
+
+    if (client) {
+        // check if we walready have the client poll running
+        if (!client->running) {
+            time (&client->time_started);
+            client->running = true;
+            retval = 0;
+        }
+    }
+
+    return retval;
+
+}
+
+// creates a new connection that is ready to connect and registers it to the client
+Connection *client_connection_create (Client *client,
+    const char *ip_address, u16 port, Protocol protocol, bool use_ipv6) {
+
+    Connection *connection = NULL;
+
+    if (client) {
+        connection = connection_new ();
+        if (connection) {
+            connection_set_values (connection, ip_address, port, protocol, use_ipv6);
+            connection_init (connection);
+            connection_register_to_client (client, connection);
+        }
+    }
+
+    return connection;
+
+}
+
+// starts a client connection -- used to connect a client to another server
+// returns 0 on success, 1 on error
+int client_connection_start (Client *client, Connection *connection) {
+
+    int retval = 1;
+
+    if (client && connection) {
+        if (!connection_connect (connection)) {
+            connection->active = true;
+            thread_create_detachable ((void *(*)(void *)) connection_update, 
+                client_connection_aux_new (client, connection), NULL);
+            client_start (client);
+            retval = 0;
+        }
+    }
+
+    return retval;
+
+}
+
+// ends a connection with a cerver by sending a disconnect packet and the closing the connection
+static void client_connection_terminate (Client *client, Connection *connection) {
+
+    if (connection) {
+        if (connection->active) {
+            if (connection->connected_to_cerver) {
+                // send a close connection packet
+                Packet *packet = packet_generate_request (REQUEST_PACKET, CLIENT_CLOSE_CONNECTION, NULL, 0);
+                if (packet) {
+                    packet_set_network_values (packet, NULL, client, connection, NULL);
+                    packet_send (packet, 0, NULL, false);
+                    packet_delete (packet);
+                }
+            }
+
+            connection_end (connection);
+        } 
+    }
+
+}
+
+// terminates and destroy a connection registered to a client
+// that is connected to a cerver
+// returns 0 on success, 1 on error
+int client_connection_end (Client *client, Connection *connection) {
+
+    int retval = 1;
+
+    if (client && connection) {
+        client_connection_terminate (client, connection);
+
+        connection_delete (dlist_remove_element (client->connections, 
+            dlist_get_element (client->connections, connection)));
+
+        retval = 0;
+    }
+
+    return retval;
+
+}
+
+// stop any on going connection and process then, destroys the client
+u8 client_teardown (Client *client) {
+
+    u8 retval = 1;
+
+    if (client) {
+        // end any ongoing connection
+        for (ListElement *le = dlist_start (client->connections); le; le = le->next) {
+            client_connection_terminate (client, (Connection *) le->data);
+            connection_delete (dlist_remove_element (client->connections, le));
+        }
+
+        client->running = false;
+
+        client_delete (client);
+
+        retval = 0;
+    }
+
+    return retval;
+
+}

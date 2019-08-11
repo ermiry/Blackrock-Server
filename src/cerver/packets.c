@@ -13,6 +13,8 @@
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 
+#include "cerver/game/lobby.h"
+
 #ifdef CERVER_DEBUG
 #include "cerver/utils/log.h"
 #endif
@@ -96,6 +98,7 @@ Packet *packet_new (void) {
         packet->cerver = NULL;
         packet->client = NULL;
         packet->connection = NULL;
+        packet->lobby = NULL;
 
         packet->custom_type = NULL;
 
@@ -132,6 +135,7 @@ void packet_delete (void *ptr) {
         packet->cerver = NULL;
         packet->client = NULL;
         packet->connection = NULL;
+        packet->lobby = NULL;
 
         str_delete (packet->custom_type);
         if (packet->data) free (packet->data);
@@ -145,12 +149,13 @@ void packet_delete (void *ptr) {
 
 // sets the pakcet destinatary is directed to and the protocol to use
 void packet_set_network_values (Packet *packet, Cerver *cerver, 
-    Client *client, Connection *connection) {
+    Client *client, Connection *connection, Lobby *lobby) {
 
     if (packet) {
         packet->cerver = cerver;
         packet->client = client;
         packet->connection = connection;
+        packet->lobby = lobby;
     }
 
 }
@@ -338,12 +343,12 @@ Packet *packet_generate_request (PacketType packet_type, u32 req_type,
 // TODO: check for errno appropierly
 // sends a packet using the tcp protocol and the packet sock fd
 // returns 0 on success, 1 on error
-u8 packet_send_tcp (const Packet *packet, int flags, size_t *total_sent) {
+u8 packet_send_tcp (const Packet *packet, int flags, size_t *total_sent, bool raw) {
 
     if (packet) {
         ssize_t sent;
-        const char *p = (char *) packet->packet;
-        size_t packet_size = packet->packet_size;
+        const char *p = raw ? (char *) packet->data : (char *) packet->packet;
+        size_t packet_size = raw ? packet->data_size : packet->packet_size;
 
         while (packet_size > 0) {
             sent = send (packet->connection->sock_fd, p, packet_size, flags);
@@ -361,7 +366,7 @@ u8 packet_send_tcp (const Packet *packet, int flags, size_t *total_sent) {
 
 }
 
-// FIXME: correctly send an udp packet!!
+// TODO: correctly send an udp packet!!
 u8 packet_send_udp (const void *packet, size_t packet_size) {
 
     ssize_t sent;
@@ -379,10 +384,13 @@ u8 packet_send_udp (const void *packet, size_t packet_size) {
 }
 
 static void packet_send_update_stats (PacketType packet_type, size_t sent,
-    Cerver *cerver, Client *client, Connection *connection) {
+    Cerver *cerver, Client *client, Connection *connection, Lobby *lobby) {
 
-    cerver->stats->n_packets_sent += 1;
-    cerver->stats->total_bytes_sent += sent;
+    if (cerver) {
+        cerver->stats->n_packets_sent += 1;
+        cerver->stats->total_bytes_sent += sent;
+    }
+
     if (client) {
         client->stats->n_packets_send += 1;
         client->stats->total_bytes_sent += sent;
@@ -391,60 +399,75 @@ static void packet_send_update_stats (PacketType packet_type, size_t sent,
     connection->stats->n_packets_sent += 1;
     connection->stats->total_bytes_sent += sent; 
 
+    if (lobby) {
+        lobby->stats->n_packets_sent += 1;
+        lobby->stats->bytes_sent += sent;
+    }
+
     switch (packet_type) {
         case ERROR_PACKET: 
-            cerver->stats->sent_packets->n_error_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_error_packets += 1;
             if (client) client->stats->sent_packets->n_error_packets += 1;
             connection->stats->sent_packets->n_error_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_error_packets += 1;
             break;
 
         case AUTH_PACKET: 
-            cerver->stats->sent_packets->n_auth_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_auth_packets += 1;
             if (client) client->stats->sent_packets->n_auth_packets += 1;
             connection->stats->sent_packets->n_auth_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_auth_packets += 1;
             break;
 
         case REQUEST_PACKET: 
-            cerver->stats->sent_packets->n_request_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_request_packets += 1;
             if (client) client->stats->sent_packets->n_request_packets += 1;
             connection->stats->sent_packets->n_request_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_request_packets += 1;
             break;
 
         case GAME_PACKET:
-            cerver->stats->sent_packets->n_game_packets += 1; 
+            if (cerver) cerver->stats->sent_packets->n_game_packets += 1; 
             if (client) client->stats->sent_packets->n_game_packets += 1;
             connection->stats->sent_packets->n_game_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_game_packets += 1;
             break;
 
         case APP_PACKET:
-            cerver->stats->sent_packets->n_app_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_app_packets += 1;
             if (client) client->stats->sent_packets->n_app_packets += 1;
             connection->stats->sent_packets->n_app_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_app_packets += 1;
             break;
 
         case APP_ERROR_PACKET: 
-            cerver->stats->sent_packets->n_app_error_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_app_error_packets += 1;
             if (client) client->stats->sent_packets->n_app_error_packets += 1;
             connection->stats->sent_packets->n_app_error_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_app_error_packets += 1;
             break;
 
         case CUSTOM_PACKET:
-            cerver->stats->sent_packets->n_custom_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_custom_packets += 1;
             if (client) client->stats->sent_packets->n_custom_packets += 1;
             connection->stats->sent_packets->n_custom_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_custom_packets += 1;
             break;
 
         case TEST_PACKET: 
-            cerver->stats->sent_packets->n_test_packets += 1;
+            if (cerver) cerver->stats->sent_packets->n_test_packets += 1;
             if (client) client->stats->sent_packets->n_test_packets += 1;
             connection->stats->sent_packets->n_test_packets += 1;
+            if (lobby) lobby->stats->sent_packets->n_test_packets += 1;
             break;
     }
 
 }
 
 // sends a packet using its network values
-u8 packet_send (const Packet *packet, int flags, size_t *total_sent) {
+// raw flag to send a raw packet (only the data that was set to the packet, without any header)
+// returns 0 on success, 1 on error
+u8 packet_send (const Packet *packet, int flags, size_t *total_sent, bool raw) {
 
     u8 retval = 1;
 
@@ -452,9 +475,10 @@ u8 packet_send (const Packet *packet, int flags, size_t *total_sent) {
         switch (packet->connection->protocol) {
             case PROTOCOL_TCP: {
                 size_t sent = 0;
-                if (!packet_send_tcp (packet, flags, &sent)) {
+                if (!packet_send_tcp (packet, flags, &sent, raw)) {
+                    if (total_sent) *total_sent = sent;
                     packet_send_update_stats (packet->packet_type, sent,
-                        packet->cerver, packet->client, packet->connection);
+                        packet->cerver, packet->client, packet->connection, packet->lobby);
 
                     retval = 0;
                 }

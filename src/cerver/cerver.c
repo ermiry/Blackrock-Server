@@ -23,6 +23,8 @@
 #include "cerver/handler.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
+#include "cerver/connection.h"
+
 #include "cerver/game/game.h"
 
 #include "cerver/collections/dllist.h"
@@ -107,6 +109,15 @@ static void cerver_stats_delete (CerverStats *cerver_stats) {
 
 }
 
+// sets the cerver stats threshold time (how often the stats get reset)
+void cerver_stats_set_threshold_time (Cerver *cerver, time_t threshold_time) {
+
+    if (cerver) {
+        if (cerver->stats) cerver->stats->threshold_time = threshold_time;
+    }
+
+}
+
 void cerver_stats_print (Cerver *cerver) {
 
     if (cerver) {
@@ -170,6 +181,7 @@ Cerver *cerver_new (void) {
         c->protocol = PROTOCOL_TCP;         // default protocol
         c->use_ipv6 = false;
         c->connection_queue = DEFAULT_CONNECTION_QUEUE;
+        c->receive_buffer_size = RECEIVE_PACKET_BUFFER_SIZE;
 
         c->isRunning = false;
         c->blocking = true;
@@ -255,6 +267,20 @@ void cerver_set_network_values (Cerver *cerver, const u16 port, const Protocol p
 
 }
 
+// sets the cerver connection queue (how many connections to queue for accept)
+void cerver_set_connection_queue (Cerver *cerver, const u16 connection_queue) {
+
+    if (cerver) cerver->connection_queue = connection_queue;
+
+}
+
+// sets the cerver's receive buffer size used in recv method
+void cerver_set_receive_buffer_size (Cerver *cerver, const u32 size) {
+
+    if (cerver) cerver->receive_buffer_size = size;
+
+}
+
 // sets the cerver's data and a way to free it
 void cerver_set_cerver_data (Cerver *cerver, void *data, Action delete_data) {
 
@@ -292,7 +318,7 @@ static u8 cerver_on_hold_init (Cerver *cerver) {
     u8 retval = 1;
 
     if (cerver) {
-        cerver->on_hold_connections = avl_init (client_connection_comparator, client_connection_delete);
+        cerver->on_hold_connections = avl_init (connection_comparator, connection_delete);
         cerver->on_hold_connection_sock_fd_map = htab_init (poll_n_fds / 2, NULL, NULL, NULL, false, NULL, NULL);
         if (cerver->on_hold_connections && cerver->on_hold_connection_sock_fd_map) {
             cerver->max_on_hold_connections = poll_n_fds;
@@ -837,6 +863,15 @@ static void cerver_destroy_on_hold_connections (Cerver *cerver) {
 static void cerver_destroy_clients (Cerver *cerver) {
 
     if (cerver) {
+        if (cerver->stats->current_n_connected_clients > 0) {
+            // send a cerver teardown packet to all clients connected to cerver
+            Packet *packet = packet_generate_request (CERVER_PACKET, CERVER_TEARDOWN, NULL, 0);
+            if (packet) {
+                client_broadcast_to_all_avl (cerver->clients->root, cerver, packet);
+                packet_delete (packet);
+            }
+        }
+
         // destroy the sock fd buffer map
         htab_destroy (cerver->sock_buffer_map);
         cerver->sock_buffer_map = NULL;

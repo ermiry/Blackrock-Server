@@ -12,6 +12,7 @@
 #include "cerver/sessions.h"
 #include "cerver/cerver.h"
 #include "cerver/client.h"
+#include "cerver/connection.h"
 #include "cerver/auth.h"
 
 #include "cerver/threads/thpool.h"
@@ -102,8 +103,8 @@ static void auth_send_success_packet (const Cerver *cerver, const Connection *co
     if (cerver) {
         Packet *success_packet = packet_generate_request (AUTH_PACKET, SUCCESS_AUTH, NULL, 0);
         if (success_packet) {
-            packet_set_network_values (success_packet, (Cerver *) cerver, NULL, (Connection *) connection);
-            packet_send (success_packet, 0, NULL);
+            packet_set_network_values (success_packet, (Cerver *) cerver, NULL, (Connection *) connection, NULL);
+            packet_send (success_packet, 0, NULL, false);
             packet_delete (success_packet);
         }
 
@@ -128,8 +129,8 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
         if (!on_hold_connection_remove (packet->cerver, packet->connection)) {
             Client *c = client_create ();
             if (c) {
-                if (!client_connection_register_to_client (c, packet->connection)) {
-                    client_connection_register_to_cerver (packet->cerver, c, packet->connection);
+                if (!connection_register_to_client (c, packet->connection)) {
+                    connection_register_to_cerver_poll (packet->cerver, c, packet->connection);
 
                     if (packet->cerver->use_sessions) {
                         // FIXME: generate the new session id - token
@@ -160,8 +161,8 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
 
                         Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
                         if (error_packet) {
-                            packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection);
-                            packet_send (error_packet, 0, NULL);
+                            packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
+                            packet_send (error_packet, 0, NULL, false);
                             packet_delete (error_packet);
                         }
                         
@@ -180,8 +181,8 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
 
                     Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
                     if (error_packet) {
-                        packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection);
-                        packet_send (error_packet, 0, NULL);
+                        packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
+                        packet_send (error_packet, 0, NULL, false);
                         packet_delete (error_packet);
                     }
                     
@@ -200,8 +201,8 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
                 
                 Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
                 if (error_packet) {
-                    packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection);
-                    packet_send (error_packet, 0, NULL);
+                    packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
+                    packet_send (error_packet, 0, NULL, false);
                     packet_delete (error_packet);
                 }
 
@@ -220,8 +221,8 @@ static u8 auth_create_new_client (Packet *packet, AuthData *auth_data) {
             
             Packet *error_packet = error_packet_generate (ERR_SERVER_ERROR, "Internal cerver error!");
             if (error_packet) {
-                packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection);
-                packet_send (error_packet, 0, NULL);
+                packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
+                packet_send (error_packet, 0, NULL, false);
                 packet_delete (error_packet);
             }
 
@@ -255,8 +256,8 @@ static void auth_failed (const Packet *packet) {
         // send failed auth packet to client
         Packet *error_packet = error_packet_generate (ERR_FAILED_AUTH, "Failed to authenticate!");
         if (error_packet) {
-            packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection);
-            packet_send (error_packet, 0, NULL);
+            packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
+            packet_send (error_packet, 0, NULL, false);
             packet_delete (error_packet);
         }
 
@@ -289,9 +290,9 @@ static void auth_with_token (const Packet *packet, const AuthData *auth_data) {
                 auth_data->token->str, packet->cerver->info->name->str));
             #endif
 
-            if (!client_connection_register_to_client (client, packet->connection)) {
+            if (!connection_register_to_client (client, packet->connection)) {
                 // add the connection sock fd to the cerver poll fds
-                client_connection_register_to_cerver (packet->cerver, client, packet->connection);
+                connection_register_to_cerver_poll (packet->cerver, client, packet->connection);
 
                 // remove the connection from the on hold structures
                 on_hold_poll_remove_sock_fd (packet->cerver, packet->connection->sock_fd);
@@ -574,7 +575,7 @@ static u8 on_hold_poll (void *ptr) {
                 if (cerver->hold_fds[i].revents == 0) continue;
                 if (cerver->hold_fds[i].revents != POLLIN) continue;
 
-                cerver_receive (cerver_receive_new (cerver, cerver->hold_fds[i].fd, true));
+                cerver_receive (cerver_receive_new (cerver, cerver->hold_fds[i].fd, true, NULL));
                 // if (thpool_add_work (cerver->thpool, cerver_receive, 
                 //     cerver_receive_new (cerver, cerver->hold_fds[i].fd, true))) {
                 //     cerver_log_msg (stderr, LOG_ERROR, LOG_NO_TYPE, 
@@ -712,7 +713,7 @@ static u8 on_hold_connection_remove (const Cerver *cerver, Connection *connectio
 
     if (cerver && connection) {
         // remove the connection associated to the sock fd
-        Connection *query = client_connection_new ();
+        Connection *query = connection_new ();
         query->sock_fd = connection->sock_fd;
         avl_remove_node (cerver->on_hold_connections, query);
 
@@ -735,13 +736,13 @@ void on_hold_connection_drop (const Cerver *cerver, Connection *connection) {
 
     if (cerver && connection) {
         // close the connection socket
-        client_connection_end (connection);
+        connection_end (connection);
 
         // remove the connection from the on hold structures
         on_hold_connection_remove (cerver, connection);
 
         // we can now safely delete the connection
-        client_connection_delete (connection);
+        connection_delete (connection);
     }
 
 }
@@ -751,7 +752,7 @@ static Connection *on_hold_connection_get_by_sock (const Cerver *cerver, const i
     Connection *connection = NULL;
 
     if (cerver) {
-        Connection *query = client_connection_new ();
+        Connection *query = connection_new ();
         if (query) {
             query->sock_fd = sock_fd;
             void *connection_data = avl_get_node_data (cerver->on_hold_connections, query);

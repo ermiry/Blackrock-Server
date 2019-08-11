@@ -2,6 +2,7 @@
 #define _CERVER_PACKETS_H_
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "cerver/types/types.h"
 #include "cerver/types/string.h"
@@ -10,9 +11,12 @@
 #include "cerver/cerver.h"
 #include "cerver/client.h"
 
+#include "cerver/game/lobby.h"
+
 struct _Cerver;
 struct _Client;
 struct _Connection;
+struct _Lobby;
 
 typedef u32 ProtocolID;
 
@@ -140,6 +144,7 @@ struct _Packet {
     struct _Cerver *cerver;
     struct _Client *client;
     struct _Connection *connection;
+    struct _Lobby *lobby;
 
     PacketType packet_type;
     String *custom_type;
@@ -168,7 +173,7 @@ extern Packet *packet_create (PacketType type, void *data, size_t data_size);
 
 // sets the pakcet destinatary is directed to and the protocol to use
 extern void packet_set_network_values (Packet *packet, struct _Cerver *cerver, 
-    struct _Client *client, struct _Connection *connection);
+    struct _Client *client, struct _Connection *connection, struct _Lobby *lobby);
 
 // sets the data of the packet -> copies the data into the packet
 // if the packet had data before it is deleted and replaced with the new one
@@ -195,15 +200,16 @@ extern Packet *packet_generate_request (PacketType packet_type, u32 req_type,
 
 // sends a packet using the tcp protocol and the packet sock fd
 // returns 0 on success, 1 on error
-extern u8 packet_send_tcp (const Packet *packet, int flags, size_t *total_sent);
+extern u8 packet_send_tcp (const Packet *packet, int flags, size_t *total_sent, bool raw);
 
 // sends a packet using the udp protocol
 // returns 0 on success, 1 on error
 extern u8 packet_send_udp (const void *packet, size_t packet_size);
 
 // sends a packet using its network values
+// raw flag to send a raw packet (only the data that was set to the packet, without any header)
 // returns 0 on success, 1 on error
-extern u8 packet_send (const Packet *packet, int flags, size_t *total_sent);
+extern u8 packet_send (const Packet *packet, int flags, size_t *total_sent, bool raw);
 
 // check for packets with bad size, protocol, version, etc
 extern u8 packet_check (Packet *packet);

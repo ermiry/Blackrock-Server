@@ -6,6 +6,8 @@
 #include "cerver/game/gametype.h"
 #include "cerver/collections/dllist.h"
 
+GameType *game_type_get_by_name (DoubleList *game_types, const char *name);
+
 GameType *game_type_new (void) {
 
     GameType *type = (GameType *) malloc (sizeof (GameType));
@@ -37,6 +39,10 @@ GameType *game_type_create (const char *name, void *data, void (*delete_data)(vo
             type->delete_data = delete_data;
             type->start = start;
             type->end = end;
+
+            type->use_default_handler = true;
+            type->custom_handler = NULL;
+            type->max_players = 0;
         }
     }
 
@@ -54,6 +60,23 @@ void game_type_delete (void *ptr) {
 
         free (type);
     }
+
+}
+
+// add the required configuration that is needed to create a new lobby for the game type when requested
+// returns 0 on success, 1 on error
+int game_type_add_lobby_config (GameType *game_type,
+    bool use_default_handler, Action custom_handler, u32 max_players) {
+
+    int retval = 0;
+
+    if (game_type) {
+        game_type->use_default_handler = use_default_handler;
+        game_type->custom_handler = custom_handler;
+        game_type->max_players = max_players;
+    }
+
+    return retval;
 
 }
 
@@ -82,7 +105,7 @@ int game_type_unregister (DoubleList *game_types, const char *name) {
             game_type = (GameType *) le->data;
             if (!strcmp (name, game_type->name->str)) {
                 game_type_delete (dlist_remove_element (game_types, le));
-                retval =0;
+                retval = 0;
             }
         }
     }

@@ -89,6 +89,9 @@ typedef struct CerverStats {
 
 } CerverStats;
 
+// sets the cerver stats threshold time (how often the stats get reset)
+extern void cerver_stats_set_threshold_time (struct _Cerver *cerver, time_t threshold_time);
+
 extern void cerver_stats_print (struct _Cerver *cerver);
 
 // this is the generic cerver struct, used to create different server types
@@ -99,6 +102,7 @@ struct _Cerver {
     Protocol protocol;                  // we only support either tcp or udp
     bool use_ipv6;  
     u16 connection_queue;               // each server can handle connection differently
+    u32 receive_buffer_size;
 
     bool isRunning;                     // the server is recieving and/or sending packetss
     bool blocking;                      // sokcet fd is blocking?
@@ -168,6 +172,12 @@ extern void cerver_delete (void *ptr);
 // sets the cerver main network values
 extern void cerver_set_network_values (Cerver *cerver, const u16 port, const Protocol protocol,
     bool use_ipv6, const u16 connection_queue);
+
+// sets the cerver connection queue (how many connections to queue for accept)
+extern void cerver_set_connection_queue (Cerver *cerver, const u16 connection_queue);
+
+// sets the cerver's receive buffer size used in recv method
+extern void cerver_set_receive_buffer_size (Cerver *cerver, const u32 size);
 
 // sets the cerver's data and a way to free it
 extern void cerver_set_cerver_data (Cerver *cerver, void *data, Action delete_data);
