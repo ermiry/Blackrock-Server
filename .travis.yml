@@ -1,0 +1,17 @@
+sudo: required
+
+services:
+  - docker
+
+before_install:
+  - docker build -t ermiry/black-server:test -f ./Dockerfile.test ./client
+
+script:
+  - docker run ermiry/black-server:test
+
+deploy:
+  provider: script
+  skip_cleanup: true
+  script: bash ./deploy.sh -u "$DOCKER_ID" -p "$DOCKER_PASSWORD" -s "$ERMIRY_SERVER"
+  on:
+    branch: master

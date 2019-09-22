@@ -3,5 +3,6 @@ FROM ermiry/ubuntu-cmongo
 RUN apt-get update && apt-get install -y libpthread-stubs0-dev sqlite3 libsqlite3-dev
 
 WORKDIR /app
+COPY . .
 
-CMD ["bin", "bash"]
+CMD ["make", "-j4"]
