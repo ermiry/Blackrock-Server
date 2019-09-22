@@ -154,6 +154,7 @@ u8 player_unregister_from_lobby_poll (Lobby *lobby, Player *player) {
 
 }
 
+// FIXME: we need to be sure that if the one that we are removing is the owner, we need to find a new owner
 // unregisters a player from a lobby --> removes him from lobby's structures
 u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
 
@@ -161,15 +162,13 @@ u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
 
     if (lobby && player) {
         if (player->client) {
-            ListElement *le = player_get_le_from_lobby (lobby, player);
-            if (le) {
-                dlist_remove_element (lobby->players, le);
+            // printf ("\nplayer_unregister_from_lobby client id: %li\n", player->client->id);
+            if (lobby->default_handler) {
+                // unregister all the player's client connections from the lobby
+                player_unregister_from_lobby_poll (lobby, player);
+            }
 
-                if (lobby->default_handler) {
-                    // unregister all the player's client connections from the lobby
-                    player_unregister_from_lobby_poll (lobby, player);
-                }
-
+            if (!dlist_remove (lobby->players, player)) {
                 lobby->n_current_players--;
 
                 #ifdef CERVER_DEBUG
@@ -193,22 +192,10 @@ u8 player_unregister_from_lobby (Lobby *lobby, Player *player) {
                         lobby->id->str));
                     #endif
 
-                    // stop the lobby threads
-                    lobby->running = false;
-                    lobby->in_game = false;
-
-                    // remove the lobby from the cerver 
+                    // teardown the cerver
                     Cerver *cerver = lobby->cerver;
                     GameCerver *game_cerver = (GameCerver *) cerver->cerver_data;
-                    lobby_delete (dlist_remove_element (game_cerver->current_lobbys, 
-                        dlist_get_element (game_cerver->current_lobbys, lobby)));
-                    game_cerver->stats->current_active_lobbys--;
-
-                    #ifdef CERVER_DEBUG
-                    cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
-                        c_string_create ("Current active lobbys in cerver %s: %d.",
-                        cerver->info->name->str, game_cerver->stats->current_active_lobbys));
-                    #endif
+                    lobby_teardown (game_cerver, lobby);
                 }
 
                 retval = 0;

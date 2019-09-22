@@ -141,6 +141,11 @@ extern Lobby *lobby_get (struct _GameCerver *game_cerver, Lobby *query);
 // seraches for a lobby with matching id
 extern Lobby *lobby_search_by_id (struct _Cerver *cerver, const char *id);
 
+// stops the lobby, disconnects clinets (players) if any, destroys lobby game data, and deletes the lobby at the end
+extern int lobby_teardown (struct _GameCerver *game_cerver, Lobby *lobby);
+
+/*** lobby poll ***/
+
 // inits the lobby poll structures
 // returns 0 on success, 1 on error
 extern u8 lobby_poll_init (Lobby *lobby, unsigned int max_players_fds);

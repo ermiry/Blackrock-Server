@@ -144,6 +144,26 @@ void connection_set_max_sleep (Connection *connection, u32 max_sleep) {
 
 }
 
+// sets if the connection will receive packets or not (default true)
+// if true, a new thread is created that handled incoming packets
+void connection_set_receive (Connection *connection, bool receive) {
+
+    if (connection) connection->receive_packets = receive;
+
+}
+
+// sets a custom receive method to handle incomming packets in the connection
+// a reference to the client and connection will be passed to the action as ClientConnection structure
+void connection_set_custom_receive (Connection *connection, Action custom_receive, void *args) {
+
+    if (connection) {
+        connection->custom_receive = custom_receive;
+        connection->custom_receive_args = args;
+        if (connection->custom_receive) connection->receive_packets = true;
+    }
+
+}
+
 // sets up the new connection values
 u8 connection_init (Connection *connection) {
 
@@ -457,6 +477,25 @@ u8 connection_unregister_from_cerver_poll (Cerver *cerver, Client *client, Conne
 
 }
 
+static ConnectionCustomReceiveData *connection_custom_receive_data_new (Client *client, Connection *connection, void *args) {
+
+    ConnectionCustomReceiveData *custom_data = (ConnectionCustomReceiveData *) malloc (sizeof (ConnectionCustomReceiveData));
+    if (custom_data) {
+        custom_data->client = client;
+        custom_data->connection = connection;
+        custom_data->args = args;
+    }
+
+    return custom_data;
+
+}
+
+static inline void connection_custom_receive_data_delete (void *custom_data_ptr) {
+
+    if (custom_data_ptr) free (custom_data_ptr);
+
+}
+
 // starts listening and receiving data in the connection sock
 void connection_update (void *ptr) {
 
@@ -464,10 +503,19 @@ void connection_update (void *ptr) {
         ClientConnection *cc = (ClientConnection *) ptr;
         // thread_set_name (c_string_create ("connection-%s", cc->connection->name->str));
 
-        while (cc->client->running && cc->connection->active) {
-            // client_receive (cc->client, cc->connection);
+        ConnectionCustomReceiveData *custom_data = connection_custom_receive_data_new (cc->client, cc->connection, 
+            cc->connection->custom_receive_args);
+
+        if (cc->connection->receive_packets) {
+            while (cc->client->running && cc->connection->active) {
+                // TODO: do we want to use the same logic as in cerver receive and add up to that stats?
+                if (cc->connection->custom_receive) cc->connection->custom_receive (custom_data);
+                // FIXME: add client receive
+                // else client_receive (cc->client, cc->connection);
+            }
         }
 
+        connection_custom_receive_data_delete (custom_data);
         client_connection_aux_delete (cc);
     }
 

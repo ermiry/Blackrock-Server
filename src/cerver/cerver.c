@@ -703,6 +703,7 @@ static u8 cerver_one_time_init (Cerver *cerver) {
             // if we have a game cerver, we might wanna load game data -> set by cerver admin
             if (cerver->type == GAME_CERVER) {
                 GameCerver *game_data = (GameCerver *) cerver->cerver_data;
+                game_data->cerver = cerver;
                 if (game_data && game_data->load_game_data) {
                     game_data->load_game_data (NULL);
                 }

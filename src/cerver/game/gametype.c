@@ -80,6 +80,22 @@ int game_type_add_lobby_config (GameType *game_type,
 
 }
 
+// sets an action to be called when a player joins the lobby (game)
+// a reference to the player and lobby is passed as an argument
+void game_type_set_on_lobby_join (GameType *game_type, Action on_lobby_join) {
+
+    if (game_type) game_type->on_lobby_join = on_lobby_join;
+
+}
+
+// sets an action to be called when a player leaves the lobby (game)
+// a reference to the player and lobby is passed as an argument
+void game_type_set_on_lobby_leave (GameType *game_type, Action on_lobby_leave) {
+    
+    if (game_type) game_type->on_lobby_leave = on_lobby_leave;
+
+}
+
 // registers a new game type, returns 0 on LOG_SUCCESS, 1 on error
 int game_type_register (DoubleList *game_types, GameType *game_type) {
 

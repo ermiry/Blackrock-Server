@@ -109,7 +109,22 @@ static void cerver_request_packet_handler (Packet *packet) {
 
                 // the client is going to disconnect and will close all of its active connections
                 // so drop it from the server
-                case CLIENT_DISCONNET: client_drop (packet->cerver, packet->client); break;
+                case CLIENT_DISCONNET: {
+                    // check if the client is inside a lobby
+                    if (packet->lobby) {
+                        #ifdef CERVER_DEBUG
+                        cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
+                            c_string_create ("Client %ld inside lobby %s wants to close the connection...",
+                            packet->client->id, packet->lobby->id->str));
+                        #endif
+
+                        // remove the player from the lobby
+                        Player *player = player_get_by_sock_fd_list (packet->lobby, packet->connection->sock_fd);
+                        player_unregister_from_lobby (packet->lobby, player);
+                    }
+
+                    client_drop (packet->cerver, packet->client);
+                } break;
 
                 default: 
                     #ifdef CERVER_DEBUG
@@ -464,6 +479,12 @@ static void cerver_receive_handle_failed (CerverReceive *cr) {
     }
 
     else {
+        // check if the socket belongs to a player inside a lobby
+        if (cr->lobby->players->size > 0) {
+            Player *player = player_get_by_sock_fd_list (cr->lobby, cr->sock_fd);
+            if (player) player_unregister_from_lobby (cr->lobby, player);
+        }
+
         // get to which client the connection is registered to
         Client *client = client_get_by_sock_fd (cr->cerver, cr->sock_fd);
         if (client) client_remove_connection_by_sock_fd (cr->cerver, client, cr->sock_fd);
@@ -535,7 +556,7 @@ void cerver_receive (void *ptr) {
                             }
                         }
 
-                        // else cerver_receive_handle_failed (cr);
+                        else cerver_receive_handle_failed (cr);
 
                         // break;
                     }

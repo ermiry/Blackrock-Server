@@ -53,6 +53,10 @@ struct _Connection {
 
     bool active;
 
+    bool receive_packets;                   // set if the connection will receive packets or not (default true)
+    Action custom_receive;                  // custom receive method to handle incomming packets in the connection
+    void *custom_receive_args;              // arguments to be passed to the custom receive method
+
     ConnectionStats *stats;
 
 };
@@ -78,6 +82,23 @@ extern void connection_set_values (Connection *connection,
 
 // sets the connection max sleep (wait time) to try to connect to the cerver
 extern void connection_set_max_sleep (Connection *connection, u32 max_sleep);
+
+// sets if the connection will receive packets or not (default true)
+// if true, a new thread is created that handled incoming packets
+extern void connection_set_receive (Connection *connection, bool receive);
+
+typedef struct ConnectionCustomReceiveData {
+
+    struct _Client *client;
+    struct _Connection *connection;
+    void *args;
+
+} ConnectionCustomReceiveData;
+
+// sets a custom receive method to handle incomming packets in the connection
+// a reference to the client and connection will be passed to the action as ClientConnection structure
+// alongside the arguments passed to this method
+extern void connection_set_custom_receive (Connection *connection, Action custom_receive, void *args);
 
 // sets up the new connection values
 extern u8 connection_init (Connection *connection);

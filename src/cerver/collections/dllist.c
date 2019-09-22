@@ -1,7 +1,8 @@
 #include <stdlib.h>
-#include <stdbool.h>
 
 #include "cerver/collections/dllist.h"
+
+void *dlist_remove_element (DoubleList *dlist, ListElement *element);
 
 static ListElement *list_element_new (void) {
 
@@ -105,7 +106,7 @@ void dlist_clean (DoubleList *dlist) {
 /*** Elements ***/
 
 // inserts the data in the double list after the specified element
-// return true on success, false on error
+// returns true on success, false on error or not found
 bool dlist_insert_after (DoubleList *dlist, ListElement *element, void *data) {
 
     if (dlist && data) {
@@ -137,6 +138,42 @@ bool dlist_insert_after (DoubleList *dlist, ListElement *element, void *data) {
     }
 
     return false;
+
+}
+
+// finds the data using the query and the list comparator and the removes it from the list
+// and deletes it using the list destroy method
+// returns 0 on success, 1 on error or not found
+int dlist_remove (DoubleList *dlist, void *query) {
+
+    int retval = 1;
+
+    if (dlist && query) {
+        ListElement *ptr = dlist_start (dlist);
+
+        if (dlist->compare) {
+            bool first = true;
+            while (ptr != NULL) {
+                if (!dlist->compare (ptr->data, query)) {
+                    // remove the list element
+                    void *data = NULL;
+                    if (first) data = dlist_remove_element (dlist, NULL);
+                    else data = dlist_remove_element (dlist, ptr);
+                    if (data) {
+                        if (dlist->destroy) dlist->destroy (data);
+                        else free (data);
+
+                        retval = 0;
+                    }
+                }
+
+                ptr = ptr->next;
+                first = false;
+            }
+        }
+    }
+
+    return retval;
 
 }
 

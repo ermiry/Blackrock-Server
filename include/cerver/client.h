@@ -64,7 +64,12 @@ struct _Client {
 typedef struct _Client Client;
 
 extern Client *client_new (void);
+
+// complete deletes a client and all of its data
 extern void client_delete (void *ptr);
+
+// used in dta structures that require a delete function, but the client need to stay alive
+extern void client_delete_dummy (void *ptr);
 
 // creates a new client and inits its values
 extern Client *client_create (void);
@@ -157,8 +162,12 @@ extern struct _Connection *client_connection_create (Client *client,
     const char *ip_address, u16 port, Protocol protocol, bool use_ipv6);
 
 // starts a client connection -- used to connect a client to another server
+// returns only after a success or failed connection
 // returns 0 on success, 1 on error
 extern int client_connection_start (Client *client, struct _Connection *connection);
+
+// starts the client connection async -- creates a new thread to handle how to connect with server
+extern void client_connection_start_async (Client *client, struct _Connection *connection);
 
 // terminates and destroy a connection registered to a client
 // that is connected to a cerver

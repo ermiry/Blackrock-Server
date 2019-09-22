@@ -95,6 +95,8 @@ void client_delete (void *ptr) {
 
 }
 
+void client_delete_dummy (void *ptr) {}
+
 // creates a new client and inits its values
 Client *client_create (void) {
 
@@ -612,6 +614,7 @@ Connection *client_connection_create (Client *client,
 }
 
 // starts a client connection -- used to connect a client to another server
+// returns only after a success or failed connection
 // returns 0 on success, 1 on error
 int client_connection_start (Client *client, Connection *connection) {
 
@@ -628,6 +631,26 @@ int client_connection_start (Client *client, Connection *connection) {
     }
 
     return retval;
+
+}
+
+static void client_connection_start_wrapper (void *data_ptr) {
+
+    if (data_ptr) {
+        ClientConnection *cc = (ClientConnection *) data_ptr;
+        client_connection_start (cc->client, cc->connection);
+        client_connection_aux_delete (cc);
+    }
+
+}
+
+// starts the client connection async -- creates a new thread to handle how to connect with server
+void client_connection_start_async (Client *client, Connection *connection) {
+
+    if (client && connection) {
+        thread_create_detachable ((void *(*) (void *)) client_connection_start_wrapper, 
+            client_connection_aux_new (client, connection), NULL);
+    }
 
 }
 

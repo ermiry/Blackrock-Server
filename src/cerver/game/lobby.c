@@ -233,7 +233,7 @@ u8 lobby_init (GameCerver *game_cerver, Lobby *lobby) {
             #endif
 
             lobby->sock_fd_player_map = htab_init (LOBBY_DEFAULT_MAX_PLAYERS, NULL, NULL, NULL, false, NULL, NULL);
-            lobby->players = dlist_init (player_delete, player_comparator_by_id);
+            lobby->players = dlist_init (player_delete, player_comparator_client_id);
             
             lobby->stats = lobby_stats_new ();
 
@@ -323,6 +323,48 @@ Lobby *lobby_search_by_id (Cerver *cerver, const char *id) {
     }
 
     return NULL;
+
+}
+
+// stops the lobby, disconnects clinets (players) if any, destroys lobby game data, and deletes the lobby at the end
+int lobby_teardown (GameCerver *game_cerver, Lobby *lobby) {
+
+    int retval = 0;
+
+    if (lobby) {
+        #ifdef CERVER_DEBUG
+        String *name = str_new (lobby->id->str);
+        #endif
+
+        // stop the lobby threads
+        lobby->running = false;
+        lobby->in_game = false;
+
+        // call the game type end method
+        if (lobby->game_type->end) lobby->game_type->end (lobby);
+
+        // destroy the lobby game data
+        if (lobby->game_type) {
+            if (lobby->game_data_delete) lobby->game_data_delete (lobby->game_data);
+            else free (lobby->game_data);
+        }
+
+        // unregister the lobby from the game cerver
+        game_cerver_unregister_lobby (game_cerver, lobby);
+
+        // finally delete the lobby
+        lobby_delete (lobby);
+
+        #ifdef CERVER_DEBUG
+        if (name) {
+            cerver_log_msg (stdout, LOG_SUCCESS, LOG_GAME, 
+                c_string_create ("Lobby %s teardown was successfull!", name->str));
+            str_delete (name);
+        }
+        #endif
+    }
+
+    return retval;
 
 }
 
@@ -858,7 +900,7 @@ SLobby *lobby_serialize (Lobby *lobby) {
     if (lobby) {
         slobby = slobby_new ();
         if (slobby) {
-            strncpy (slobby->id.string, lobby->id->str, 64);
+            strncpy (slobby->id.str, lobby->id->str, 64);
             slobby->id.len = (lobby->id->len >= 64) ? 64 : lobby->id->len;
             slobby->creation_timestamp = lobby->creation_time_stamp;
             slobby->in_game = lobby->in_game;

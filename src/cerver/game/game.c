@@ -21,6 +21,10 @@
 #include "cerver/utils/utils.h"
 #include "cerver/utils/log.h"
 
+static LobbyPlayer *lobby_player_new (Lobby *lobby, Player *player);
+
+static inline void lobby_player_delete (void *lp_ptr);
+
 /*** Game Cerver */
 
 #pragma region Game Cerver
@@ -62,6 +66,8 @@ GameCerver *game_new (void) {
 
     GameCerver *game = (GameCerver *) malloc (sizeof (GameCerver));
     if (game) {
+        game->cerver = NULL;
+
         game->current_lobbys = dlist_init (lobby_delete, lobby_comparator);
 
         game->lobby_id_generator = lobby_default_id_generator;
@@ -107,6 +113,13 @@ void game_delete (void *game_ptr) {
 
 /*** Game Cerver configuration ***/
 
+// sets the game cerver's cerver reference
+void game_set_cerver_reference (GameCerver *game_cerver, Cerver *cerver) {
+
+    if (game_cerver) game_cerver->cerver = cerver;
+
+}
+
 // option to set the game cerver lobby id generator
 void game_set_lobby_id_generator (GameCerver *game_cerver, void *(*lobby_id_generator) (const void *)) {
 
@@ -144,6 +157,69 @@ void game_set_final_action (GameCerver *game_cerver,
 
 }
 
+/*** Game Cerver Lobbys ***/
+
+// registers a new lobby to the game cerver
+void game_cerver_register_lobby (GameCerver *game_cerver, Lobby *lobby) {
+
+    if (game_cerver && lobby) {
+        // check if the lobby is already registered to the game cerver
+        if (!dlist_search (game_cerver->current_lobbys, lobby)) {
+            dlist_insert_after (game_cerver->current_lobbys, dlist_end (game_cerver->current_lobbys), lobby);
+            game_cerver->stats->current_active_lobbys += 1;
+
+            #ifdef CERVER_DEBUG
+            char *status = c_string_create ("Lobby %s was registered to cerver %s.", 
+                lobby->id->str, game_cerver->cerver->info->name->str);
+            if (status) {
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_NO_TYPE, status);
+                free (status);
+            }
+            #endif
+        }
+
+        else {
+            char *status = c_string_create ("Lobby %s is already registered to cerver %s.", 
+                lobby->id->str, game_cerver->cerver->info->name->str);
+            if (status) {
+                cerver_log_msg (stdout, LOG_WARNING, LOG_NO_TYPE, status);
+                free (status);
+            }
+        }
+    }
+
+}
+
+// unregisters a lobby from the game cerver
+void game_cerver_unregister_lobby (GameCerver *game_cerver, Lobby *lobby) {
+
+    if (game_cerver && lobby) {
+        void *lobby_data = dlist_remove_element (game_cerver->current_lobbys, 
+                dlist_get_element (game_cerver->current_lobbys, lobby));
+
+        if (lobby_data) {
+            Lobby *l = (Lobby *) lobby_data;
+            #ifdef CERVER_DEBUG
+            char *status = c_string_create ("Unregistered lobby %s from cerver %s", 
+                l->id->str, game_cerver->cerver->info->name->str);
+            if (status) {
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, status);
+                free (status);
+            }
+            #endif
+
+            game_cerver->stats->current_active_lobbys--;
+
+            #ifdef CERVER_DEBUG
+            cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
+                c_string_create ("Current active lobbys in cerver %s: %d.",
+                game_cerver->cerver->info->name->str, game_cerver->stats->current_active_lobbys));
+            #endif
+        }
+    }
+
+}
+
 #pragma endregion
 
 /*** Game Packet Handler ***/
@@ -160,12 +236,12 @@ static void game_lobby_create (Packet *packet) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
                 c_string_create ("Client %ld requested to create a new lobby in cerver %s of type: %s",
-                packet->client->id, packet->cerver->info->name->str, stype->string));
+                packet->client->id, packet->cerver->info->name->str, stype->str));
             #endif
 
             // check that the game type exists and get the configuration
             GameCerver *game_cerver = (GameCerver *) packet->cerver->cerver_data;
-            GameType *game_type = game_type_get_by_name (game_cerver->game_types, stype->string);
+            GameType *game_type = game_type_get_by_name (game_cerver->game_types, stype->str);
             if (game_type) {
                 Lobby *lobby = lobby_create (packet->cerver, packet->client,
                     game_type->use_default_handler, game_type->custom_handler, game_type->max_players);
@@ -173,10 +249,9 @@ static void game_lobby_create (Packet *packet) {
                     lobby->game_type = game_type;
 
                     // register the lobby to the cerver
-                    dlist_insert_after (game_cerver->current_lobbys, dlist_end (game_cerver->current_lobbys), lobby);
+                    game_cerver_register_lobby (game_cerver, lobby);
 
                     game_cerver->stats->lobbys_created += 1;
-                    game_cerver->stats->current_active_lobbys += 1;
 
                     #ifdef CERVER_DEBUG
                     cerver_log_msg (stdout, LOG_SUCCESS, LOG_GAME,
@@ -209,7 +284,7 @@ static void game_lobby_create (Packet *packet) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
                     c_string_create ("Failed to find %s game type in cerver %s!",
-                    stype->string, packet->cerver->info->name->str));
+                    stype->str, packet->cerver->info->name->str));
                 #endif
                 Packet *error_packet = error_packet_generate (ERR_CREATE_LOBBY, "Bad game type!");
                 if (error_packet) {
@@ -243,29 +318,65 @@ static void game_lobby_join_specific (Packet *packet, LobbyJoin *lj) {
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
             c_string_create ("Client %ld requested to join lobby with id ""%s"" in cerver %s.",
-            packet->client->id, lj->lobby_id.string, packet->cerver->info->name->str));
+            packet->client->id, lj->lobby_id.str, packet->cerver->info->name->str));
         #endif
 
-        Lobby *lobby = lobby_search_by_id (packet->cerver, lj->lobby_id.string);
+        Lobby *lobby = lobby_search_by_id (packet->cerver, lj->lobby_id.str);
         if (lobby) {
-            if (!lobby_join (packet->cerver, packet->client, lobby)) {
-                // success joinning the lobby, send back the lobby
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stdout, LOG_SUCCESS, LOG_GAME, 
-                    c_string_create ("Client %ld joined lobby with id: %s",
-                    packet->client->id, lobby->id->str));
-                #endif
+            // check that the lobby is of the pecified type
+            #ifdef CERVER_DEBUG
+            char *status = c_string_create ("game_lobby_join_specific () -- found lobby type: %s -- requested lobby type: %s", 
+                lobby->game_type->name->str, lj->game_type.str);
+            if (status) {
+                cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, status);
+                free (status);
+            }
+            #endif
 
-                lobby_send (lobby, false, packet->cerver, packet->client, packet->connection);
+            if (!strcmp (lobby->game_type->name->str, lj->game_type.str)) {
+                if (!lobby_join (packet->cerver, packet->client, lobby)) {
+                    Player *query = player_new ();
+                    if (query) {
+                        query->client = packet->client;
+                        LobbyPlayer *lp = lobby_player_new (lobby, player_get_from_lobby (lobby, query));
+                        if (lp) {
+                            if (lobby->game_type->on_lobby_join) lobby->game_type->on_lobby_join (lp);
+                            lobby_player_delete (lp);
+                        }
+
+                        free (query);
+                    }
+
+                    // success joinning the lobby, send back the lobby
+                    #ifdef CERVER_DEBUG
+                    cerver_log_msg (stdout, LOG_SUCCESS, LOG_GAME, 
+                        c_string_create ("Client %ld joined lobby with id: %s",
+                        packet->client->id, lobby->id->str));
+                    #endif
+
+                    lobby_send (lobby, false, packet->cerver, packet->client, packet->connection);
+                }
+
+                else {
+                    // client failed to join the lobby - cerver error
+                    // #ifdef CERVER_DEBUG
+                    cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
+                        c_string_create ("Client %ld failed to join lobby %s!",
+                        packet->client->id, lobby->id->str));
+                    // #endif
+                    Packet *error_packet = error_packet_generate (ERR_JOIN_LOBBY, "Failed to join lobby!");
+                    if (error_packet) {
+                        packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
+                        packet_send (error_packet, 0, NULL, false);
+                        packet_delete (error_packet);
+                    }
+                }
             }
 
+            // lobby with id does not match the requested game type
             else {
-                // client failed to join the lobby - cerver error
-                #ifdef CERVER_DEBUG
-                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,
-                    c_string_create ("Client %ld failed to join lobby %s!",
+                cerver_log_msg (stderr, LOG_ERROR, LOG_GAME,  c_string_create ("Client %ld failed to join lobby %s -- types doen't match!",
                     packet->client->id, lobby->id->str));
-                #endif
                 Packet *error_packet = error_packet_generate (ERR_JOIN_LOBBY, "Failed to join lobby!");
                 if (error_packet) {
                     packet_set_network_values (error_packet, packet->cerver, packet->client, packet->connection, packet->lobby);
@@ -276,11 +387,11 @@ static void game_lobby_join_specific (Packet *packet, LobbyJoin *lj) {
         }
 
         else {
-            // failed to tget the lobby with matching id
+            // failed to get the lobby with matching id
             #ifdef CERVER_DEBUG
             cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
                 c_string_create ("Failed to get lobby with id: ""%s"" in cerver %s!", 
-                lj->lobby_id.string, packet->cerver->info->name->str));
+                lj->lobby_id.str, packet->cerver->info->name->str));
             #endif
             Packet *error_packet = error_packet_generate (ERR_JOIN_LOBBY, "Not lobby found with id!");
             if (error_packet) {
@@ -293,6 +404,8 @@ static void game_lobby_join_specific (Packet *packet, LobbyJoin *lj) {
 
 }
 
+// FIXME:
+// TODO: also dont forget to call the on lobby join action
 // search for a suitable lobby for the player
 // TODO: what to do if non is found? create a new one? or just return an error?
 static void game_lobby_join_search (Packet *packet, LobbyJoin *lj) {
@@ -301,7 +414,7 @@ static void game_lobby_join_search (Packet *packet, LobbyJoin *lj) {
         #ifdef CERVER_DEBUG
         cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME,
             c_string_create ("Client %ld request to join a lobby of type: %s in cerver %s",
-            packet->client->id, lj->game_type.string, packet->cerver->info->name->str));
+            packet->client->id, lj->game_type.str, packet->cerver->info->name->str));
         #endif
     }
 
@@ -365,10 +478,10 @@ static void game_lobby_start (Packet *packet) {
             #ifdef CERVER_DEBUG
             cerver_log_msg (stdout, LOG_DEBUG, LOG_GAME, 
                 c_string_create ("Client %ld requested to start lobby with id ""%s"" in cerver %s.",
-                packet->client->id, lobby_id->string, packet->cerver->info->name->str));
+                packet->client->id, lobby_id->str, packet->cerver->info->name->str));
             #endif
 
-            Lobby *lobby = lobby_search_by_id (packet->cerver, lobby_id->string);
+            Lobby *lobby = lobby_search_by_id (packet->cerver, lobby_id->str);
             if (lobby) {
                 // check if the client is the owner of the lobby
                 Player *owner = player_get_by_sock_fd_list (lobby, packet->connection->sock_fd);
@@ -428,7 +541,7 @@ static void game_lobby_start (Packet *packet) {
                 #ifdef CERVER_DEBUG
                 cerver_log_msg (stderr, LOG_ERROR, LOG_GAME, 
                     c_string_create ("Failed to get lobby with id: ""%s"" in cerver %s!", 
-                    lobby_id->string, packet->cerver->info->name->str));
+                    lobby_id->str, packet->cerver->info->name->str));
                 #endif
                 Packet *error_packet = error_packet_generate (ERR_GAME_START, "Not lobby found with id!");
                 if (error_packet) {
@@ -482,3 +595,17 @@ void game_packet_handler (Packet *packet) {
 }
 
 #pragma endregion
+
+static LobbyPlayer *lobby_player_new (Lobby *lobby, Player *player) {
+
+    LobbyPlayer *lp = (LobbyPlayer *) malloc (sizeof (LobbyPlayer));
+    if (lp) {
+        lp->lobby = lobby;
+        lp->player = player;
+    }
+
+    return lp;
+
+}
+
+static inline void lobby_player_delete (void *lp_ptr) { if (lp_ptr) free (lp_ptr); }

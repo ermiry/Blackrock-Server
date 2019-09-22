@@ -15,7 +15,6 @@
 #include "cerver/collections/avl.h"
 
 struct _Cerver;
-struct _GameServerData;
 struct _Client;
 struct _Packet;
 
@@ -34,6 +33,8 @@ typedef struct GameCerverStats {
 extern void game_cerver_stats_print (struct _Cerver *cerver);
 
 struct _GameCerver {
+
+    struct _Cerver *cerver;                         // refernce to the cerver this is located
 
     DoubleList *current_lobbys;                     // a list of the current lobbys
     void *(*lobby_id_generator) (const void *);
@@ -64,6 +65,9 @@ extern void game_delete (void *game_ptr);
 
 /*** Game Cerver Configuration ***/
 
+// sets the game cerver's cerver reference
+extern void game_set_cerver_reference (GameCerver *game_cerver, struct _Cerver *cerver);
+
 extern void *lobby_default_id_generator (const void *data_ptr);
 
 // option to set the game cerver lobby id generator
@@ -85,5 +89,20 @@ extern void game_set_final_action (GameCerver *game_cerver,
 
 // handles a game type packet
 extern void game_packet_handler (struct _Packet *packet);
+
+/*** Game Cerver Lobbys ***/
+
+// registers a new lobby to the game cerver
+extern void game_cerver_register_lobby (GameCerver *game_cerver, struct _Lobby *lobby);
+
+// unregisters a lobby from the game cerver
+extern void game_cerver_unregister_lobby (GameCerver *game_cerver, struct _Lobby *lobby);
+
+typedef struct LobbyPlayer {
+
+    struct _Lobby *lobby;
+    struct _Player *player;
+
+} LobbyPlayer;
 
 #endif
