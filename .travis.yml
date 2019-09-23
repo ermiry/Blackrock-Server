@@ -1,6 +1,7 @@
 sudo: required
 services:
   - docker
+
 before_install:
   - openssl aes-256-cbc -K $encrypted_82cafb5493dd_key -iv $encrypted_82cafb5493dd_iv -in deploy_key.enc -out ./deploy_key -d
   - docker build -t ermiry/black-server:test -f ./Dockerfile.test ./client
