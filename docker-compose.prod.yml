@@ -1,15 +1,9 @@
 version: '3'
 services:
-  cerver:
+  black:
     restart: always
-    build:
-      dockerfile: Dockerfile.dev
-      context: .
-    volumes:
-      - .:/app/
+    image: ermiry/black-server:production
     environment:
-      - CURR_ENV=development
+      - CURR_ENV=production
     ports:
       - '7001:7001'
-    depends_on:
-      - mongo
