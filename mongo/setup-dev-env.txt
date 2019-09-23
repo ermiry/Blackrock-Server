@@ -1,0 +1,7 @@
+- mongo localhost
+> use admin
+> db.auth ('root', 'password')
+> use ermiry
+> db.createUser ({ user: 'cerver', pwd: 'password', roles: ['readWrite'] })
+> db.logout()
+> db.auth ('cerver', 'password')

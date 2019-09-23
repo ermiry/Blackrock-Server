@@ -1,6 +1,6 @@
 FROM ermiry/ubuntu-cmongo:latest
 
-RUN apt-get update && apt-get install -y libpthread-stubs0-dev sqlite3 libsqlite3-dev
+RUN apt-get update && apt-get install -y libpthread-stubs0-dev sqlite3 libsqlite3-dev pkg-config
 
 WORKDIR /app/cerver
 COPY . .
