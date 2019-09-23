@@ -1,0 +1,15 @@
+version: '3'
+services:
+  cerver:
+    restart: always
+    build:
+      dockerfile: Dockerfile.dev
+      context: .
+    volumes:
+      - .:/app/
+    environment:
+      - CURR_ENV=development
+    ports:
+      - '7001:7001'
+    depends_on:
+      - mongo
